@@ -431,6 +431,7 @@ def addBulkItems(auction_id):
         _add_bulk_items_helper(db, auction_id, bulk, holo, ex)
     except ValueError as e:
         db.rollback()
+        logger.exception('failed to add to auction | auction_id : %s', auction_id) 
         return jsonify({"status": "error", "message": str(e)}), 400
     db.commit()
     return jsonify({"status": "success"}), 201
@@ -691,6 +692,7 @@ def addToExistingAuction(auction_id):
             return jsonify({"status": "success"}), 201
         except ValueError as e:
             db.rollback()
+            logger.exception('Failed to add to existing auction | auction_id: %s | reason: %s', auction_id, e)
             return jsonify({"status": "error", "message": str(e)}), 400
 
 
@@ -808,6 +810,7 @@ def orderReturn(saleId):
         db.execute("DELETE FROM sales WHERE id = ?", (saleId,))
     except:
         db.rollback()
+        logger.exception('Return creation failed | saleId: %s', saleId)
         return jsonify(
             {"status": "error", "message": "There was an error while creating a return"}
         ), 400
@@ -891,8 +894,7 @@ def generate_credit_note(saleId):
     if not payment_methods and reciever.get("paymentMethod"):
         payment_methods = [{"type": reciever.get("paymentMethod"), "amount": 0}]
 
-    # try:
-    if True:
+    try:
         pdf_path, cn_num = generateInvoice.generateCreditNote(
             reciever,
             items if items else None,
@@ -904,8 +906,9 @@ def generate_credit_note(saleId):
             shipping,
             original_invoice_num,
         )
-    # except Exception as e:
-    #   return jsonify({'status': 'error', 'message': str(e)}), 500
+    except Exception as e:
+        logger.critical('Credit note generation failed %s',e)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
     return jsonify({"status": "success", "pdf_path": pdf_path, "cn_num": cn_num}), 200
 
@@ -1444,6 +1447,7 @@ def recalculateCardPrices(auction_id, new_auction_price):
     ).fetchall()
 
     if not cards and not sealed_items:
+        logger.warning('No unsold cards or sealed items found | auction_id: %s', auction_id)
         return jsonify(
             {"status": "error", "message": "No unsold cards or sealed items found"}
         ), 400
@@ -1470,6 +1474,7 @@ def recalculateCardPrices(auction_id, new_auction_price):
     )
 
     if total_market_value == 0:
+        logger.warning('Market value is 0 | auction_id: %s', auction_id)
         return jsonify(
             {"status": "error", "message": "Total market value is zero"}
         ), 400
@@ -1477,22 +1482,27 @@ def recalculateCardPrices(auction_id, new_auction_price):
     priceDiff = total_market_value - new_auction_price
 
     # Update each card proportionally
-    for card in cards:
-        if card["market_value"] is not None and card["market_value"] > 0:
-            discount = (card["market_value"] / total_market_value) * priceDiff
-            new_price = round(card["market_value"] - discount, 2)
-            db.execute(
-                "UPDATE cards SET card_price = ? WHERE id = ?", (new_price, card["id"])
-            )
+    try:
+        for card in cards:
+            if card["market_value"] is not None and card["market_value"] > 0:
+                discount = (card["market_value"] / total_market_value) * priceDiff
+                new_price = round(card["market_value"] - discount, 2)
+                db.execute(
+                    "UPDATE cards SET card_price = ? WHERE id = ?", (new_price, card["id"])
+                )
 
-    # Update sealed items proportionally
-    for item in sealed_items:
-        if item["market_value"] is not None and item["market_value"] > 0:
-            discount = (item["market_value"] / total_market_value) * priceDiff
-            new_price = round(item["market_value"] - discount, 2)
-            db.execute(
-                "UPDATE sealed SET price = ? WHERE id = ?", (new_price, item["id"])
-            )
+        # Update sealed items proportionally
+        for item in sealed_items:
+            if item["market_value"] is not None and item["market_value"] > 0:
+                discount = (item["market_value"] / total_market_value) * priceDiff
+                new_price = round(item["market_value"] - discount, 2)
+                db.execute(
+                    "UPDATE sealed SET price = ? WHERE id = ?", (new_price, item["id"])
+                )
+    except Exception as e:
+        db.rollback()
+        logger.exception("Database error while adjusting cards | auction_id: %s | error: %s", auction_id, e)
+        return jsonify({"status": "error", "message": "There was an error while adjusting card prices"})
 
     db.commit()
     return jsonify({"status": "success"}), 200
@@ -1637,7 +1647,7 @@ def cardMarketOrder():
             card["cardId"] = ids
 
     except:
-        logger.exception()
+        logger.exception('cardMarketOrder failed to get card ids')
         print("There was an error while getting card ids")
         return jsonify(
             {"status": "error", "message": "Failed to match cards to card ids"}
@@ -1658,7 +1668,7 @@ def cardMarketOrder():
             if len(ids) > 0:
                 item["id"] = ids
     except:
-        logger.exception()
+        logger.exception('cardMarketOrder failed to get sealed ids')
         print("There was an error while getting sealed ids")
         return jsonify(
             {
@@ -1864,7 +1874,7 @@ def importSoldCSV():
                     checkFile.write(orderId + "\n")
 
         except Exception as e:
-            logger.exception()
+            logger.exception("Failed to proces CSV file | reason: %s", e)
             print(f"Error processing CSV file: {e}")
             return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -2027,166 +2037,176 @@ def invoice():
         sealed = cartContent.get("sealed")
         # Validate inventory before processing
         db = get_db()
-        # try:
-        if bulk and bulk.get("quantity", 0) > 0:
-            if not _check_bulk_inventory(db, "bulk", bulk.get("quantity", 0)):
+        try:
+            if bulk and bulk.get("quantity", 0) > 0:
+                if not _check_bulk_inventory(db, "bulk", bulk.get("quantity", 0)):
+                    return jsonify(
+                        {
+                            "status": "error",
+                            "message": f"Insufficient bulk inventory. Requested: {bulk.get('quantity', 0)}",
+                        }
+                    ), 400
+
+            if holo and holo.get("quantity", 0) > 0:
+                if not _check_bulk_inventory(db, "holo", holo.get("quantity", 0)):
+                    return jsonify(
+                        {
+                            "status": "error",
+                            "message": f"Insufficient holo inventory. Requested: {holo.get('quantity', 0)}",
+                        }
+                    ), 400
+
+            if ex and ex.get("quantity", 0) > 0:
+                if not _check_bulk_inventory(db, "ex", ex.get("quantity", 0)):
+                    return jsonify(
+                        {
+                            "status": "error",
+                            "message": f"Insufficient ex inventory. Requested: {ex.get('quantity', 0)}",
+                        }
+                    ), 400
+            # Generate the invoice and get the file path
+            # Pass payment methods array (or single method for backwards compatibility)
+            payment_data, valid, err, pdf_path = None, False, None, None
+            payment_methods_input = recieverInfo.get("paymentMethods") or []
+            if payment_methods_input:
+                valid, payment_data, err = validate_and_sanitize_payments(
+                    payment_methods_input
+                )
+            elif recieverInfo.get("paymentMethod"):
+                # Backwards compatibility - convert single payment method to array
+                payment_data = [{"type": recieverInfo.get("paymentMethod"), "amount": 0}]
+                valid = True
+            else:
+                err = "No payment method provided"
+            if err != None:
+                logger.error('Failed to validate payment | payment method: %s',recieverInfo.get('paymentMethod'))
                 return jsonify(
                     {
                         "status": "error",
-                        "message": f"Insufficient bulk inventory. Requested: {bulk.get('quantity', 0)}",
+                        "message": f"There was an error while validating payments {err}",
                     }
-                ), 401
+                ), 400
+            if not valid:
+                return jsonify({"status": "error", "message": "Invalid payment data"}), 400
 
-        if holo and holo.get("quantity", 0) > 0:
-            if not _check_bulk_inventory(db, "holo", holo.get("quantity", 0)):
-                return jsonify(
-                    {
-                        "status": "error",
-                        "message": f"Insufficient holo inventory. Requested: {holo.get('quantity', 0)}",
-                    }
-                ), 402
-
-        if ex and ex.get("quantity", 0) > 0:
-            if not _check_bulk_inventory(db, "ex", ex.get("quantity", 0)):
-                return jsonify(
-                    {
-                        "status": "error",
-                        "message": f"Insufficient ex inventory. Requested: {ex.get('quantity', 0)}",
-                    }
-                ), 403
-        # Generate the invoice and get the file path
-        # Pass payment methods array (or single method for backwards compatibility)
-        payment_data, valid, err, pdf_path = None, False, None, None
-        payment_methods_input = recieverInfo.get("paymentMethods") or []
-        if payment_methods_input:
-            valid, payment_data, err = validate_and_sanitize_payments(
-                payment_methods_input
-            )
-        elif recieverInfo.get("paymentMethod"):
-            # Backwards compatibility - convert single payment method to array
-            payment_data = [{"type": recieverInfo.get("paymentMethod"), "amount": 0}]
-            valid = True
-        else:
-            err = "No payment method provided"
-        if err != None:
-            return jsonify(
-                {
-                    "status": "error",
-                    "message": f"There was an error while validating payments {err}",
-                }
-            ), 400
-        if not valid:
-            return jsonify({"status": "error", "message": "Invalid payment data"}), 400
-
-        pdf_path, invoice_num = generateInvoice.generate_invoice(
-            reciever=recieverInfo,
-            items=cards,
-            sealed=sealed,
-            bulk=bulk,
-            holo=holo,
-            ex=ex,
-            payment_methods=payment_data,
-            shipping=cartContent.get("shipping"),
-        )
-
-        shippingPrice = cartContent.get("shipping", {}).get("shippingPrice")
-        recieverInfoJson = json.dumps(recieverInfo)
-        if shippingPrice == None:
-            shippingPrice = 0  # Create sale record - ensure we have a valid date
-        sale_date = datetime.date.today().isoformat()
-        total_amount = round(float(recieverInfo.get("total")) + float(shippingPrice), 2)
-        cursor = db.execute(
-            "INSERT INTO sales (invoice_number, sale_date, total_amount, notes, shipping_info) VALUES (?, ?, ?, ?,?)",
-            (invoice_num, sale_date, total_amount, recieverInfoJson, shippingPrice),
-        )
-        sale_id = cursor.lastrowid
-
-        # Add sale items
-        if len(cards) > 0:
-            for card in cards:
-                sell_price = float(card.get("marketValue", 0))
-                db.execute(
-                    "UPDATE cards SET sold_date = ? WHERE id = ?",
-                    (sale_date, card.get("cardId")),
+            try:
+                pdf_path, invoice_num = generateInvoice.generate_invoice(
+                    reciever=recieverInfo,
+                    items=cards,
+                    sealed=sealed,
+                    bulk=bulk,
+                    holo=holo,
+                    ex=ex,
+                    payment_methods=payment_data,
+                    shipping=cartContent.get("shipping"),
                 )
+            except:
+                logger.exception('Failed to create invoice | cards: %s | sealed: %s | bulk: %s | holo: %s | ex: %s | payment_methods: %s | shipping: %s',cards, sealed, bulk, holo, ex ,payment_data, cartContent['shipping'])
 
-                db.execute(
-                    "INSERT INTO sale_items (sale_id, card_id, sell_price, profit) "
-                    "VALUES (?, ?, ?, ? - (SELECT card_price FROM cards WHERE id = ?))",
-                    (
-                        sale_id,
-                        card.get("cardId"),
-                        sell_price,
-                        sell_price,
-                        card.get("cardId"),
-                    ),
-                )
-
-        if sealed:
-            for item in sealed:
-                db.execute(
-                    "UPDATE sealed SET sale_id = ? WHERE id = ?",
-                    (sale_id, item.get("sid").replace("s", "")),
-                )
-
-        if bulk:
-            db.execute(
-                "INSERT INTO bulk_sales (sale_id, item_type, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)",
-                (
-                    sale_id,
-                    "bulk",
-                    bulk.get("quantity", 0),
-                    bulk.get("unit_price", BULK_ITEM_UNIT_PRICES["bulk"]),
-                    bulk.get("sell_price", 0),
-                ),
+            shippingPrice = cartContent.get("shipping", {}).get("shippingPrice")
+            recieverInfoJson = json.dumps(recieverInfo)
+            if shippingPrice == None:
+                shippingPrice = 0
+            sale_date = datetime.date.today().isoformat()
+            total_amount = round(float(recieverInfo.get("total")) + float(shippingPrice), 2)
+            cursor = db.execute(
+                "INSERT INTO sales (invoice_number, sale_date, total_amount, notes, shipping_info) VALUES (?, ?, ?, ?,?)",
+                (invoice_num, sale_date, total_amount, recieverInfoJson, shippingPrice),
             )
-            # I am pretty sure the execudes are not needed
-            db.execute(
-                'UPDATE bulk_counter SET counter = counter - ? WHERE counter_name = "bulk"',
-                (bulk.get("quantity", 0),),
-            )
-            # Deduct from bulk_items using FIFO
-            _deduct_bulk_items_fifo(db, "bulk", bulk.get("quantity", 0))
+            sale_id = cursor.lastrowid
+            
+            try:
+                # Add sale items
+                if len(cards) > 0:
+                    for card in cards:
+                        sell_price = float(card.get("marketValue", 0))
+                        db.execute(
+                            "UPDATE cards SET sold_date = ? WHERE id = ?",
+                            (sale_date, card.get("cardId")),
+                        )
 
-        if holo:
-            db.execute(
-                "INSERT INTO bulk_sales (sale_id, item_type, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)",
-                (
-                    sale_id,
-                    "holo",
-                    holo.get("quantity", 0),
-                    holo.get("unit_price", BULK_ITEM_UNIT_PRICES["holo"]),
-                    holo.get("sell_price", 0),
-                ),
-            )
-            db.execute(
-                'UPDATE bulk_counter SET counter = counter - ? WHERE counter_name = "holo"',
-                (holo.get("quantity", 0),),
-            )
-            # Deduct from bulk_items using FIFO
-            _deduct_bulk_items_fifo(db, "holo", holo.get("quantity", 0))
+                        db.execute(
+                            "INSERT INTO sale_items (sale_id, card_id, sell_price, profit) "
+                            "VALUES (?, ?, ?, ? - (SELECT card_price FROM cards WHERE id = ?))",
+                            (
+                                sale_id,
+                                card.get("cardId"),
+                                sell_price,
+                                sell_price,
+                                card.get("cardId"),
+                            ),
+                        )
 
-        if ex:
-            db.execute(
-                "INSERT INTO bulk_sales (sale_id, item_type, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)",
-                (
-                    sale_id,
-                    "ex",
-                    ex.get("quantity", 0),
-                    ex.get("unit_price", BULK_ITEM_UNIT_PRICES["ex"]),
-                    ex.get("sell_price", 0),
-                ),
-            )
-            db.execute(
-                'UPDATE bulk_counter SET counter = counter - ? WHERE counter_name = "ex"',
-                (ex.get("quantity", 0),),
-            )
-            _deduct_bulk_items_fifo(db, "ex", ex.get("quantity", 0))
+                if sealed:
+                    for item in sealed:
+                        db.execute(
+                            "UPDATE sealed SET sale_id = ? WHERE id = ?",
+                            (sale_id, item.get("sid").replace("s", "")),
+                        )
 
-        db.commit()
+                if bulk:
+                    db.execute(
+                        "INSERT INTO bulk_sales (sale_id, item_type, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)",
+                        (
+                            sale_id,
+                            "bulk",
+                            bulk.get("quantity", 0),
+                            bulk.get("unit_price", BULK_ITEM_UNIT_PRICES["bulk"]),
+                            bulk.get("sell_price", 0),
+                        ),
+                    )
+                    # I am pretty sure the execudes are not needed
+                    db.execute(
+                        'UPDATE bulk_counter SET counter = counter - ? WHERE counter_name = "bulk"',
+                        (bulk.get("quantity", 0),),
+                    )
+                    # Deduct from bulk_items using FIFO
+                    _deduct_bulk_items_fifo(db, "bulk", bulk.get("quantity", 0))
 
-        # Send the PDF file as a download
-        return jsonify({"status": "success", "pdf_path": pdf_path}), 200
-        # except Exception as e:
-        #    db.rollback()
-        #    return jsonify({'status': 'error', 'message': f'There was an error {e}'}), 400
+                if holo:
+                    db.execute(
+                        "INSERT INTO bulk_sales (sale_id, item_type, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)",
+                        (
+                            sale_id,
+                            "holo",
+                            holo.get("quantity", 0),
+                            holo.get("unit_price", BULK_ITEM_UNIT_PRICES["holo"]),
+                            holo.get("sell_price", 0),
+                        ),
+                    )
+                    db.execute(
+                        'UPDATE bulk_counter SET counter = counter - ? WHERE counter_name = "holo"',
+                        (holo.get("quantity", 0),),
+                    )
+                    # Deduct from bulk_items using FIFO
+                    _deduct_bulk_items_fifo(db, "holo", holo.get("quantity", 0))
+
+                if ex:
+                    db.execute(
+                        "INSERT INTO bulk_sales (sale_id, item_type, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)",
+                        (
+                            sale_id,
+                            "ex",
+                            ex.get("quantity", 0),
+                            ex.get("unit_price", BULK_ITEM_UNIT_PRICES["ex"]),
+                            ex.get("sell_price", 0),
+                        ),
+                    )
+                    db.execute(
+                        'UPDATE bulk_counter SET counter = counter - ? WHERE counter_name = "ex"',
+                        (ex.get("quantity", 0),),
+                    )
+                    _deduct_bulk_items_fifo(db, "ex", ex.get("quantity", 0))
+            except Exception as e:
+                db.rollback()
+                logger.exception('Error while adding to sale tables')
+                return jsonify({'status': 'error', 'message': f'Something went wrong while adding items do sale tables. {e}'}), 400
+
+            db.commit()
+
+            # Send the PDF file as a download
+            return jsonify({"status": "success", "pdf_path": pdf_path}), 200
+        except Exception as e:
+            db.rollback()
+            logger.exception('There was a fail during invoice generation | %s', e)
+            return jsonify({'status': 'error', 'message': f'There was an error {e}'}), 400

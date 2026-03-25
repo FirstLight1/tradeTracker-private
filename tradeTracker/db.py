@@ -1,14 +1,113 @@
 import sqlite3
 import click
+import logging
 from flask import current_app, g
+import time
+
+logger = logging.getLogger(__name__)
+SLOW_QUERY_THRESHOLD_MS = 200
+
+class LoggingCursor:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def execute(self, query, params=None):
+        start = time.perf_counter()
+        try:
+            self._cursor.execute(query, params or ())
+            duration_ms = (time.perf_counter() - start) * 1000
+
+            if duration_ms > SLOW_QUERY_THRESHOLD_MS:
+                logger.warning(
+                        "Slow query | %.2fms | %s | params: %s",
+                        duration_ms, query, params,
+                        )
+            else:
+                pass
+            # logger.debug(
+                    #     "Query OK | %.2fms | %s", duration_ms, query
+                    # )
+
+            return self   # ← important: lets cursor.lastrowid work
+
+        except Exception:
+            logger.exception(
+                    "Query failed | %s | params: %s", query, params
+                    )
+            raise
+
+    def executemany(self, query, params_list):
+        start = time.perf_counter()
+        try:
+            self._cursor.executemany(query, params_list)
+            duration_ms = (time.perf_counter() - start) * 1000
+
+            if duration_ms > SLOW_QUERY_THRESHOLD_MS:
+                logger.warning(
+                        "Slow executemany | %.2fms | %s | %d rows",
+                        duration_ms, query, len(params_list),
+                        )
+            else:
+                logger.debug(
+                        "Executemany OK | %.2fms | %s | %d rows",
+                        duration_ms, query, len(params_list),
+                        )
+
+            return self
+
+        except Exception:
+            logger.exception(
+                    "Executemany failed | %s | %d rows",
+                    query, len(params_list)
+                    )
+            raise
+
+    @property
+    def lastrowid(self):
+        return self._cursor.lastrowid
+
+    def fetchone(self):
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+
+class LoggingConnection:
+    def __init__(self, connection):
+        self._conn = connection
+
+    def cursor(self):
+        return LoggingCursor(self._conn.cursor())
+
+    def execute(self, query, params=None):
+        return LoggingCursor(self._conn.cursor()).execute(query, params)
+
+    def commit(self):
+        #logger.debug("Transaction committed")
+        self._conn.commit()
+
+    def rollback(self):
+        logger.warning("Transaction rolled back")
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
 
 def get_db():
     if 'db' not in g:
-        g.db = sqlite3.connect(
+        conn  = sqlite3.connect(
             current_app.config['DATABASE'],
             detect_types=sqlite3.PARSE_DECLTYPES
         )
-        g.db.row_factory = sqlite3.Row
+        conn.row_factory = sqlite3.Row
+        g.db = LoggingConnection(conn)
         g.db.execute('PRAGMA foreign_keys = ON')
     return g.db
 

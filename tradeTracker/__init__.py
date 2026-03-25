@@ -58,10 +58,10 @@ def create_app(test_config=None):
 
     configure_logging(app)
     app.logger.info("App startup")
-    app.logger.setLevel(logging.ERROR)
-    logging.getLogger().setLevel(logging.ERROR)
-    logging.getLogger("werkzeug").setLevel(logging.ERROR)
-    logging.getLogger("waitress").setLevel(logging.ERROR)
+    app.logger.setLevel(logging.WARNING)
+    logging.getLogger().setLevel(logging.WARNING)
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)
+    logging.getLogger("waitress").setLevel(logging.WARNING)
 
     @app.errorhandler(Exception)
     def handle_unexpected_error(err):
