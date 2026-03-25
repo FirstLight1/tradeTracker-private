@@ -141,7 +141,7 @@ def loadExpansions():
                     all_pokemon_sets[key] = value
     except FileNotFoundError:
         print(f"Warning: Expansions file not found at {expansions_path}")
-        logger.exception('File not found %s', expansions_path)
+        logger.exception("File not found %s", expansions_path)
         all_pokemon_sets = {}
 
     return all_pokemon_sets
@@ -431,7 +431,7 @@ def addBulkItems(auction_id):
         _add_bulk_items_helper(db, auction_id, bulk, holo, ex)
     except ValueError as e:
         db.rollback()
-        logger.exception('failed to add to auction | auction_id : %s', auction_id) 
+        logger.exception("failed to add to auction | auction_id : %s", auction_id)
         return jsonify({"status": "error", "message": str(e)}), 400
     db.commit()
     return jsonify({"status": "success"}), 201
@@ -692,7 +692,11 @@ def addToExistingAuction(auction_id):
             return jsonify({"status": "success"}), 201
         except ValueError as e:
             db.rollback()
-            logger.exception('Failed to add to existing auction | auction_id: %s | reason: %s', auction_id, e)
+            logger.exception(
+                "Failed to add to existing auction | auction_id: %s | reason: %s",
+                auction_id,
+                e,
+            )
             return jsonify({"status": "error", "message": str(e)}), 400
 
 
@@ -748,10 +752,14 @@ def loadSoldCards(sale_id):
         (sale_id,),
     ).fetchall()
 
-    sealed_sales = db.execute("SELECT * FROM sealed WHERE sale_id = ?", (sale_id,)).fetchall()
+    sealed_sales = db.execute(
+        "SELECT * FROM sealed WHERE sale_id = ?", (sale_id,)
+    ).fetchall()
     sealed_sales_list = [dict(item) for item in sealed_sales]
 
-    bulk_sales = db.execute("SELECT * FROM bulk_sales WHERE sale_id = ?", (sale_id,)).fetchall()
+    bulk_sales = db.execute(
+        "SELECT * FROM bulk_sales WHERE sale_id = ?", (sale_id,)
+    ).fetchall()
     bulk_sales_list = [dict(bulk) for bulk in bulk_sales]
     response = {
         "cards": [dict(card) for card in cards],
@@ -810,7 +818,7 @@ def orderReturn(saleId):
         db.execute("DELETE FROM sales WHERE id = ?", (saleId,))
     except:
         db.rollback()
-        logger.exception('Return creation failed | saleId: %s', saleId)
+        logger.exception("Return creation failed | saleId: %s", saleId)
         return jsonify(
             {"status": "error", "message": "There was an error while creating a return"}
         ), 400
@@ -907,10 +915,13 @@ def generate_credit_note(saleId):
             original_invoice_num,
         )
     except Exception as e:
-        logger.critical('Credit note generation failed %s',e)
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.critical("Credit note generation failed %s", e)
+        return jsonify({"status": "error", "message": str(e)}), 500
 
-    logger.info('Credit note generated succesfully | original invoice num: %s', original_invoice_num)
+    logger.info(
+        "Credit note generated succesfully | original invoice num: %s",
+        original_invoice_num,
+    )
     return jsonify({"status": "success", "pdf_path": pdf_path, "cn_num": cn_num}), 200
 
 
@@ -970,14 +981,16 @@ def generateSoldReport():
             month, year, cards_list, sealedList, bulkAndHoloList, shipping_list
         )
         xls_path = createBuyReport(month, year, db)
-        logger.info('Sold report generated succesfully | month: %s | year: %s', month, year)
+        logger.info(
+            "Sold report generated succesfully | month: %s | year: %s", month, year
+        )
         return jsonify(
             {"status": "success", "pdf_path": pdf_path, "xls_path": xls_path}
         ), 200
     except Exception as e:
-        logger.exception('PDF generation failed')
+        logger.exception("PDF generation failed")
         print(f"Error generating PDF: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 def generatePDF(month, year, cards, sealed, bulkAndHoloList, shipping):
@@ -1449,7 +1462,9 @@ def recalculateCardPrices(auction_id, new_auction_price):
     ).fetchall()
 
     if not cards and not sealed_items:
-        logger.warning('No unsold cards or sealed items found | auction_id: %s', auction_id)
+        logger.warning(
+            "No unsold cards or sealed items found | auction_id: %s", auction_id
+        )
         return jsonify(
             {"status": "error", "message": "No unsold cards or sealed items found"}
         ), 400
@@ -1476,7 +1491,7 @@ def recalculateCardPrices(auction_id, new_auction_price):
     )
 
     if total_market_value == 0:
-        logger.warning('Market value is 0 | auction_id: %s', auction_id)
+        logger.warning("Market value is 0 | auction_id: %s", auction_id)
         return jsonify(
             {"status": "error", "message": "Total market value is zero"}
         ), 400
@@ -1490,7 +1505,8 @@ def recalculateCardPrices(auction_id, new_auction_price):
                 discount = (card["market_value"] / total_market_value) * priceDiff
                 new_price = round(card["market_value"] - discount, 2)
                 db.execute(
-                    "UPDATE cards SET card_price = ? WHERE id = ?", (new_price, card["id"])
+                    "UPDATE cards SET card_price = ? WHERE id = ?",
+                    (new_price, card["id"]),
                 )
 
         # Update sealed items proportionally
@@ -1503,8 +1519,17 @@ def recalculateCardPrices(auction_id, new_auction_price):
                 )
     except Exception as e:
         db.rollback()
-        logger.exception("Database error while adjusting cards | auction_id: %s | error: %s", auction_id, e)
-        return jsonify({"status": "error", "message": "There was an error while adjusting card prices"})
+        logger.exception(
+            "Database error while adjusting cards | auction_id: %s | error: %s",
+            auction_id,
+            e,
+        )
+        return jsonify(
+            {
+                "status": "error",
+                "message": "There was an error while adjusting card prices",
+            }
+        )
 
     db.commit()
     return jsonify({"status": "success"}), 200
@@ -1618,11 +1643,11 @@ def cardMarketTable():
             )
 
             db.commit()
-            logger.info('Cards successfully imported | auction_id: %s', auction_id)
+            logger.info("Cards successfully imported | auction_id: %s", auction_id)
             return jsonify({"status": "success"}), 201
 
         except Exception as e:
-            logger.exception('DB error') 
+            logger.exception("DB error")
             print("DB error:", e)
             return jsonify({"status": "error"}), 500
 
@@ -1650,7 +1675,7 @@ def cardMarketOrder():
             card["cardId"] = ids
 
     except:
-        logger.exception('cardMarketOrder failed to get card ids')
+        logger.exception("cardMarketOrder failed to get card ids")
         print("There was an error while getting card ids")
         return jsonify(
             {"status": "error", "message": "Failed to match cards to card ids"}
@@ -1671,7 +1696,7 @@ def cardMarketOrder():
             if len(ids) > 0:
                 item["id"] = ids
     except:
-        logger.exception('cardMarketOrder failed to get sealed ids')
+        logger.exception("cardMarketOrder failed to get sealed ids")
         print("There was an error while getting sealed ids")
         return jsonify(
             {
@@ -1684,7 +1709,7 @@ def cardMarketOrder():
     orderInfo = {"shipping_info": shipping_info, "cards": cards, "sealed": sealed}
     global latest
     latest = orderInfo
-    logger.info('Order succcessfully extracted')
+    logger.info("Order succcessfully extracted")
     return jsonify({"status": "success"}), 200
 
 
@@ -2078,12 +2103,17 @@ def invoice():
                 )
             elif recieverInfo.get("paymentMethod"):
                 # Backwards compatibility - convert single payment method to array
-                payment_data = [{"type": recieverInfo.get("paymentMethod"), "amount": 0}]
+                payment_data = [
+                    {"type": recieverInfo.get("paymentMethod"), "amount": 0}
+                ]
                 valid = True
             else:
                 err = "No payment method provided"
             if err != None:
-                logger.error('Failed to validate payment | payment method: %s',recieverInfo.get('paymentMethod'))
+                logger.error(
+                    "Failed to validate payment | payment method: %s",
+                    recieverInfo.get("paymentMethod"),
+                )
                 return jsonify(
                     {
                         "status": "error",
@@ -2091,7 +2121,9 @@ def invoice():
                     }
                 ), 400
             if not valid:
-                return jsonify({"status": "error", "message": "Invalid payment data"}), 400
+                return jsonify(
+                    {"status": "error", "message": "Invalid payment data"}
+                ), 400
 
             try:
                 pdf_path, invoice_num = generateInvoice.generate_invoice(
@@ -2105,20 +2137,31 @@ def invoice():
                     shipping=cartContent.get("shipping"),
                 )
             except:
-                logger.exception('Failed to create invoice | cards: %s | sealed: %s | bulk: %s | holo: %s | ex: %s | payment_methods: %s | shipping: %s',cards, sealed, bulk, holo, ex ,payment_data, cartContent['shipping'])
+                logger.exception(
+                    "Failed to create invoice | cards: %s | sealed: %s | bulk: %s | holo: %s | ex: %s | payment_methods: %s | shipping: %s",
+                    cards,
+                    sealed,
+                    bulk,
+                    holo,
+                    ex,
+                    payment_data,
+                    cartContent["shipping"],
+                )
 
             shippingPrice = cartContent.get("shipping", {}).get("shippingPrice")
             recieverInfoJson = json.dumps(recieverInfo)
             if shippingPrice == None:
                 shippingPrice = 0
             sale_date = datetime.date.today().isoformat()
-            total_amount = round(float(recieverInfo.get("total")) + float(shippingPrice), 2)
+            total_amount = round(
+                float(recieverInfo.get("total")) + float(shippingPrice), 2
+            )
             cursor = db.execute(
                 "INSERT INTO sales (invoice_number, sale_date, total_amount, notes, shipping_info) VALUES (?, ?, ?, ?,?)",
                 (invoice_num, sale_date, total_amount, recieverInfoJson, shippingPrice),
             )
             sale_id = cursor.lastrowid
-            
+
             try:
                 # Add sale items
                 if len(cards) > 0:
@@ -2203,15 +2246,26 @@ def invoice():
                     _deduct_bulk_items_fifo(db, "ex", ex.get("quantity", 0))
             except Exception as e:
                 db.rollback()
-                logger.exception('Error while adding to sale tables')
-                return jsonify({'status': 'error', 'message': f'Something went wrong while adding items do sale tables. {e}'}), 400
+                logger.exception("Error while adding to sale tables")
+                return jsonify(
+                    {
+                        "status": "error",
+                        "message": f"Something went wrong while adding items do sale tables. {e}",
+                    }
+                ), 400
 
             db.commit()
 
             # Send the PDF file as a download
-            logger.info('Invoice generated succesfully | invoice_number: %s | sale_id: %s', invoice_num, sale_id)
+            logger.info(
+                "Invoice generated succesfully | invoice_number: %s | sale_id: %s",
+                invoice_num,
+                sale_id,
+            )
             return jsonify({"status": "success", "pdf_path": pdf_path}), 200
         except Exception as e:
             db.rollback()
-            logger.exception('There was a fail during invoice generation | %s', e)
-            return jsonify({'status': 'error', 'message': f'There was an error {e}'}), 400
+            logger.exception("There was a fail during invoice generation | %s", e)
+            return jsonify(
+                {"status": "error", "message": f"There was an error {e}"}
+            ), 400
