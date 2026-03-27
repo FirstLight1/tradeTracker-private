@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../static/styles/header-align.css">
+    <link rel="stylesheet" href="../static/styles/collection-aling.css">
+    <link rel="stylesheet" href="../static/styles/collection-style.css">
+    <title>Collection</title>
+</head>
+<body>
+    <h1>Trade Tracker - COLLECTION</h1>
+    <header class="header">
+        <nav class="nav-bar">
+            <div>
+                <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                <button class="auctions"><a href="{{ url_for('actions.renderAuctions') }}">Sales</a></button>
+                <span class="arrow right"><img src="../static/images/rightarrow.png" alt="right arrow"></span>
+            </div>
+            <div>
+                <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                <button class="add-to-collection"><a href="{{ url_for('actions.renderAddCardsToCollection') }}">Add Card(s)</a></button>
+                <span class="arrow right"><img src="../static/images/rightarrow.png" alt="right arrow"></span>
+            </div>
+
+            <div class="inventory-value">
+                <div><p class="inventory-value-header">Inventory value</p></div>
+                <div><p class="inventory-value-value"></p></div>
+            </div>
+        </nav>
+    </header>
+    <main>
+        <div class="card-header">
+            <p>Card name</p>
+            <p>Card number</p>
+            <p>Condition</p>
+            <p>Buy price</p>
+            <p>Market value</p>
+        </div>
+        <div class="collection">
+            <!-- cards go here -->
+        </div>
+    </main>
+    <script type="module" src="../static/collection.js"></script>
+</body>
+</html>

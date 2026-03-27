@@ -1,0 +1,246 @@
+@font-face {
+  font-family: 'HollowKnightFont';
+  src: url('../fonts/hollowKnight.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+:root {
+  --waterway-dark: #0a0d14;
+  --waterway-medium: #141b2a;
+  --waterway-light: #1d2639;
+  --accent-teal: #5ad1c7;
+  --accent-purple: #7c5fa3;
+  --text-color: #b4c1d3;
+  --glow-color: rgba(90, 209, 199, 0.25);
+  --mist-color: rgba(124, 95, 163, 0.08);
+  --primary-font: 'HollowKnightFont', serif;
+  --white-color: rgb(255, 255, 255);
+}
+
+body {
+  color: var(--text-color);
+  font-family: var(--primary-font), serif;
+  position: relative;
+  overflow-x: hidden;
+  min-height: 100vh;
+  background: linear-gradient(
+    120deg,
+    rgba(10, 13, 20, 0.96) 0%,
+    rgba(29, 38, 57, 0.93) 100%
+  ),
+  url('../images/RoyalWaterwaysBG.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+h1{
+  color: var(--text-color);
+  text-shadow:
+    0 0 2px rgba(255,255,255,1),
+    0 0 6px rgba(255,250,240,0.9),
+    0 0 14px rgba(255,240,220,0.7),
+    0 0 30px rgba(200,190,255,0.25),
+    0 0 60px rgba(180,170,255,0.12);
+  font-size: 2.8rem;
+  font-weight: normal;
+  font-family: var(--primary-font), serif;
+  letter-spacing: 0.15em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--text-color);
+  text-decoration: none;
+}
+a:hover {
+    letter-spacing: 0.25em;
+}
+
+.nav-bar {
+  background: linear-gradient(
+    90deg,
+    var(--waterway-dark) 0%,
+    rgba(29, 38, 57, 0.92) 50%,
+    var(--waterway-dark) 100%
+  );
+  border: 1px solid rgba(90, 209, 199, 0.13);
+  box-shadow: 0 5px 18px rgba(0,0,0,0.45), 0 0 40px var(--glow-color);
+  backdrop-filter: blur(6px);
+}
+
+.arrow {
+  font-size: 24px;
+  color: var(--accent-teal);
+  opacity: 0;
+  cursor: default;
+  padding: 5px 12px;
+  transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.arrow img{
+    width: 24px;
+    height: 24px;
+}
+
+.nav-bar div:hover .arrow {
+  opacity: 1;
+}
+
+button, .button {
+  background: linear-gradient(
+    135deg,
+    rgba(90, 209, 199, 0.08) 0%,
+    rgba(124, 95, 163, 0.10) 100%
+  );
+  border: none;
+  border-radius: 25px;
+  color: var(--text-color);
+  font-family: var(--primary-font), serif;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  text-shadow:
+    0 0 2px rgba(255,255,255,1),
+    0 0 6px rgba(255,250,240,0.9),
+    0 0 14px rgba(255,240,220,0.7),
+    0 0 30px rgba(200,190,255,0.25),
+    0 0 60px rgba(180,170,255,0.12);
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 0 transparent;
+  cursor: pointer;
+}
+
+button:hover, .button:hover {
+  letter-spacing: 0.22em;
+}
+
+.content-container {
+  background: linear-gradient(
+    135deg,
+    rgba(26, 31, 46, 0.9) 0%,
+    rgba(13, 17, 23, 0.9) 100%
+  );
+  width: 1500px;
+  margin-left: auto;
+  margin-right: auto;
+  border: 1px solid rgba(90, 209, 199, 0.10);
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 0 60px var(--mist-color);
+  backdrop-filter: blur(10px);
+  padding-bottom: 25px;
+  padding-top: 15px;
+}
+
+.cards-header p {
+  color: var(--accent-teal);
+  font-family: var(--primary-font), serif;
+  letter-spacing: 0.09em;
+  text-shadow: 0 0 2px var(--white-color), 0 0 8px var(--glow-color);
+}
+
+.card {
+  box-shadow: 0 4px 18px rgba(0,0,0,0.32), 0 0 30px var(--mist-color);
+  border-radius: 10px;
+  transition: box-shadow 0.3s, background 0.3s;
+}
+
+input[type="text"], select, textarea {
+  background: var(--waterway-dark);
+  color: var(--text-color);
+  border: 1px solid var(--accent-teal);
+  font-family: var(--primary-font), serif;
+  box-shadow: 0 0 12px var(--glow-color) inset;
+  border-radius: 6px;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+a.sale-link{
+  color: var(--accent-teal);
+  text-decoration: none;
+  border: 1px solid rgba(90, 209, 199, 0.3);
+  border-radius: 16px;
+  padding: 6px 12px;
+  background: rgba(90, 209, 199, 0.08);
+  box-shadow: inset 0 0 8px rgba(90, 209, 199, 0.12);
+  transition: all 0.25s ease;
+}
+
+a.sale-link:hover,
+a.sale-link:focus{
+  color: var(--text-color);
+  border-color: rgba(90, 209, 199, 0.6);
+  box-shadow: 0 0 16px rgba(90, 209, 199, 0.2), inset 0 0 10px rgba(90, 209, 199, 0.16);
+  outline: none;
+}
+
+input[type="text"]:focus, select:focus, textarea:focus {
+  border-color: var(--accent-teal);
+  box-shadow: 0 0 18px var(--accent-teal) inset, 0 0 8px var(--glow-color);
+  outline: none;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent-teal);
+  box-shadow: 0 0 8px var(--glow-color);
+}
+
+.total-profit, .inventory-value {
+  color: var(--text-color);
+  text-shadow: 0 0 2px var(--accent-teal), 0 0 8px var(--glow-color);
+  font-family: var(--primary-font), serif;
+  letter-spacing: 0.1em;
+  margin-right: 26px;
+  text-shadow:
+    0 0 2px rgba(255,255,255,1),
+    0 0 6px rgba(255,250,240,0.9),
+    0 0 14px rgba(255,240,220,0.7),
+    0 0 30px rgba(200,190,255,0.25),
+    0 0 60px rgba(180,170,255,0.12);
+}
+
+.inventory-value{
+    margin-left: 35px;
+}
+
+.total-profit{
+    margin-left: 35px;
+}
+
+.total-profit-value, .inventory-value-value {
+  margin-left: 7px;
+}
+
+.action-buttons{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.action-buttons:hover .arrow{
+    opacity: 1;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--waterway-dark);
+  box-shadow: inset 0 0 5px rgba(0,0,0,0.3);
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(var(--accent-teal), var(--accent-purple));
+  border-radius: 5px;
+  border: 2px solid var(--waterway-dark);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-teal);
+  box-shadow: 0 0 10px var(--glow-color);
+}

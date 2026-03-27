@@ -1,0 +1,307 @@
+:root {
+    /* Queen's Garden Color Palette */
+    --color-primary: #0a1a1f; /* Deep, dark teal */
+    --color-secondary: #102a2a; /* Dark cyan */
+    --color-accent: #6affa0; /* Luminous mint green */
+    --color-highlight: #a0c0d0; /* Soft, misty blue */
+    
+    /* Background Colors */
+    --bg-primary: rgba(10, 26, 31, 0.75); /* Deep teal, semi-transparent */
+    --bg-secondary: rgba(16, 42, 42, 0.75); /* Dark cyan, semi-transparent */
+    --bg-card: rgba(10, 26, 31, 0.65); /* Darker card background */
+    
+    /* Text Colors */
+    --text-primary: #c0e0f0; /* Light, ethereal blue */
+    --text-secondary: #ffffff; /* Pure white for contrast */
+    --text-accent: #6affa0; /* Luminous mint for accents */
+    
+    /* Border Colors */
+    --border-primary: rgba(106, 255, 160, 0.3); /* Faint mint border */
+    --border-hover: rgba(106, 255, 160, 0.8); /* Glowing mint border on hover */
+    
+    /* Shadow Colors */
+    --shadow-primary: rgba(106, 255, 160, 0.2); /* Soft mint glow */
+    --shadow-secondary: rgba(75, 58, 90, 0.4); /* Muted purple shadow */
+    --shadow-accent: rgba(160, 192, 208, 0.3); /* Ethereal blue glow */
+}
+
+@font-face {
+    font-family: 'HollowKnight';
+    src: url('../fonts/hollowKnight.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+html {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'HollowKnight', serif;
+    background: linear-gradient(
+        rgba(10, 26, 31, 0.85), 
+        rgba(16, 42, 42, 0.95)
+    ),
+    url('../images/queensGardenBG.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    color: var(--text-primary);
+    min-height: 100%;
+    margin: 0;
+    padding: 20px;
+    box-shadow: 0 0 120px 20px var(--shadow-primary) inset, 0 0 80px 10px var(--shadow-secondary) inset;
+}
+
+h1 {
+    color: var(--text-primary);
+    font-size: 2.8rem;
+    text-shadow:
+        0 0 2px rgba(255,255,255,0.8),
+        0 0 8px var(--text-accent),
+        0 0 18px var(--shadow-primary),
+        0 0 30px var(--shadow-secondary),
+        0 0 50px var(--shadow-accent);
+    letter-spacing: 0.15rem;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.nav-bar {
+    background: linear-gradient(90deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    box-shadow: 0 2px 24px var(--shadow-primary), 0 0 32px var(--shadow-secondary) inset;
+    backdrop-filter: blur(8px);
+}
+
+.nav-bar button {
+    background: linear-gradient(
+        135deg,
+        transparent 0%,
+        rgba(106, 255, 160, 0.05) 50%,
+        transparent 100%
+    );
+    color: var(--text-primary);
+    border: 1px solid transparent;
+    border-radius: 25px;
+    font-family: 'HollowKnight', serif;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    text-shadow:
+        0 0 2px rgba(255,255,255,0.7),
+        0 0 6px var(--text-accent),
+        0 0 12px var(--shadow-primary);
+    padding-bottom: 5px;
+    height: 40px;
+}
+
+.arrow {
+    margin: 0px;
+    opacity: 0;
+    cursor: default;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+.arrow img {
+    width: 24px;
+    height: 24px;
+}
+
+.nav-bar div:hover .arrow {
+    opacity: 1;
+    transition: opacity 0.5s;
+}
+
+.nav-bar button:hover {
+    letter-spacing: 0.25em;
+}
+
+.nav-bar a {
+    color: var(--color-accent);
+    text-decoration: none;
+    text-shadow: 0 0 8px var(--color-accent), 0 0 4px var(--color-primary);
+}
+
+.inventory-value {
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    color: var(--color-accent);
+}
+
+.inventory-value-header {
+    color: var(--color-accent);
+    font-size: 1.1rem;
+    text-shadow: 0 0 12px var(--color-primary), 0 0 8px var(--color-accent);
+}
+
+.inventory-value-value {
+    color: var(--text-primary);
+    font-size: 1.3rem;
+    text-shadow: 0 0 16px var(--color-accent), 0 0 10px var(--color-highlight);
+    margin-left: 15px;
+}
+
+.card-header {
+    background: linear-gradient(90deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    color: var(--text-accent);
+    border-radius: 10px;
+    box-shadow: 0 0 24px var(--shadow-primary) inset, 0 0 12px var(--shadow-primary);
+    font-size: 1.1rem;
+    letter-spacing: 1px;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0;
+    width: 1530px;
+}
+
+.collection {
+    background: linear-gradient(120deg, var(--bg-primary) 60%, var(--bg-secondary) 100%);
+    border-radius: 16px;
+    box-shadow: 0 0 48px var(--shadow-primary) inset, 0 0 32px var(--shadow-primary);
+    padding: 1.5rem 0;
+    backdrop-filter: blur(5px);
+    border: 1px solid var(--border-primary);
+    position: relative;
+    width: 1530px;
+    margin: 0 auto 2rem auto;
+}
+
+.collection .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 12px;
+    box-shadow: 0 0 12px var(--shadow-secondary), 0 0 6px var(--shadow-accent) inset;
+    color: var(--text-primary);
+    margin-bottom: 1.2rem;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(3px);
+}
+
+.collection .card:hover {
+    border-color: var(--border-hover);
+    box-shadow: 0 0 24px var(--shadow-primary), 0 0 12px var(--shadow-secondary), 0 0 10px var(--shadow-accent);
+    color: var(--text-accent);
+    background: var(--bg-secondary);
+}
+
+p, a, button {
+    font-family: 'HollowKnight', serif;
+    text-shadow: 0 0 6px var(--color-primary), 0 0 3px var(--color-accent);
+}
+
+input[type="text"], input[type="number"] {
+    background: var(--color-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 25px;
+    box-shadow: 
+        inset 0 0 10px rgba(0, 0, 0, 0.4),
+        0 0 15px var(--shadow-secondary);
+    transition: all 0.3s ease;
+    backdrop-filter: blur(5px);
+    padding: 8px 15px;
+    font-family: 'HollowKnight', serif;
+}
+
+input[type="checkbox"] {
+    accent-color: var(--color-accent);
+}
+
+input[type="text"]:focus, 
+input[type="number"]:focus, 
+select:focus, 
+textarea:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 12px var(--shadow-primary) inset, 0 0 8px var(--shadow-accent);
+    outline: none;
+}
+
+select {
+    background: var(--color-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 25px;
+    box-shadow: 
+        inset 0 0 10px rgba(0, 0, 0, 0.4),
+        0 0 15px var(--shadow-secondary);
+    transition: all 0.3s ease;
+    backdrop-filter: blur(5px);
+    padding: 8px 15px;
+    font-family: 'HollowKnight', serif;
+}
+
+.delete-btn{
+    margin-left: 30px;
+    background: transparent;
+    color: var(--text-primary);
+    border: none;
+    border-radius: 15px;
+    letter-spacing: 0.2em;
+    font-size: large;
+    cursor: pointer;
+}
+
+.delete-btn:hover{
+    letter-spacing: 0.25em;
+    scale: 1.1;
+    transition: all 0.3s ease;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    background: var(--color-primary);
+}
+
+::-webkit-scrollbar-track {
+    background: var(--color-primary);
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(
+        var(--color-accent),
+        var(--color-highlight)
+    );
+    border-radius: 5px;
+    border: 2px solid var(--color-primary);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-accent);
+    box-shadow: 0 0 10px var(--text-accent);
+}
+
+.add-card,
+.save-btn{
+    background: transparent;
+    color: var(--color-accent);
+    font-size: 20px;
+    border: none;
+    border-radius: 15px;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    padding-bottom: 7px;
+    letter-spacing: 0.2em;
+}
+
+.add-card-container:hover .arrow,
+.save-container:hover .arrow{
+    opacity: 1;
+    transition: opacity 0.5s;
+}
+
+.add-card-container:hover .add-card,
+.save-container:hover .save-btn{
+    letter-spacing: 0.25em;
+    transition: all 0.3s ease;
+}

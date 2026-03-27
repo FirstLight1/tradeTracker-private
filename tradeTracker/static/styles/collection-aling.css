@@ -1,0 +1,35 @@
+body{
+    padding: 0px;
+    margin: 0px;
+    color: var(--text-color);
+    font-family: var(--primary-font), "Cinzel", serif;
+    position: relative;
+    overflow-x: hidden;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.card-header,
+.card{
+    display: grid;
+    grid-template-columns: 280px 120px 150px 100px 135px 110px;
+    gap: 25px;
+    text-align:center;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-header{
+    height: 75px;
+}
+
+.button-container,
+.add-card-container,
+.save-container{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 20px;
+}

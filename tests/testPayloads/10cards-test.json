@@ -1,0 +1,97 @@
+[
+  {
+    "name": "Cardmarket Condition Test Auction",
+    "buy": 450.0,
+    "date": "2025-01-20"
+  },
+  {
+    "cardName": "Charizard V",
+    "cardNum": "019",
+    "condition": "NM",
+    "buyPrice": 20.0,
+    "marketValue": 25.5,
+    "sellPrice": 25.5,
+    "soldDate": null
+  },
+  {
+    "cardName": "Pikachu",
+    "cardNum": "005",
+    "condition": "LP",
+    "buyPrice": 5.0,
+    "marketValue": 8.0,
+    "sellPrice": 8.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Gengar EX",
+    "cardNum": "112",
+    "condition": "EX",
+    "buyPrice": 18.0,
+    "marketValue": 22.0,
+    "sellPrice": 22.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Mew V",
+    "cardNum": "060",
+    "condition": "GD",
+    "buyPrice": 12.0,
+    "marketValue": 14.0,
+    "sellPrice": 14.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Bulbasaur",
+    "cardNum": "001",
+    "condition": "PL",
+    "buyPrice": 3.0,
+    "marketValue": 5.0,
+    "sellPrice": 5.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Umbreon VMAX",
+    "cardNum": "215",
+    "condition": "MT",
+    "buyPrice": 80.0,
+    "marketValue": 90.0,
+    "sellPrice": 90.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Squirtle",
+    "cardNum": "007",
+    "condition": "GD",
+    "buyPrice": 4.0,
+    "marketValue": 6.5,
+    "sellPrice": 6.5,
+    "soldDate": null
+  },
+  {
+    "cardName": "Arcanine",
+    "cardNum": "059",
+    "condition": "EX",
+    "buyPrice": 7.0,
+    "marketValue": 10.0,
+    "sellPrice": 10.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Lugia V",
+    "cardNum": "186",
+    "condition": "LP",
+    "buyPrice": 35.0,
+    "marketValue": 40.0,
+    "sellPrice": 40.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Rayquaza VMAX",
+    "cardNum": "218",
+    "condition": "PO",
+    "buyPrice": 60.0,
+    "marketValue": 75.0,
+    "sellPrice": 75.0,
+    "soldDate": null
+  }
+]

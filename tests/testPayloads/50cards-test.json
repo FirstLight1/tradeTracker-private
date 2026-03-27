@@ -1,0 +1,421 @@
+[
+  {
+    "name": "Large Cardmarket Auction",
+    "buy": 1250.0,
+    "date": "2025-01-20"
+  },
+  {
+    "cardName": "Charizard V",
+    "cardNum": "019",
+    "condition": "NM",
+    "buyPrice": 20.0,
+    "marketValue": 25.5,
+    "sellPrice": 25.5,
+    "soldDate": null
+  },
+  {
+    "cardName": "Pikachu",
+    "cardNum": "005",
+    "condition": "LP",
+    "buyPrice": 5.0,
+    "marketValue": 8.0,
+    "sellPrice": 8.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Gengar EX",
+    "cardNum": "112",
+    "condition": "EX",
+    "buyPrice": 18.0,
+    "marketValue": 22.0,
+    "sellPrice": 22.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Mew V",
+    "cardNum": "060",
+    "condition": "GD",
+    "buyPrice": 12.0,
+    "marketValue": 14.0,
+    "sellPrice": 14.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Bulbasaur",
+    "cardNum": "001",
+    "condition": "PL",
+    "buyPrice": 3.0,
+    "marketValue": 5.0,
+    "sellPrice": 5.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Umbreon VMAX",
+    "cardNum": "215",
+    "condition": "MT",
+    "buyPrice": 80.0,
+    "marketValue": 90.0,
+    "sellPrice": 90.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Squirtle",
+    "cardNum": "007",
+    "condition": "GD",
+    "buyPrice": 4.0,
+    "marketValue": 6.5,
+    "sellPrice": 6.5,
+    "soldDate": null
+  },
+  {
+    "cardName": "Arcanine",
+    "cardNum": "059",
+    "condition": "EX",
+    "buyPrice": 7.0,
+    "marketValue": 10.0,
+    "sellPrice": 10.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Lugia V",
+    "cardNum": "186",
+    "condition": "LP",
+    "buyPrice": 35.0,
+    "marketValue": 40.0,
+    "sellPrice": 40.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Rayquaza VMAX",
+    "cardNum": "218",
+    "condition": "PO",
+    "buyPrice": 60.0,
+    "marketValue": 75.0,
+    "sellPrice": 75.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Blastoise",
+    "cardNum": "009",
+    "condition": "NM",
+    "buyPrice": 15.0,
+    "marketValue": 19.0,
+    "sellPrice": 19.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Venusaur",
+    "cardNum": "003",
+    "condition": "EX",
+    "buyPrice": 14.0,
+    "marketValue": 17.0,
+    "sellPrice": 17.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Charmeleon",
+    "cardNum": "024",
+    "condition": "GD",
+    "buyPrice": 6.0,
+    "marketValue": 7.5,
+    "sellPrice": 7.5,
+    "soldDate": null
+  },
+  {
+    "cardName": "Wartortle",
+    "cardNum": "008",
+    "condition": "PL",
+    "buyPrice": 4.0,
+    "marketValue": 5.0,
+    "sellPrice": 5.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Ivysaur",
+    "cardNum": "002",
+    "condition": "LP",
+    "buyPrice": 5.0,
+    "marketValue": 6.0,
+    "sellPrice": 6.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Moltres",
+    "cardNum": "146",
+    "condition": "NM",
+    "buyPrice": 10.0,
+    "marketValue": 13.0,
+    "sellPrice": 13.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Zapdos",
+    "cardNum": "145",
+    "condition": "EX",
+    "buyPrice": 9.0,
+    "marketValue": 11.0,
+    "sellPrice": 11.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Articuno",
+    "cardNum": "144",
+    "condition": "MT",
+    "buyPrice": 12.0,
+    "marketValue": 15.0,
+    "sellPrice": 15.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Snorlax",
+    "cardNum": "143",
+    "condition": "GD",
+    "buyPrice": 8.0,
+    "marketValue": 9.5,
+    "sellPrice": 9.5,
+    "soldDate": null
+  },
+  {
+    "cardName": "Dragonite",
+    "cardNum": "149",
+    "condition": "NM",
+    "buyPrice": 22.0,
+    "marketValue": 27.0,
+    "sellPrice": 27.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Dratini",
+    "cardNum": "147",
+    "condition": "LP",
+    "buyPrice": 3.0,
+    "marketValue": 4.5,
+    "sellPrice": 4.5,
+    "soldDate": null
+  },
+  {
+    "cardName": "Dragonair",
+    "cardNum": "148",
+    "condition": "PL",
+    "buyPrice": 4.0,
+    "marketValue": 6.0,
+    "sellPrice": 6.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Eevee",
+    "cardNum": "133",
+    "condition": "NM",
+    "buyPrice": 2.5,
+    "marketValue": 3.5,
+    "sellPrice": 3.5,
+    "soldDate": null
+  },
+  {
+    "cardName": "Vaporeon",
+    "cardNum": "134",
+    "condition": "EX",
+    "buyPrice": 8.0,
+    "marketValue": 9.0,
+    "sellPrice": 9.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Jolteon",
+    "cardNum": "135",
+    "condition": "GD",
+    "buyPrice": 7.0,
+    "marketValue": 8.5,
+    "sellPrice": 8.5,
+    "soldDate": null
+  },
+  {
+    "cardName": "Flareon",
+    "cardNum": "136",
+    "condition": "LP",
+    "buyPrice": 7.5,
+    "marketValue": 9.0,
+    "sellPrice": 9.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Mimikyu",
+    "cardNum": "235",
+    "condition": "NM",
+    "buyPrice": 6.0,
+    "marketValue": 7.0,
+    "sellPrice": 7.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Lucario",
+    "cardNum": "448",
+    "condition": "EX",
+    "buyPrice": 8.0,
+    "marketValue": 10.0,
+    "sellPrice": 10.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Gardevoir",
+    "cardNum": "282",
+    "condition": "GD",
+    "buyPrice": 7.0,
+    "marketValue": 8.0,
+    "sellPrice": 8.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Salamence",
+    "cardNum": "373",
+    "condition": "LP",
+    "buyPrice": 10.0,
+    "marketValue": 12.0,
+    "sellPrice": 12.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Metagross",
+    "cardNum": "376",
+    "condition": "PL",
+    "buyPrice": 6.0,
+    "marketValue": 7.0,
+    "sellPrice": 7.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Tyranitar",
+    "cardNum": "248",
+    "condition": "NM",
+    "buyPrice": 18.0,
+    "marketValue": 21.0,
+    "sellPrice": 21.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Scizor",
+    "cardNum": "212",
+    "condition": "EX",
+    "buyPrice": 7.0,
+    "marketValue": 9.5,
+    "sellPrice": 9.5,
+    "soldDate": null
+  },
+  {
+    "cardName": "Houndoom",
+    "cardNum": "229",
+    "condition": "GD",
+    "buyPrice": 5.0,
+    "marketValue": 6.0,
+    "sellPrice": 6.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Absol",
+    "cardNum": "359",
+    "condition": "LP",
+    "buyPrice": 3.0,
+    "marketValue": 4.0,
+    "sellPrice": 4.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Zoroark",
+    "cardNum": "571",
+    "condition": "NM",
+    "buyPrice": 9.0,
+    "marketValue": 11.0,
+    "sellPrice": 11.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Greninja",
+    "cardNum": "658",
+    "condition": "EX",
+    "buyPrice": 11.0,
+    "marketValue": 13.0,
+    "sellPrice": 13.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Talonflame",
+    "cardNum": "663",
+    "condition": "GD",
+    "buyPrice": 4.0,
+    "marketValue": 5.5,
+    "sellPrice": 5.5,
+    "soldDate": null
+  },
+  {
+    "cardName": "Sylveon",
+    "cardNum": "700",
+    "condition": "LP",
+    "buyPrice": 8.0,
+    "marketValue": 10.0,
+    "sellPrice": 10.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Garchomp",
+    "cardNum": "445",
+    "condition": "NM",
+    "buyPrice": 10.0,
+    "marketValue": 12.0,
+    "sellPrice": 12.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Alakazam",
+    "cardNum": "065",
+    "condition": "EX",
+    "buyPrice": 9.5,
+    "marketValue": 11.0,
+    "sellPrice": 11.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Machamp",
+    "cardNum": "068",
+    "condition": "GD",
+    "buyPrice": 4.5,
+    "marketValue": 5.5,
+    "sellPrice": 5.5,
+    "soldDate": null
+  },
+  {
+    "cardName": "Golem",
+    "cardNum": "076",
+    "condition": "PL",
+    "buyPrice": 3.5,
+    "marketValue": 4.5,
+    "sellPrice": 4.5,
+    "soldDate": null
+  },
+  {
+    "cardName": "Hitmonlee",
+    "cardNum": "106",
+    "condition": "LP",
+    "buyPrice": 3.0,
+    "marketValue": 4.0,
+    "sellPrice": 4.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Hitmonchan",
+    "cardNum": "107",
+    "condition": "NM",
+    "buyPrice": 5.0,
+    "marketValue": 6.0,
+    "sellPrice": 6.0,
+    "soldDate": null
+  },
+  {
+    "cardName": "Nidoking",
+    "cardNum": "034",
+    "condition": "GD",
+    "buyPrice": 6.0,
+    "marketValue": 7.0,
+    "sellPrice": 7.0,
+    "soldDate": null
+  }
+]

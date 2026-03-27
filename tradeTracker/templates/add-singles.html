@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../static/styles/addSingles.css">
+    <link rel="stylesheet" href="../static/styles/header-align.css">
+    <link rel="stylesheet" href="../static/styles/addSingles-style.css">
+    <title>Add Singles</title>
+</head>
+<body>
+    <h1>Trade<span class="shadow"></span> Tracker - Add Singles</h1>
+    <header class="header">
+        <nav class="nav-bar">
+            <div>
+                <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                <button class="addAuction"><a href="{{ url_for('actions.renderAuctions') }}">Sales</a></button>
+                <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
+            </div>
+            <div>
+                <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                <button class="addSingles"><a href="{{ url_for('actions.addAuction') }}">Add Auction</a></button>
+                <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
+            </div>
+            <div>
+                <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                <button class="collection"><a href="{{ url_for('actions.renderCollection')}}">Collection</a></button>
+                <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
+            </div>
+            <div class="inventory-value">
+                <div><p class="inventory-value-header">Inventory</p></div>
+                <div><p class="inventory-value-value"></p></div>
+            </div>
+        </nav>
+    </header>
+    <main>
+        <dir class="content-container">
+            <dir class="cards-header">
+                <p>Card name</p>
+                <p>Card number</p>
+                <p>Condition</p>
+                <p>Buy price</p>
+                <p>Market price</p>
+                <p>Sell price</p>
+            </dir>
+            <dir class="cards-container">
+                <dir class="card">
+                    <input type="text" name="cardName" autocomplete="off">
+                    <input type="text" name="cardNum" autocomplete="off">
+                    <select name="condition">
+                        <option value="Mint">Mint</option>
+                        <option value="Near Mint" selected="selected">Near Mint</option>
+                        <option value="Excellent">Excellent</option>
+                        <option value="Good">Good</option>
+                        <option value="Light Played">Light Played</option>
+                        <option value="Played">Played</option>
+                        <option value="Poor">Poor</option>
+                    </select>
+                    <input type="text" name="buyPrice" autocomplete="off">
+                    <input type="text" name="marketValue" class="marketValue" oninput="handleCardInput(this)" autocomplete="off">
+                    <input type="text" name="sellPrice" autocomplete="off">
+                </dir>
+            </dir>
+        </dir>
+        <dir class="buttons-container">
+            <dir class="add-card-container action-buttons">
+                <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                    <button class="add-card">Add card</button>
+                <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>   
+            </dir>
+            <dir class="save-auction-container action-buttons">
+                <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                    <button class="save-btn">Save</button>            
+                <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
+            </dir>
+        </dir>
+    </main>
+    <script type="module" src="../static/addSingles.js"></script>
+</body>
+</html>

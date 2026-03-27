@@ -1,0 +1,349 @@
+body{
+    padding: 0px;
+    margin: 0px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+p{
+    display: inline;
+    margin: 20px;
+    padding: 0px;
+    margin: 0px;
+}
+
+.content-container{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.alert-div{
+    text-align:center;
+    margin:5px;
+}
+
+
+.alert-error{
+    background-color: #D0342C ;
+    border-radius: 15px;
+    border: 2px solid red;
+}
+
+.alert-message{
+    background-color: #3B82F6;
+    border-radius: 10px;
+    border: 2px solid blue ;
+}
+
+.header-container{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-left: -950px;
+    margin-bottom: -35px;
+}
+
+.auction-tab{
+    border-radius: 15px;
+    padding: 15px;
+    display: grid;
+    grid-template-columns: repeat(4, 150px) repeat(3, 50px);
+    grid-column-gap: 50px;
+    width: 1500px;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    text-align: center;
+    cursor: pointer;
+    justify-content: center;
+}
+
+.auction-container .auction-tab{
+    grid-template-columns: 220px 140px 170px 240px 120px 120px 240px;
+    grid-column-gap: 24px;
+    width: max-content;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.sealed-container.auction-tab{
+    grid-template-columns: 220px 140px 170px 240px 120px 120px 240px;
+    grid-column-gap: 24px;
+    width: max-content;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.auction-container .auction-tab > *{
+    justify-self: center;
+    align-self: center;
+}
+
+.sealed-container.auction-tab > *{
+    justify-self: center;
+    align-self: center;
+}
+
+.sold-tab{
+    grid-template-columns: repeat(4, 150px) repeat(4, 50px);
+    justify-content: center;
+}
+
+.auction-header{
+    display: grid;
+    grid-template-columns: repeat(3, 150px);
+    grid-column-gap: 50px;
+    text-align: center;
+    margin-bottom: 35px;
+}
+
+.auction-tab button{
+    height: 40px;
+    background: none;
+}
+
+.auction-tab input{
+    height: 26px;
+}
+
+.payment-method-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-height: 40px;
+    max-height: 250px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    gap: 5px;
+    width: 100%;
+    max-width: 450px;
+}
+
+.payment-method {
+    line-height: 1.5;
+    text-align: left;
+}
+
+.payment-row {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-bottom: 3px;
+    flex-wrap: nowrap;
+    width: 100%;
+}
+
+.payment-type-select {
+    min-width: 180px;
+    max-width: 220px;
+    padding: 2px;
+    font-size: 12px;
+}
+
+.payment-amount-input {
+    width: 50px;
+    padding: 2px;
+    font-size: 12px;
+}
+
+.remove-payment-btn {
+    background-color: #ff4444;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.add-payment-row-btn, .edit-payments-btn, .save-payments-btn, .cancel-payments-btn {
+    padding: 3px 8px;
+    margin-top: 3px;
+    margin-right: 3px;
+    cursor: pointer;
+    border-radius: 3px;
+    border: 1px solid #ccc;
+    font-size: 11px;
+}
+
+.edit-payments-btn {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+}
+
+.save-payments-btn {
+    background-color: #2196F3;
+    color: white;
+    border: none;
+}
+
+.save-payments-btn:hover {
+    background-color: #0b7dda;
+}
+
+.cancel-payments-btn {
+    background-color: #f44336;
+    color: white;
+    border: none;
+}
+
+.cancel-payments-btn:hover {
+    background-color: #da190b;
+}
+
+.payment-rows-container {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.cards-header{
+    display: grid;
+    grid-template-columns: 280px 120px 150px 80px 100px 80px 90px 180px 90px;
+    gap: 5px;
+    text-align:center;
+    padding-bottom: 5px;
+    margin-top: 10px;
+    width: max-content;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.auction-container .auction-tab .payment-method-container {
+    align-items: center;
+    text-align: center;
+    max-width: 240px;
+}
+
+.auction-container .auction-tab .payment-method {
+    text-align: center;
+}
+
+.auction-container .auction-tab .barter-id-select,
+.auction-container .auction-tab .sale-link{
+    width: 100%;
+    max-width: 240px;
+    box-sizing: border-box;
+}
+
+.auction-container .auction-tab .auction-link-cell{
+    width: 240px;
+    min-width: 0;
+}
+
+.auction-container .auction-tab .sale-link {
+    display: inline-flex;
+    justify-content: center;
+}
+
+.button-container{
+  display: flex;
+}
+
+.add-cards-auction{
+    padding-left: 30px;
+    width: 200px;
+    margin-right: 100px;
+}
+
+.cards-container{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+}
+
+.auction-tab .cards-container{
+    grid-column: 1 / -1;
+    width: 100%;
+    justify-self: center;
+}
+
+.sold-tab .cards-container{
+    grid-column: 1 / -1;
+    width: 100%;
+    justify-self: center;
+}
+
+.sold-tab .return{
+    margin-right: 35px;
+}
+
+.sold-tab .link-img{
+    margin-left: 15px;
+}
+
+.auction-link-hint{
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.auction-link-hint::after{
+    content: 'Show auction';
+    position: absolute;
+    bottom: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    white-space: nowrap;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.auction-link-hint:hover::after{
+    opacity: 1;
+}
+
+.cards-container *{
+    pointer-events: auto;
+}
+
+.button-container{
+    padding-top: 17px;
+}
+
+.card{
+    display: grid;
+    grid-template-columns: 280px 120px 150px 80px 100px 80px 90px 180px 90px;
+    gap: 5px;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    text-align: center;
+    width: max-content;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.sealed-header,
+.sealed-item {
+    display: grid;
+    grid-template-columns: 300px 150px 150px 150px 150px 150px 150px 100px;
+    gap: 5px;
+    text-align: center;
+    align-items: center;
+}
+
+.sealed-header {
+    margin-top: 80px;
+    padding-bottom: 5px;
+}
+
+.sealed-item {
+    margin-top: 15px;
+    margin-bottom: 15px;
+}
+
+.link-img{
+    height: 68px;
+}
