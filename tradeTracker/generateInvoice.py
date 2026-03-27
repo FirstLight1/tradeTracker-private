@@ -330,7 +330,7 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
     else:
         invoices_dir = os.path.join(current_app.instance_path, 'invoices')
         os.makedirs(invoices_dir, exist_ok=True)
-        output_filename = f"Dobropis:{cn_num}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
+        output_filename = f"Dobropis_{cn_num}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
         output_path = os.path.join(invoices_dir, output_filename)
 
     pdf.gen(output_path, generate_qr_code=False)

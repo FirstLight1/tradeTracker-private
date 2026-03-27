@@ -254,8 +254,8 @@ CREATE TABLE barter(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     auction_id INTEGER,
     sale_id INTEGER,
-    FOREIGN KEY (auction_id) REFERENCES auctions(id),
-    FOREIGN KEY (sale_id) REFERENCES sales(id)
+    FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE,
+    FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
     );
 '''
         db.executescript(schema)

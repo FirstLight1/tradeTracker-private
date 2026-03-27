@@ -822,7 +822,6 @@ def orderReturn(saleId):
         return jsonify(
             {"status": "error", "message": "There was an error while creating a return"}
         ), 400
-
     db.commit()
     return jsonify({"status": "success"}), 200
 

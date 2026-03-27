@@ -11,7 +11,7 @@ OLD_APP_NAME = 'run_app.exe'  # Legacy name for backward compatibility
 
 # The local version is now a variable.
 # This should be updated for each new release when you build the .exe.
-LOCAL_VERSION = "2.8.1"
+LOCAL_VERSION = "2.8.2"
 
 # Detect which executable we're currently running
 def get_current_exe_name():
