@@ -748,10 +748,10 @@ def loadSoldCards(sale_id):
         (sale_id,),
     ).fetchall()
 
-    sealed_sales = db.execute("SELECT * FROM sealed WHERE sale_id = ?", (sale_id,))
+    sealed_sales = db.execute("SELECT * FROM sealed WHERE sale_id = ?", (sale_id,)).fetchall()
     sealed_sales_list = [dict(item) for item in sealed_sales]
 
-    bulk_sales = db.execute("SELECT * FROM bulk_sales WHERE sale_id = ?", (sale_id,))
+    bulk_sales = db.execute("SELECT * FROM bulk_sales WHERE sale_id = ?", (sale_id,)).fetchall()
     bulk_sales_list = [dict(bulk) for bulk in bulk_sales]
     response = {
         "cards": [dict(card) for card in cards],
@@ -767,7 +767,7 @@ def unlinkedBarterIds():
     db = get_db()
     ids = db.execute(
         "SELECT id, invoice_number FROM sales WHERE id NOT IN (SELECT sale_id FROM barter WHERE sale_id IS NOT NULL) ORDER BY id DESC"
-    )
+    ).fetchall()
     return jsonify({"status": "success", "data": [dict(row) for row in ids]})
 
 
@@ -910,6 +910,7 @@ def generate_credit_note(saleId):
         logger.critical('Credit note generation failed %s',e)
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+    logger.info('Credit note generated succesfully | original invoice num: %s', original_invoice_num)
     return jsonify({"status": "success", "pdf_path": pdf_path, "cn_num": cn_num}), 200
 
 
@@ -969,6 +970,7 @@ def generateSoldReport():
             month, year, cards_list, sealedList, bulkAndHoloList, shipping_list
         )
         xls_path = createBuyReport(month, year, db)
+        logger.info('Sold report generated succesfully | month: %s | year: %s', month, year)
         return jsonify(
             {"status": "success", "pdf_path": pdf_path, "xls_path": xls_path}
         ), 200
@@ -1616,6 +1618,7 @@ def cardMarketTable():
             )
 
             db.commit()
+            logger.info('Cards successfully imported | auction_id: %s', auction_id)
             return jsonify({"status": "success"}), 201
 
         except Exception as e:
@@ -1681,6 +1684,7 @@ def cardMarketOrder():
     orderInfo = {"shipping_info": shipping_info, "cards": cards, "sealed": sealed}
     global latest
     latest = orderInfo
+    logger.info('Order succcessfully extracted')
     return jsonify({"status": "success"}), 200
 
 
@@ -2205,6 +2209,7 @@ def invoice():
             db.commit()
 
             # Send the PDF file as a download
+            logger.info('Invoice generated succesfully | invoice_number: %s | sale_id: %s', invoice_num, sale_id)
             return jsonify({"status": "success", "pdf_path": pdf_path}), 200
         except Exception as e:
             db.rollback()

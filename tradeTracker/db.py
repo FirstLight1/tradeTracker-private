@@ -72,6 +72,9 @@ class LoggingCursor:
     def fetchall(self):
         return self._cursor.fetchall()
 
+    def __iter__(self):
+        return iter(self._cursor)
+
     def __getattr__(self, name):
         return getattr(self._cursor, name)
 

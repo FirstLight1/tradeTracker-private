@@ -58,8 +58,8 @@ def create_app(test_config=None):
 
     configure_logging(app)
     app.logger.info("App startup")
-    app.logger.setLevel(logging.WARNING)
-    logging.getLogger().setLevel(logging.WARNING)
+    app.logger.setLevel(logging.INFO)
+    logging.getLogger().setLevel(logging.INFO)
     logging.getLogger("werkzeug").setLevel(logging.WARNING)
     logging.getLogger("waitress").setLevel(logging.WARNING)
 

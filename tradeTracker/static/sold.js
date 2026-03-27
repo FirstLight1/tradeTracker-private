@@ -155,7 +155,7 @@ async function loadHistory() {
                 try {
                     const cnResponse = await fetch(`/generateCreditNote/${saleId}`);
                     const cnData = await cnResponse.json();
-                    console.log(cnData);
+                    //TODO - This needs a refactor, cause CN is generated even tho the return could fail
                     if (cnData.status !== 'success') {
                         renderAlert('Error generating credit note: ' + cnData.message, 'error');
                         returnButton.disabled = false;
