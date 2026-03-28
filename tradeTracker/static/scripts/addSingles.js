@@ -13,9 +13,9 @@ saveButton.addEventListener('click', () => {
     const cards = document.querySelectorAll('.card');
         cards.forEach(ell =>{
             let card = new struct();
-            const input = (selector) => ell.querySelector(selector)?.value.trim().toUpperCase() || null;
+            const input = (selector) => DOMPurify.sanitize(ell.querySelector(selector)?.value.trim().toUpperCase()) || null;
             const inputNumber = (selector) => {
-                const val = ell.querySelector(selector)?.value.trim();
+                const val = DOMPurify.sanitize(ell.querySelector(selector)?.value.trim());
                     if(!val){
                         return null;
                     }
@@ -32,7 +32,7 @@ saveButton.addEventListener('click', () => {
             card.sellPrice = card.marketValue;
             }
             if(card.buyPrice === null){
-                card.buyPrice = (card.marketValue * 0.80).toFixed(2);
+                card.buyPrice = (DOMPurify.sanitize(card.marketValue) * 0.80).toFixed(2);
             }
             if(card.cardName !== null && card.marketValue !== null){
                 cardsArr.push(card);
@@ -67,4 +67,5 @@ addCardButton.addEventListener('click', () =>{
     const card = cards[0];
     const container = document.querySelector(".cards-container")
     const newCard = createNewCard(card.cloneNode(true));
+    container.append(newCard);
 })

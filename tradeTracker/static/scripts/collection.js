@@ -1,5 +1,10 @@
 import {renderField, replaceWithPElement, renderAlert} from './main.js';
 
+function sanitizeNumericId(value) {
+    const parsed = Number.parseInt(String(value), 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? String(parsed) : '';
+}
+
 function appendEuroSign(value, dataset){
     if (dataset === 'card_num' || dataset === 'card_name'){
         return value;
@@ -80,16 +85,17 @@ async function fetchCollection(){
         const data = await response.json();
     
         data.forEach(card => {
+            const safeCardId = sanitizeNumericId(card.id);
             const cardDiv = document.createElement('div');
             cardDiv.classList.add('card');
             cardDiv.innerHTML = `
-            ${renderField(card.card_name, 'text', ['card-info', 'card-name'], 'Card name', 'card_name')}
-            ${renderField(card.card_num, 'text', ['card-info', 'card-num'], 'Card number', 'card_num')}
-            <p class='card-info condition' data-field="condition">${card.condition ? card.condition : 'Unknown'}</p>
-            ${renderField(card.buy_price ? card.buy_price + '€' : null,'text', ['card-info', 'buy-price'], 'Buy price', 'buy_price')}
-            ${renderField(card.market_value ? card.market_value + '€' : null,'text', ['card-info', 'market-value'], 'Market value', 'market_value')}
-            <span hidden class="card-id">${card.id}</span>
-            <button class="delete-btn" data-id="${card.id}">Delete</button>
+            ${renderField(DOMPurify.sanitize(card.card_name), 'text', ['card-info', 'card-name'], 'Card name', 'card_name')}
+            ${renderField(DOMPurify.sanitize(card.card_num), 'text', ['card-info', 'card-num'], 'Card number', 'card_num')}
+            <p class='card-info condition' data-field="condition">${DOMPurify.sanitize(card.condition) ? DOMPurify.sanitize(card.condition) : 'Unknown'}</p>
+            ${renderField(card.buy_price ? DOMPurify.sanitize(card.buy_price) + '€' : null,'text', ['card-info', 'buy-price'], 'Buy price', 'buy_price')}
+            ${renderField(card.market_value ? DOMPurify.sanitize(card.market_value) + '€' : null,'text', ['card-info', 'market-value'], 'Market value', 'market_value')}
+            <span hidden class="card-id">${safeCardId}</span>
+            <button class="delete-btn" data-id="${safeCardId}">Delete</button>
             `;
             collectionContainer.appendChild(cardDiv);
         });
@@ -113,7 +119,7 @@ async function fetchCollection(){
                 const cardDiv = event.target.closest('.card');
                 const cardId = cardDiv.querySelector('.card-id').textContent;
                 if (event.target.classList.contains('condition')) {
-                    const value = event.target.textContent;
+                    const value = DOMPurify.sanitize(event.target.textContent);
                     const select = document.createElement('select');
                     const options = ['Mint', 'Near Mint', 'Excellent', 'Good', 'Light Played', 'Played', 'Poor'];
                     const dataset = event.target.dataset.field;
@@ -137,7 +143,7 @@ async function fetchCollection(){
                     });
                 }
                 if (event.target.tagName === "P") {
-                    let value = event.target.textContent.replace('€','');
+                    let value = DOMPurify.sanitize(event.target.textContent).replace('€','');
                     if(isNaN(value)){
                         value = value.toUpperCase();
                     }
@@ -149,7 +155,7 @@ async function fetchCollection(){
                     event.target.replaceWith(input);
                     input.focus();
                     input.addEventListener('blur', async (blurEvent) => {
-                        let newValue = blurEvent.target.value;
+                        let newValue = DOMPurify.sanitize(blurEvent.target.value).trim();
                         if(isNaN(newValue)){
                             newValue = newValue.toUpperCase();
                         }
@@ -171,7 +177,7 @@ async function fetchCollection(){
         inputFields.forEach((input) => {
             input.addEventListener('blur', async (event) =>{
                 const cardId = event.target.closest('.card').querySelector('.card-id').textContent;
-                const value = event.target.value;
+                const value = DOMPurify.sanitize(event.target.value).trim();
                 const dataset = event.target.dataset;
                 await getInputValueAndPatch(value, input, dataset.field, cardId);
                 if(event.target.classList.contains('market-value')){

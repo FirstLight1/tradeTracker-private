@@ -6,6 +6,18 @@ const BULK_TYPE_BUY_PRICES = {
     ex: 0.15
 };
 
+function sanitizeClassToken(value) {
+    return DOMPurify.sanitize(String(value ?? ''), { ALLOWED_TAGS: [], ALLOWED_ATTR: [] })
+        .toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-z0-9_-]/g, '');
+}
+
+function sanitizeNumericId(value) {
+    const parsed = Number.parseInt(String(value), 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? String(parsed) : '';
+}
+
 async function loadContent(button, soldDate) {
     const formattedDate = `${soldDate.getDate().toString().padStart(2, '0')}.${(soldDate.getMonth() + 1).toString().padStart(2, '0')}.${soldDate.getFullYear()}`;
     const saleId = button.getAttribute('data-id');
@@ -37,58 +49,62 @@ async function loadContent(button, soldDate) {
             const bulkSales = soldItems.bulk_sales;
 
             soldCards.forEach(card => {
+                const safeConditionClass = sanitizeClassToken(card.condition || 'Unknown');
+                const safeCardId = sanitizeNumericId(card.id);
                 const cardElement = document.createElement('div');
                 cardElement.classList.add('card');
 
 
 
                 cardElement.innerHTML = `
-                    ${renderField(card.card_name, 'text', ['card-info', 'card-name'], 'Card Name', 'card_name')}
-                    ${renderField(card.card_num, 'text', ['card-info', 'card-num'], 'Card Number', 'card_num')}
-                    <p class='card-info condition ${card.condition.split(' ').join('_').toLowerCase()}' data-field="condition">${card.condition ? card.condition : 'Unknown'}</p>
-                    ${renderField(card.card_price ? card.card_price + '€' : null, 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
-                    ${renderField(card.market_value ? card.market_value + '€' : null, 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
-                    ${renderField(card.invoice_sell_price ? card.invoice_sell_price + '€' : null, 'text', ['card-info', 'sell-price'], 'Sell Price', 'sell_price')}
+                    ${renderField(DOMPurify.sanitize(card.card_name), 'text', ['card-info', 'card-name'], 'Card Name', 'card_name')}
+                    ${renderField(DOMPurify.sanitize(card.card_num), 'text', ['card-info', 'card-num'], 'Card Number', 'card_num')}
+                    <p class='card-info condition ${safeConditionClass}' data-field="condition">${DOMPurify.sanitize(card.condition) ? DOMPurify.sanitize(card.condition) : 'Unknown'}</p>
+                    ${renderField(card.card_price ? DOMPurify.sanitize(card.card_price) + '€' : null, 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
+                    ${renderField(card.market_value ? DOMPurify.sanitize(card.market_value) + '€' : null, 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
+                    ${renderField(card.invoice_sell_price ? DOMPurify.sanitize(card.invoice_sell_price) + '€' : null, 'text', ['card-info', 'sell-price'], 'Sell Price', 'sell_price')}
                     <p>${card.invoice_sell_price && card.card_price ? (card.invoice_sell_price - card.card_price).toFixed(2) + '€' : 'Unknown'}</p>
                     <p>${formattedDate}</p>
                     
-                    <span hidden class = "card-id">${card.id}</span>
+                    <span hidden class = "card-id">${safeCardId}</span>
                 `;
                 cardsContainer.appendChild(cardElement);
             });
             sealedSales.forEach(item => {
+                const safeSealedId = sanitizeNumericId(item.id);
                 const sealedDiv = document.createElement('div');
                 sealedDiv.classList.add('card');
 
                 sealedDiv.innerHTML = `
-                    <p class='card-info card-name'>${item.name}</p>
+                    <p class='card-info card-name'>${DOMPurify.sanitize(item.name)}</p>
                     <p class='card-info card-num'></p>
                     <p class='card-info condition'></p>
                     <p class='card-info card-price'></p>
-                    <p class='card-info market-value'>${item.market_value}</p>
-                    <p class='card-info sell-price'>${item.market_value}</p>
+                    <p class='card-info market-value'>${DOMPurify.sanitize(item.market_value)}</p>
+                    <p class='card-info sell-price'>${DOMPurify.sanitize(item.market_value)}</p>
                     <p>${item.market_value !== null && item.price !== null ? (item.market_value - item.price).toFixed(2) + '€' : 'Unknown'}</p>
                     <p>${formattedDate}</p>
-                    <span hidden class = "sid">${item.id}</span>
+                    <span hidden class = "sid">${safeSealedId}</span>
                     `;
                 cardsContainer.appendChild(sealedDiv);
             });
 
             bulkSales.forEach(bulk => {
+                const safeBulkId = sanitizeNumericId(bulk.id);
                 const bulkElement = document.createElement('div');
                 bulkElement.classList.add('card');
 
                 const buy_price = BULK_TYPE_BUY_PRICES[bulk.item_type] ?? 0;
                 bulkElement.innerHTML = `
-                    <p class='card-info card-name'>${bulk.item_type}</p>
+                    <p class='card-info card-name'>${DOMPurify.sanitize(bulk.item_type)}</p>
                     <p class='card-info card-num'></p>
                     <p class='card-info condition'></p>
                     <p class='card-info card-price'></p>
-                    <p class='card-info market-value'>Počet: ${bulk.quantity}</p>
-                    <p class='card-info sell-price'>${bulk.total_price != null ? bulk.total_price + '€' : 'Unknown'}</p>
+                    <p class='card-info market-value'>Počet: ${DOMPurify.sanitize(bulk.quantity)}</p>
+                    <p class='card-info sell-price'>${bulk.total_price != null ? DOMPurify.sanitize(bulk.total_price) + '€' : 'Unknown'}</p>
                     <p>${bulk.total_price !== null && bulk.quantity !== null && bulk.unit_price !== null ? (bulk.total_price - bulk.quantity * buy_price).toFixed(2) + '€' : 'Unknown'}</p>
                     <p>${formattedDate}</p>
-                    <span hidden class = "bulk-id">${bulk.id}</span>
+                    <span hidden class = "bulk-id">${safeBulkId}</span>
                 `;
                 cardsContainer.appendChild(bulkElement);
             });
@@ -104,11 +120,13 @@ async function loadHistory() {
     const sales = await response.json();
     const historyContainer = document.querySelector('.sales-history-container');
     sales.forEach(sale => {
+        const safeSaleId = sanitizeNumericId(sale.id);
+        const safeAuctionId = sanitizeNumericId(sale.auction_id);
         const saleElement = document.createElement('div');
         saleElement.classList.add('sold-tab');
         saleElement.classList.add('auction-tab');
-        saleElement.id = `${sale.id}`;
-        saleElement.setAttribute('data-id', sale.id);
+        saleElement.id = safeSaleId;
+        saleElement.setAttribute('data-id', safeSaleId);
         const saleDate = new Date(sale.sale_date);
         const formattedDate = `${saleDate.getDate().toString().padStart(2, '0')}.${(saleDate.getMonth() + 1).toString().padStart(2, '0')}.${saleDate.getFullYear()}`;
         let name = "";
@@ -119,15 +137,15 @@ async function loadHistory() {
             name = sale.notes;
         }
         saleElement.innerHTML = `
-            <p class="auction-name">Invoice #${sale.invoice_number} - ${formattedDate}</p>
-            <p class="auction-price">Celková suma: ${sale.total_amount}€</p>
-            <p>Marža: ${sale.total_profit ? sale.total_profit.toFixed(2) : '0.00'}€</p>
-            <p>${name}</p>
-            <button class="view-auction" data-id="${sale.id}">View</button>
-            <button class="return" data-id="${sale.id}" >Return</button>
+            <p class="auction-name">Invoice #${DOMPurify.sanitize(sale.invoice_number)} - ${formattedDate}</p>
+            <p class="auction-price">Celková suma: ${DOMPurify.sanitize(sale.total_amount)}€</p>
+            <p>Marža: ${sale.total_profit ? DOMPurify.sanitize(sale.total_profit.toFixed(2)) : '0.00'}€</p>
+            <p>${DOMPurify.sanitize(name)}</p>
+            <button class="view-auction" data-id="${safeSaleId}">View</button>
+            <button class="return" data-id="${safeSaleId}" >Return</button>
             ${sale.auction_id === null ?
                 `<p></p>`
-                : `<span class='auction-link-hint'><a href='/#${sale.auction_id}'><img class='link-img' src="https://upload.wikimedia.org/wikipedia/en/3/3d/480px-Gawr_Gura_-_Portrait_01.png" alt="Show auction"></a></span>`
+                : `<span class='auction-link-hint'><a href='/#${safeAuctionId}'><img class='link-img' src="https://upload.wikimedia.org/wikipedia/en/3/3d/480px-Gawr_Gura_-_Portrait_01.png" alt="Show auction"></a></span>`
             } 
             <div class="cards-container">
             <!-- Cards will be loaded here -->

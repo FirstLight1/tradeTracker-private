@@ -160,10 +160,18 @@ class CartLine {
 
 
 export function renderField(value, inputType, classList, placeholder, datafield) {
+    const safeInputType = sanitizeAttrValue(inputType || 'text');
+    const safeClassList = Array.isArray(classList)
+        ? classList.map(token => sanitizeClassToken(token)).filter(Boolean).join(' ')
+        : '';
+    const safePlaceholder = sanitizeAttrValue(placeholder || '');
+    const safeDataField = sanitizeAttrValue(datafield || '');
+
     if (value === null) {
-        return `<input type="${inputType}" class="${classList.join(' ')}" placeholder="${placeholder}" data-field="${datafield}" autocomplete="off">`;
+        return `<input type="${safeInputType}" class="${safeClassList}" placeholder="${safePlaceholder}" data-field="${safeDataField}" autocomplete="off">`;
     } else {
-        return `<p class=" ${classList.join(' ')}" data-field="${datafield}">${value}</p>`;
+        const safeValue = sanitizePlainText(value);
+        return `<p class=" ${safeClassList}" data-field="${safeDataField}">${safeValue}</p>`;
     }
 }
 
@@ -259,6 +267,31 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+function sanitizePlainText(value) {
+    return DOMPurify.sanitize(String(value ?? ''), { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+}
+
+function sanitizeAttrValue(value) {
+    return sanitizePlainText(value)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function sanitizeClassToken(value) {
+    return sanitizePlainText(value)
+        .toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-z0-9_-]/g, '');
+}
+
+function sanitizeNumericId(value) {
+    const parsed = Number.parseInt(String(value), 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? String(parsed) : '';
 }
 
 const ALLOWED_PAYMENT_TYPES = new Set([
@@ -714,13 +747,13 @@ function renderCartLine(line) {
         const minusDisabled = line.cardIds.length <= 1 ? 'disabled' : '';
         const plusDisabled = !line.canIncrement ? 'disabled' : '';
         cardDiv.innerHTML = `
-            <p class="cart-card-name">${line.cardName}</p>
-            <p class="cart-card-num">${line.cardNum}</p>
-            <p class="cart-condition">${line.condition}</p>
-            <p class='market-value-invoice'>${line.marketValue}€</p>
+            <p class="cart-card-name">${DOMPurify.sanitize(line.cardName)}</p>
+            <p class="cart-card-num">${DOMPurify.sanitize(line.cardNum)}</p>
+            <p class="cart-condition">${DOMPurify.sanitize(line.condition)}</p>
+            <p class='market-value-invoice'>${DOMPurify.sanitize(line.marketValue)}€</p>
             <div class="qty-controls">
                 <button class="qty-minus" ${minusDisabled}>-</button>
-                <span class="qty-display">${line.quantity}</span>
+                <span class="qty-display">${DOMPurify.sanitize(line.quantity)}</span>
                 <button class="qty-plus" ${plusDisabled}>+</button>
             </div>
             <button class='remove-from-cart'>Remove</button>
@@ -913,8 +946,8 @@ function loadCartContentFromSession() {
                 }
 
                 itemDiv.innerHTML = `
-                    <p class='sealed-name'>${item.name}</p>
-                    <p class='sealed-price'>${item.price}</p>
+                    <p class='sealed-name'>${DOMPurify.sanitize(item.name)}</p>
+                    <p class='sealed-price'>${DOMPurify.sanitize(item.price)}</p>
                     <button class='remove-from-cart'>Remove</button>
                 `;
 
@@ -939,8 +972,8 @@ function loadCartContentFromSession() {
             div.classList.add('bulk-cart-item-bulk');
             div.innerHTML = `
                 <p>Bulk</p>
-                <p class='bulk-quantity'>q: ${cartData.bulk.quantity}</p>
-                <input type='text' class='bulk-sell-price' style='width:70px' value='${cartData.bulk.price}'>
+                <p class='bulk-quantity'>q: ${DOMPurify.sanitize(cartData.bulk.quantity)}</p>
+                <input type='text' class='bulk-sell-price' style='width:70px' value='${DOMPurify.sanitize(cartData.bulk.price)}'>
                 <button class='remove-from-cart'>Remove</button>
             `;
             bulkCartDiv.appendChild(div);
@@ -962,8 +995,8 @@ function loadCartContentFromSession() {
             div.classList.add('holo-cart-item-holo');
             div.innerHTML = `
                 <p>Holo</p>
-                <p class='holo-quantity'>q: ${cartData.holo.quantity}</p>
-                <input type='text' class='holo-sell-price' style='width:70px' value='${cartData.holo.price}'>
+                <p class='holo-quantity'>q: ${DOMPurify.sanitize(cartData.holo.quantity)}</p>
+                <input type='text' class='holo-sell-price' style='width:70px' value='${DOMPurify.sanitize(cartData.holo.price)}'>
                 <button class='remove-from-cart'>Remove</button>
             `;
             holoCartDiv.appendChild(div);
@@ -985,8 +1018,8 @@ function loadCartContentFromSession() {
             div.classList.add('ex-cart-item-ex');
             div.innerHTML = `
                 <p>Ex</p>
-                <p class='ex-quantity'>q: ${cartData.ex.quantity}</p>
-                <input type='text' class='ex-sell-price' style='width:70px' value='${cartData.ex.price}'>
+                <p class='ex-quantity'>q: ${DOMPurify.sanitize(cartData.ex.quantity)}</p>
+                <input type='text' class='ex-sell-price' style='width:70px' value='${DOMPurify.sanitize(cartData.ex.price)}'>
                 <button class='remove-from-cart'>Remove</button>
             `;
             exCartDiv.appendChild(div);
@@ -1050,13 +1083,13 @@ function loadModalDataFromSession(recieverDiv) {
         const priceInput = recieverDiv.querySelector('.price-input');
         const shippingPrice = recieverDiv.querySelector('.shipping-price');
 
-        if (clientName) clientName.value = modalData.clientName;
-        if (clientAddress) clientAddress.value = modalData.clientAddress;
-        if (clientCity) clientCity.value = modalData.clientCity;
-        if (clientCountry) clientCountry.value = modalData.clientCountry;
-        if (paybackDate && modalData.paybackDate) paybackDate.value = modalData.paybackDate;
-        if (priceInput) priceInput.value = modalData.price;
-        if (shippingPrice) shippingPrice.value = modalData.shippingPrice;
+        if (clientName) clientName.value = DOMPurify.sanitize(modalData.clientName);
+        if (clientAddress) clientAddress.value = DOMPurify.sanitize(modalData.clientAddress);
+        if (clientCity) clientCity.value = DOMPurify.sanitize(modalData.clientCity);
+        if (clientCountry) clientCountry.value = DOMPurify.sanitize(modalData.clientCountry);
+        if (paybackDate && modalData.paybackDate) paybackDate.value = DOMPurify.sanitize(modalData.paybackDate);
+        if (priceInput) priceInput.value = DOMPurify.sanitize(modalData.price);
+        if (shippingPrice) shippingPrice.value = DOMPurify.sanitize(modalData.shippingPrice);
 
         // Restore payment methods
         if (modalData.paymentMethods && modalData.paymentMethods.length > 0) {
@@ -1068,7 +1101,7 @@ function loadModalDataFromSession(recieverDiv) {
                 const firstSelect = firstPaymentDiv.querySelector('.payment-type');
                 const firstAmount = firstPaymentDiv.querySelector('.amount');
                 if (firstSelect) firstSelect.value = modalData.paymentMethods[0].type;
-                if (firstAmount) firstAmount.value = modalData.paymentMethods[0].amount;
+                if (firstAmount) firstAmount.value = DOMPurify.sanitize(modalData.paymentMethods[0].amount);
             }
 
             // Add additional payment methods (if any)
@@ -1077,13 +1110,13 @@ function loadModalDataFromSession(recieverDiv) {
                 newSelectDiv.classList.add('payment-div');
                 newSelectDiv.innerHTML = `
                     ${paymentTypeSelect('payment-type')}
-                    <input type='number' class='amount' value='${modalData.paymentMethods[i].amount}'></input>
+                    <input type='number' class='amount' value='${DOMPurify.sanitize(modalData.paymentMethods[i].amount)}'></input>
                 `;
 
                 // Set the payment type after adding to DOM
                 paymentContainer.append(newSelectDiv);
                 const select = newSelectDiv.querySelector('.payment-type');
-                if (select) select.value = modalData.paymentMethods[i].type;
+                if (select) select.value = DOMPurify.sanitize(modalData.paymentMethods[i].type);
 
                 // Add event listeners to restored inputs
                 const newInputs = newSelectDiv.querySelectorAll('input, select');
@@ -1380,17 +1413,17 @@ function shoppingCart() {
                 })
 
                 // Get values by specific class names (every time)
-                const clientName = recieverDiv.querySelector('.client-name')?.value || '';
-                const clientAddress = recieverDiv.querySelector('.client-address')?.value || '';
-                const clientCity = recieverDiv.querySelector('.client-city')?.value || '';
-                const clientCountry = recieverDiv.querySelector('.client-country')?.value || '';
-                const paybackDate = recieverDiv.querySelector('.date-input')?.value || '';
+                const clientName = DOMPurify.sanitize(recieverDiv.querySelector('.client-name')?.value) || '';
+                const clientAddress = DOMPurify.sanitize(recieverDiv.querySelector('.client-address')?.value) || '';
+                const clientCity = DOMPurify.sanitize(recieverDiv.querySelector('.client-city')?.value) || '';
+                const clientCountry = DOMPurify.sanitize(recieverDiv.querySelector('.client-country')?.value) || '';
+                const paybackDate = DOMPurify.sanitize(recieverDiv.querySelector('.date-input')?.value) || '';
                 const shippingWay = 'Doprava / Poštovné – samostatná služba';
-                const shippingPrice = recieverDiv.querySelector('.shipping-price')?.value.replace(',', '.') || '';
+                const shippingPrice = DOMPurify.sanitize(recieverDiv.querySelector('.shipping-price')?.value.replace(',', '.')) || '';
 
                 // Calculate total payment amount from payment methods
                 const paymentTotal = paymentMethods.reduce((sum, payment) => sum + payment.amount, 0);
-                const cartValueInput = document.querySelector('.price-input').value.replace(',', '.') || cartVal;
+                const cartValueInput = DOMPurify.sanitize(document.querySelector('.price-input').value.replace(',', '.')) || cartVal;
                 const expectedTotal = parseFloat(cartValueInput) + Number(shippingPrice);
 
                 // Validate payment amounts match cart total
@@ -1610,9 +1643,9 @@ function addSealedToCart(sealed, sid, auctionId = null) {
             itemDiv.setAttribute('auction_id', auctionId)
         }
         itemDiv.innerHTML = `
-        <p class='sealed-name'>${sealed.name}</p>
-        <p class='sealed-price'>${sealed.market_value}€</p>
-        <button class='remove-from-cart'>Remove</p>
+        <p class='sealed-name'>${DOMPurify.sanitize(sealed.name)}</p>
+        <p class='sealed-price'>${DOMPurify.sanitize(sealed.market_value)}€</p>
+        <button class='remove-from-cart'>Remove</button>
         `
 
         const removeFromCart = itemDiv.querySelector('.remove-from-cart');
@@ -1649,7 +1682,7 @@ function addBulkToCart() {
                 div.classList.add('bulk-cart-item-bulk');
                 div.innerHTML = `
                     <p>Bulk</p>
-                    <p class='bulk-quantity'>q: ${value}</p>
+                    <p class='bulk-quantity'>q: ${DOMPurify.sanitize(value)}</p>
                     <input type='text' class='bulk-sell-price' style='width:70px'>
                     <button class='remove-from-cart'>Remove</button>`
 
@@ -1701,7 +1734,7 @@ function addHoloToCart() {
                 div.classList.add('holo-cart-item-holo');
                 div.innerHTML = `
                     <p>Holo</p>
-                    <p class='holo-quantity'>q: ${value}</p>
+                    <p class='holo-quantity'>q: ${DOMPurify.sanitize(value)}</p>
                     <input type='text' class='holo-sell-price' style='width:70px'>
                     <button class='remove-from-cart'>Remove</button>`
                 contentDiv.appendChild(div);
@@ -1753,7 +1786,7 @@ function addExToCart() {
                 div.classList.add('ex-cart-item-ex');
                 div.innerHTML = `
                     <p>Ex</p>
-                    <p class='ex-quantity'>q: ${value}</p>
+                    <p class='ex-quantity'>q: ${DOMPurify.sanitize(value)}</p>
                     <input type='text' class='ex-sell-price' style='width:70px'>
                     <button class='remove-from-cart'>Remove</button>`;
                 contentDiv.appendChild(div);
@@ -1864,10 +1897,10 @@ function spawnMissingIdModal(card) {
 
     const cardDiv = document.createElement("div");
     cardDiv.innerHTML = `
-        <p>${card.name || ""}</p>
-        <p>${card.num || ""}</p>
-        <p>${card.condition || ""}</p>
-        <p>${card.marketValue || card.market_value || ""}€</p>
+        <p>${DOMPurify.sanitize(card.name || "")}</p>
+        <p>${DOMPurify.sanitize(card.num || "")}</p>
+        <p>${DOMPurify.sanitize(card.condition || "")}</p>
+        <p>${DOMPurify.sanitize(card.marketValue || card.market_value || "")}€</p>
     `;
     cardDiv.classList.add('missingId-item');
     modal.querySelector('.missingId-list').append(cardDiv);
@@ -1964,6 +1997,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
         const div = document.createElement('div');
         div.classList.add('search-result-item');
         div.tabIndex = 0;
+        const safeAuctionId = sanitizeNumericId(result.auction_id);
 
         // Check if this is a sealed item (has 'sid' field) or a card
         const isSealed = result.hasOwnProperty('sid');
@@ -1976,13 +2010,13 @@ function displaySearchResults(results, resultsQueue, searchInput) {
             };
 
             div.innerHTML = `
-                <p class="result result-sealed-name">${result.name || 'N/A'}</p>
-                <p class="result result-market-value">${result.market_value ? result.market_value + '€' : 'N/A'}</p>
-                <p class="result result-auction-name">${result.auction_name || (result.auction_id ? result.auction_id - 1 : 'Unassigned')}</p>
+                <p class="result result-sealed-name">${DOMPurify.sanitize(result.name || 'N/A')}</p>
+                <p class="result result-market-value">${DOMPurify.sanitize(result.market_value ? result.market_value + '€' : 'N/A')}</p>
+                <p class="result result-auction-name">${DOMPurify.sanitize(result.auction_name || (result.auction_id ? result.auction_id - 1 : 'Unassigned'))}</p>
                 <span class="result-type-badge sealed-badge">Sealed</span>
-                ${result.auction_id || result.auction_name ? `<p class="result result-auction-name">${result.auction_name || result.auction_id - 1}</p>` : `<p></p>`}
+                ${result.auction_id || result.auction_name ? `<p class="result result-auction-name">${DOMPurify.sanitize(result.auction_name || result.auction_id - 1)}</p>` : `<p></p>`}
                 <button class="add-to-cart-btn">Add to cart</button>
-                ${result.auction_id ? `<button class="view-auction" data-id="${result.auction_id}">View</button>` : ''}
+                ${safeAuctionId ? `<button class="view-auction" data-id="${safeAuctionId}">View</button>` : ''}
             `;
 
             resultsQueue.enqueue(div);
@@ -2007,7 +2041,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
                 const viewButton = div.querySelector('.view-auction');
                 viewButton.addEventListener('click', async (event) => {
                     event.stopPropagation();
-                    const element = document.getElementById(`${result.auction_id}`);
+                    const element = document.getElementById(safeAuctionId);
                     if (element) {
                         element.scrollIntoView({ behavior: 'smooth' });
                     }
@@ -2028,20 +2062,21 @@ function displaySearchResults(results, resultsQueue, searchInput) {
             card.cardNum = result.card_num;
             card.condition = result.condition;
             card.marketValue = result.market_value;
+            const safeConditionClass = sanitizeClassToken(result.condition || 'Unknown');
 
             const availableCount = result.available_count ? result.available_count : 1;
             let pendingQty = 1;
 
             // Display in desired order, with proper formatting
             div.innerHTML = `
-                <p class="result result-card-name">${result.card_name || 'N/A'}</p>
-                <p class="result result-card-num">${result.card_num || 'N/A'}</p>
-                <p class="result result-condition ${result.condition.split(' ').join('_').toLowerCase()}">${result.condition || 'Unknown'}</p>
-                <p class="result result-market-value">${result.market_value ? result.market_value + '€' : 'N/A'}</p>
+                <p class="result result-card-name">${DOMPurify.sanitize(result.card_name || 'N/A')}</p>
+                <p class="result result-card-num">${DOMPurify.sanitize(result.card_num || 'N/A')}</p>
+                <p class="result result-condition ${safeConditionClass}">${DOMPurify.sanitize(result.condition || 'Unknown')}</p>
+                <p class="result result-market-value">${DOMPurify.sanitize(result.market_value ? result.market_value + '€' : 'N/A')}</p>
                 <p class="result result-quantity">${pendingQty} / ${availableCount}</p>
-                <p class="result result-auction-name">${result.auction_name || result.auction_id - 1}</p>
+                <p class="result result-auction-name">${DOMPurify.sanitize(result.auction_name || result.auction_id - 1)}</p>
                 <button class="add-to-cart-btn">Add to cart</button>
-                <button class="view-auction" data-id="${result.auction_id}">View</button>
+                ${safeAuctionId ? `<button class="view-auction" data-id="${safeAuctionId}">View</button>` : ''}
             `;
             resultsQueue.enqueue(div);
 
@@ -2170,20 +2205,22 @@ async function loadAuctionContent(button) {
                     </div>
                 `;
                     cards.forEach(card => {
+                        const safeCardId = sanitizeNumericId(card.id);
+                        const safeCardConditionClass = sanitizeClassToken(card.condition || 'Unknown');
                         const cardDiv = document.createElement('div');
                         cardDiv.classList.add('card');
-                        cardDiv.setAttribute('data-id', card.id);
+                        cardDiv.setAttribute('data-id', safeCardId);
                         cardDiv.innerHTML = `
-                        ${renderField(card.card_name, 'text', ['card-info', 'card-name'], 'Card Name', 'card_name')}
-                        ${renderField(card.card_num, 'text', ['card-info', 'card-num'], 'Card Number', 'card_num')}
-                        <p class='card-info condition ${card.condition.split(' ').join('_').toLowerCase()}' data-field="condition">${card.condition ? card.condition : 'Unknown'}</p>
-                        ${renderField(card.card_price ? card.card_price + '€' : null, 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
-                        ${renderField(card.market_value ? card.market_value + '€' : null, 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
-                        ${renderField(card.sell_price ? card.sell_price + '€' : null, 'text', ['card-info', 'sell-price'], 'Sell Price', 'sell_price')}
+                        ${renderField(DOMPurify.sanitize(card.card_name), 'text', ['card-info', 'card-name'], 'Card Name', 'card_name')}
+                        ${renderField(DOMPurify.sanitize(card.card_num), 'text', ['card-info', 'card-num'], 'Card Number', 'card_num')}
+                        <p class='card-info condition ${safeCardConditionClass}' data-field="condition">${DOMPurify.sanitize(card.condition) ? DOMPurify.sanitize(card.condition) : 'Unknown'}</p>
+                        ${renderField(card.card_price ? DOMPurify.sanitize(card.card_price) + '€' : null, 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
+                        ${renderField(card.market_value ? DOMPurify.sanitize(card.market_value) + '€' : null, 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
+                        ${renderField(card.sell_price ? DOMPurify.sanitize(card.sell_price) + '€' : null, 'text', ['card-info', 'sell-price'], 'Sell Price', 'sell_price')}
                         ${renderField(card.card_price !== null && card.market_value !== null ? (card.market_value - card.card_price).toFixed(2) + '€' : ' ', 'text', ['card-info', 'profit'], 'profit', true)}
                         <button class="add-to-cart">Add to cart</button>
-                        <span hidden class="card-id">${card.id}</span>
-                        <button class=delete-card data-id="${card.id}">Delete</button>
+                        <span hidden class="card-id">${safeCardId}</span>
+                        <button class=delete-card data-id="${safeCardId}">Delete</button>
                     `;
                         cardsContainer.appendChild(cardDiv);
                     });
@@ -2350,11 +2387,11 @@ async function loadAuctionContent(button) {
                         });
 
                         sealedDiv.innerHTML = `
-                            <p class="sealed-name">${sealedItem.name}</p>
-                            <p class="sealed-price">${sealedItem.price}€</p>
-                            <p class="sealed-market-value">${sealedItem.market_value}€</p>
-                            <p class="sealed-margin">${margin}€</p>
-                            <p class="sealed-date">${formatedDate}</p>
+                            <p class="sealed-name">${DOMPurify.sanitize(sealedItem.name)}</p>
+                            <p class="sealed-price">${DOMPurify.sanitize(sealedItem.price)}€</p>
+                            <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
+                            <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
+                            <p class="sealed-date">${DOMPurify.sanitize(formatedDate)}</p>
                             <button class="add-to-cart-sealed" data-sid="${sealedItem.sid}">Add to cart</button>
                             <button class="delete-sealed-item" data-sid="${sealedItem.sid}">Delete</button>
                         `;
@@ -2371,8 +2408,8 @@ async function loadAuctionContent(button) {
                             const auctionId = auctionDiv.getAttribute('data-id');
 
                             const sealedData = {
-                                name: sealedDiv.querySelector('.sealed-name').textContent,
-                                market_value: sealedDiv.querySelector('.sealed-market-value').textContent.replace('€', '')
+                                name: DOMPurify.sanitize(sealedDiv.querySelector('.sealed-name').textContent),
+                                market_value: DOMPurify.sanitize(sealedDiv.querySelector('.sealed-market-value').textContent.replace('€', ''))
                             };
 
                             addSealedToCart(sealedData, sid, auctionId);
@@ -2423,10 +2460,10 @@ async function loadAuctionContent(button) {
                         bulkDiv.classList.add('bulk-item');
                         bulkDiv.setAttribute('data-id', bulkItem.id);
                         bulkDiv.innerHTML = `
-                            <p class="bulk-name">${bulkItem.item_type}</p>
-                            <p class="bulk-quantity">Quantity: ${bulkItem.quantity}</p>
-                            <p class="bulk-sell-price">Sell Price: ${bulkItem.total_price ? bulkItem.total_price + '€' : 'N/A'}</p>
-                            <button class="delete-bulk-item" data-id="${bulkItem.id}">Delete</button>
+                            <p class="bulk-name">${DOMPurify.sanitize(bulkItem.item_type)}</p>
+                            <p class="bulk-quantity">Quantity: ${DOMPurify.sanitize(bulkItem.quantity)}</p>
+                            <p class="bulk-sell-price">Sell Price: ${bulkItem.total_price ? DOMPurify.sanitize(bulkItem.total_price) + '€' : 'N/A'}</p>
+                            <button class="delete-bulk-item" data-id="${DOMPurify.sanitize(bulkItem.id)}">Delete</button>
                         `;
                         cardsContainer.insertBefore(bulkDiv, cardsContainer.querySelector('.button-container'));
                     }
@@ -2605,12 +2642,12 @@ async function loadAuctionContent(button) {
             //try {
             newCards.forEach(async (card) => {
                 let cardObj = new struct();
-                cardObj.cardName = card.querySelector('input.card-name').value.trim().toUpperCase() || null;
-                cardObj.cardNum = card.querySelector('input.card-num').value.trim().toUpperCase() || null;
-                cardObj.condition = card.querySelector('select.condition').value || null;
-                cardObj.buyPrice = card.querySelector('input.card-price').value.replace(',', '.').trim() || null;
-                cardObj.marketValue = card.querySelector('input.market-value').value.replace(',', '.').trim() || null;
-                cardObj.sellPrice = card.querySelector('input.sell-price').value.replace(',', '.').trim() || null;
+                cardObj.cardName = DOMPurify.sanitize(card.querySelector('input.card-name').value.trim().toUpperCase()) || null;
+                cardObj.cardNum = DOMPurify.sanitize(card.querySelector('input.card-num').value.trim().toUpperCase()) || null;
+                cardObj.condition = DOMPurify.sanitize(card.querySelector('select.condition').value) || null;
+                cardObj.buyPrice = DOMPurify.sanitize(card.querySelector('input.card-price').value.replace(',', '.').trim()) || null;
+                cardObj.marketValue = DOMPurify.sanitize(card.querySelector('input.market-value').value.replace(',', '.').trim()) || null;
+                cardObj.sellPrice = DOMPurify.sanitize(card.querySelector('input.sell-price').value.replace(',', '.').trim()) || null;
                 cardObj.soldDate = null;
 
                 if (cardObj.buyPrice === null) cardObj.buyPrice = cardObj.marketValue * 0.85;
@@ -2638,8 +2675,8 @@ async function loadAuctionContent(button) {
             const bulkDiv = cardsContainer.querySelector('.add-bulk-item');
             if (bulkDiv) {
                 const bulkItems = { 'item_type': 'bulk', 'quantity': null, 'total_price': null };
-                bulkItems.quantity = bulkDiv.querySelector('.bulk-quantity-input').value.trim() || null;
-                bulkItems.total_price = bulkDiv.querySelector('.bulk-sell-price-input').value.replace(',', '.').trim() || null;
+                bulkItems.quantity = DOMPurify.sanitize(bulkDiv.querySelector('.bulk-quantity-input').value.trim()) || null;
+                bulkItems.total_price = DOMPurify.sanitize(bulkDiv.querySelector('.bulk-sell-price-input').value.replace(',', '.').trim()) || null;
                 bulkItems.unit_price = bulkItems.total_price / bulkItems.quantity || null;
                 itemsToAdd['bulk'] = bulkItems;
             }
@@ -2647,8 +2684,8 @@ async function loadAuctionContent(button) {
             const holoDiv = cardsContainer.querySelector('.add-holo-item');
             if (holoDiv) {
                 const holoItems = { 'item_type': 'holo', 'quantity': null, 'total_price': null };
-                holoItems.quantity = holoDiv.querySelector('.holo-quantity-input').value.trim() || null;
-                holoItems.total_price = holoDiv.querySelector('.holo-sell-price-input').value.replace(',', '.').trim() || null;
+                holoItems.quantity = DOMPurify.sanitize(holoDiv.querySelector('.holo-quantity-input').value.trim()) || null;
+                holoItems.total_price = DOMPurify.sanitize(holoDiv.querySelector('.holo-sell-price-input').value.replace(',', '.').trim()) || null;
                 holoItems.unit_price = holoItems.total_price / holoItems.quantity || null;
                 itemsToAdd['holo'] = holoItems;
             }
@@ -2656,8 +2693,8 @@ async function loadAuctionContent(button) {
             const exDiv = cardsContainer.querySelector('.add-ex-item');
             if (exDiv) {
                 const exItems = { 'item_type': 'ex', 'quantity': null, 'total_price': null };
-                exItems.quantity = exDiv.querySelector('.ex-quantity-input').value.trim() || null;
-                exItems.total_price = exDiv.querySelector('.ex-sell-price-input').value.replace(',', '.').trim() || null;
+                exItems.quantity = DOMPurify.sanitize(exDiv.querySelector('.ex-quantity-input').value.trim()) || null;
+                exItems.total_price = DOMPurify.sanitize(exDiv.querySelector('.ex-sell-price-input').value.replace(',', '.').trim()) || null;
                 exItems.unit_price = exItems.total_price / exItems.quantity || null;
                 itemsToAdd['ex'] = exItems;
             }
@@ -2667,10 +2704,10 @@ async function loadAuctionContent(button) {
             if (sealedDivs.length > 0) {
                 const sealedItems = [];
                 sealedDivs.forEach(sealedDiv => {
-                    const name = sealedDiv.querySelector('.sealed-name-input').value.trim() || null;
-                    const price = sealedDiv.querySelector('.sealed-price-input').value.trim() || null;
-                    const marketValue = sealedDiv.querySelector('.sealed-market-value-input').value.trim() || null;
-                    const date = sealedDiv.querySelector('.sealed-date-input').value || null;
+                    const name = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-name-input').value.trim()) || null;
+                    const price = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-price-input').value.trim()) || null;
+                    const marketValue = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-market-value-input').value.trim()) || null;
+                    const date = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-date-input').value) || null;
 
                     if (name !== null && marketValue !== null) {
                         sealedItems.push({
@@ -2746,15 +2783,15 @@ async function loadSealed(viewButton) {
                     const sealedDiv = document.createElement('div');
                     sealedDiv.classList.add('sealed-item');
                     sealedDiv.setAttribute('sid', sealedData.sid);
-                    const margin = (Number(sealedData.market_value) - Number(sealedData.price)).toFixed(2);
-                    const timeStamp = sealedData.date.replace('Z', '');
+                    const margin = (Number(DOMPurify.sanitize(sealedData.market_value)) - Number(DOMPurify.sanitize(sealedData.price))).toFixed(2);
+                    const timeStamp = DOMPurify.sanitize(sealedData.date).replace('Z', '');
                     const date = new Date(timeStamp);
                     let formatedDate = date.toLocaleDateString('sk-SK', { year: 'numeric', month: '2-digit', day: '2-digit' });
                     sealedDiv.innerHTML = `
-                        <p class='sealed-name'>${sealedData.name}</p>
-                        <p class='unit-price'>${sealedData.price}</p>
-                        <p class='VAT-sealed'>${(sealedData.price / 1.23).toFixed(2)}</p>
-                        <p class='market-value-sealed'>${sealedData.market_value}</p>
+                        <p class='sealed-name'>${DOMPurify.sanitize(sealedData.name)}</p>
+                        <p class='unit-price'>${DOMPurify.sanitize(sealedData.price)}</p>
+                        <p class='VAT-sealed'>${(DOMPurify.sanitize(sealedData.price) / 1.23).toFixed(2)}</p>
+                        <p class='market-value-sealed'>${DOMPurify.sanitize(sealedData.market_value)}</p>
                         <p class='margin'>${margin}</p>
                         <p class='add-date'>${formatedDate}</p>
                         <button class='add-to-cart'>Add to cart</button>
@@ -2881,7 +2918,10 @@ async function renderBarterSelect(select) {
     const data = await loadUnlinkedIds();
 
     data.forEach((row) => {
-        select.innerHTML += `<option value="${row.id}">${row.invoice_number}</option>`
+        const option = document.createElement('option');
+        option.value = sanitizeNumericId(row.id);
+        option.textContent = sanitizePlainText(row.invoice_number);
+        select.appendChild(option);
     });
     return select
 }
@@ -2892,14 +2932,15 @@ async function loadAuctions() {
         const response = await fetch('/loadAuctions');
         const data = await response.json();
         data.forEach(auction => {
+            const safeAuctionId = sanitizeNumericId(auction.id);
+            const safeSaleId = sanitizeNumericId(auction.sale_id);
             const auctionDiv = document.createElement('div');
             auctionDiv.classList.add('auction-tab');
-            auctionDiv.id = `${auction.id}`;
+            auctionDiv.id = safeAuctionId;
             if (auction.auction_name === 'Singles') {
                 auctionDiv.classList.add('singles');
             }
-            auctionDiv.setAttribute('data-id', auction.id);
-            auctionDiv.id = auction.id;
+            auctionDiv.setAttribute('data-id', safeAuctionId);
             let auctionName = auction.auction_name || "Auction " + (auction.id - 1); // Fallback for name
             let auctionPrice = auction.auction_price || null; // Fallback for buy price
             const buyDate = new Date(auction.date_created);
@@ -2914,19 +2955,19 @@ async function loadAuctions() {
             const invoiceNumber = auction.invoice_number;
 
             auctionDiv.innerHTML = `
-                <p class="auction-name">${auctionName}</p>
-                ${renderField(auctionPrice != null ? auctionPrice + '€' : null, 'text', ['auction-price'], 'Auction Buy Price', 'auction_price')}
-                <p class="buy-date">${formatedDate || dateFromUTC}</p>
+                <p class="auction-name">${DOMPurify.sanitize(auctionName)}</p>
+                ${renderField(auctionPrice != null ? DOMPurify.sanitize(auctionPrice) + '€' : null, 'text', ['auction-price'], 'Auction Buy Price', 'auction_price')}
+                <p class="buy-date">${DOMPurify.sanitize(formatedDate || dateFromUTC)}</p>
                 <div class="payment-method-container">
                     <div class="payment-method">${paymentDisplay}</div>
                     <button class="edit-payments-btn">Edit</button>
                 </div>
-                <button class="view-auction" data-id="${auction.id}">View</button>
-                <button class="delete-auction" data-id="${auction.id}">Delete</button>
+                <button class="view-auction" data-id="${safeAuctionId}">View</button>
+                <button class="delete-auction" data-id="${safeAuctionId}">Delete</button>
                 <div class="auction-link-cell">
                     ${auction.sale_id == null
                     ? `<select class='barter-id-select'><option value="null">Select Invoice Number to link</option></select>`
-                    : `<a class="sale-link" href="/sold#${auction.sale_id}">Invoice Number: ${invoiceNumber}</a>`
+                    : `<a class="sale-link" href="/sold#${safeSaleId}">Invoice Number: ${DOMPurify.sanitize(invoiceNumber)}</a>`
                 }
                 </div>
                 <div class="cards-container">
@@ -2983,11 +3024,11 @@ async function loadAuctions() {
             // Add existing payments
             if (payments.length > 0) {
                 payments.forEach(payment => {
-                    rowsContainer.innerHTML += paymentTypeRow(payment.type, payment.amount);
+                    rowsContainer.innerHTML += paymentTypeRow(DOMPurify.sanitize(payment.type), DOMPurify.sanitize(payment.amount));
                 });
             } else {
                 // Add one empty row if no payments
-                const auctionPrice = auctionDiv.querySelector('.auction-price').textContent.replace('€', '')
+                const auctionPrice = DOMPurify.sanitize(auctionDiv.querySelector('.auction-price').textContent.replace('€', ''));
                 rowsContainer.innerHTML += paymentTypeRow('Bankový prevod', auctionPrice);
             }
 
@@ -3057,7 +3098,7 @@ async function loadAuctions() {
                     auctionDiv.paymentsData = paymentsArray;
                     const paymentDisplay = formatPaymentDisplay(paymentsArray);
                     paymentContainer.innerHTML = `
-                        <div class="payment-method">${paymentDisplay}</div>
+                        <div class="payment-method">${DOMPurify.sanitize(paymentDisplay)}</div>
                         <button class="edit-payments-btn">Edit</button>
                     `;
                     // Re-attach listener to new edit button
@@ -3071,7 +3112,7 @@ async function loadAuctions() {
             paymentContainer.querySelector('.cancel-payments-btn').addEventListener('click', () => {
                 const paymentDisplay = formatPaymentDisplay(auctionDiv.paymentsData || []);
                 paymentContainer.innerHTML = `
-                    <div class="payment-method">${paymentDisplay}</div>
+                    <div class="payment-method">${DOMPurify.sanitize(paymentDisplay)}</div>
                     <button class="edit-payments-btn">Edit</button>
                 `;
                 // Re-attach listener to new edit button
