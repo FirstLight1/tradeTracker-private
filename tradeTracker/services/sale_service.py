@@ -11,7 +11,6 @@ class SaleService:
     def process_sale(self, sale_input) -> models.SaleResult:
         with self.db:  # sqlite transaction
             self._check_inventory(sale_input)
-            print(sale_input)
             receipt = self.receipt_service.issue(sale_input)  # invoice teraz, ekasa neskôr
             sale_id = self._insert_sale_header(sale_input, receipt)
             self._insert_sale_items(sale_id, sale_input)
