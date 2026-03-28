@@ -45,6 +45,7 @@ def generate_invoice(reciever, items=None, sealed=None , bulk=None, holo=None, e
         env_path = os.path.join(os.path.dirname(__file__), 'env.txt')
         logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
     
+    print(reciever, items, sealed, bulk, holo,ex, payment_methods,shipping)
     # Read or create env.txt with invoice_num
     ## TODO error handling
     try:

@@ -20,8 +20,11 @@ import sqlite3
 import fpdf
 import json
 import pandas as pd
-from . import generateInvoice
 import logging
+from . import generateInvoice, CONSTANTS
+from tradeTracker.services.models import SaleInput
+from tradeTracker.services.sale_service import SaleService
+from tradeTracker.services.reciept_service import InvoiceReceiptService
 
 bp = Blueprint("actions", __name__)
 logger = logging.getLogger(__name__)
@@ -42,32 +45,12 @@ conditionDict = {
 }
 
 # Allowed payment types (whitelist)
-ALLOWED_PAYMENT_TYPES = {
-    "Hotovosť",
-    "Karta",
-    "Barter",
-    "Bankový prevod",
-    "Online platba",
-    "Dobierka",
-    "Online platobný systém",
-}
-
-BULK_ITEM_UNIT_PRICES = {"bulk": 0.01, "holo": 0.03, "ex": 0.15}
-
-
-def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
-    # Don't capture KeyboardInterrupt (Ctrl+C) — let it exit normally
-    if issubclass(exc_type, KeyboardInterrupt):
-        sys.__excepthook__(exc_type, exc_value, exc_traceback)
-        return
-
-    logger.critical(
-        "Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback)
-    )
+ALLOWED_PAYMENT_TYPES = CONSTANTS.ALLOWED_PAYMENT_TYPES
+BULK_ITEM_UNIT_PRICES = CONSTANTS.BULK_ITEM_UNIT_PRICES
 
 
 def get_bulk_item_unit_price(item_type):
-    return BULK_ITEM_UNIT_PRICES.get(item_type, 0)
+    return CONSTANTS.BULK_ITEM_UNIT_PRICES.get(item_type, 0)
 
 
 def validate_and_sanitize_payments(payments):
@@ -98,7 +81,6 @@ def validate_and_sanitize_payments(payments):
         # Validate payment type against whitelist
         if payment_type not in ALLOWED_PAYMENT_TYPES:
             return False, None, f"Invalid payment type: {payment_type}"
-
         # Validate amount is a number
         try:
             amount = float(amount)
@@ -1438,7 +1420,7 @@ def recalculateCardPrices(auction_id, new_auction_price):
     db = get_db()
     new_auction_price = float(new_auction_price)
 
-    for item_type, unit_price in BULK_ITEM_UNIT_PRICES.items():
+    for item_type, unit_price in CONSTANTS.BULK_ITEM_UNIT_PRICES.items():
         quantity = db.execute(
             "SELECT quantity FROM bulk_items WHERE auction_id = ? AND item_type = ?",
             (auction_id, item_type),
@@ -2057,211 +2039,53 @@ def getCardIds():
 def invoice():
     if request.method == "POST":
         cartContent = request.get_json()
-        recieverInfo = cartContent["recieverInfo"]
-        cards = cartContent.get("cards") or []
-        bulk = cartContent.get("bulkItem")
-        holo = cartContent.get("holoItem")
-        ex = cartContent.get("exItem")
-        sealed = cartContent.get("sealed")
-        # Validate inventory before processing
-        db = get_db()
-        try:
-            if bulk and bulk.get("quantity", 0) > 0:
-                if not _check_bulk_inventory(db, "bulk", bulk.get("quantity", 0)):
-                    return jsonify(
-                        {
-                            "status": "error",
-                            "message": f"Insufficient bulk inventory. Requested: {bulk.get('quantity', 0)}",
-                        }
-                    ), 400
-
-            if holo and holo.get("quantity", 0) > 0:
-                if not _check_bulk_inventory(db, "holo", holo.get("quantity", 0)):
-                    return jsonify(
-                        {
-                            "status": "error",
-                            "message": f"Insufficient holo inventory. Requested: {holo.get('quantity', 0)}",
-                        }
-                    ), 400
-
-            if ex and ex.get("quantity", 0) > 0:
-                if not _check_bulk_inventory(db, "ex", ex.get("quantity", 0)):
-                    return jsonify(
-                        {
-                            "status": "error",
-                            "message": f"Insufficient ex inventory. Requested: {ex.get('quantity', 0)}",
-                        }
-                    ), 400
-            # Generate the invoice and get the file path
-            # Pass payment methods array (or single method for backwards compatibility)
-            payment_data, valid, err, pdf_path = None, False, None, None
-            payment_methods_input = recieverInfo.get("paymentMethods") or []
-            if payment_methods_input:
-                valid, payment_data, err = validate_and_sanitize_payments(
-                    payment_methods_input
-                )
-            elif recieverInfo.get("paymentMethod"):
-                # Backwards compatibility - convert single payment method to array
-                payment_data = [
-                    {"type": recieverInfo.get("paymentMethod"), "amount": 0}
-                ]
-                valid = True
-            else:
-                err = "No payment method provided"
-            if err != None:
-                logger.error(
-                    "Failed to validate payment | payment method: %s",
-                    recieverInfo.get("paymentMethod"),
-                )
-                return jsonify(
+        payment_data, valid, err, pdf_path = None, False, None, None
+        payment_methods_input = cartContent.get("paymentMethods") or []
+        if payment_methods_input:
+            valid, payment_data, err = validate_and_sanitize_payments(
+                payment_methods_input
+            )
+        elif cartContent.get("paymentMethod"):
+            # Backwards compatibility - convert single payment method to array
+            payment_data = [{"type": cartContent.get("paymentMethod"), "amount": 0}]
+            valid = True
+        else:
+            err = "No payment method provided"
+        if err != None:
+            return (
+                jsonify(
                     {
                         "status": "error",
                         "message": f"There was an error while validating payments {err}",
                     }
-                ), 400
-            if not valid:
-                return jsonify(
-                    {"status": "error", "message": "Invalid payment data"}
-                ), 400
-
-            try:
-                pdf_path, invoice_num = generateInvoice.generate_invoice(
-                    reciever=recieverInfo,
-                    items=cards,
-                    sealed=sealed,
-                    bulk=bulk,
-                    holo=holo,
-                    ex=ex,
-                    payment_methods=payment_data,
-                    shipping=cartContent.get("shipping"),
-                )
-            except:
-                logger.exception(
-                    "Failed to create invoice | cards: %s | sealed: %s | bulk: %s | holo: %s | ex: %s | payment_methods: %s | shipping: %s",
-                    cards,
-                    sealed,
-                    bulk,
-                    holo,
-                    ex,
-                    payment_data,
-                    cartContent["shipping"],
-                )
-
-            shippingPrice = cartContent.get("shipping", {}).get("shippingPrice")
-            recieverInfoJson = json.dumps(recieverInfo)
-            if shippingPrice == None:
-                shippingPrice = 0
-            sale_date = datetime.date.today().isoformat()
-            total_amount = round(
-                float(recieverInfo.get("total")) + float(shippingPrice), 2
+                ),
+                400,
             )
-            cursor = db.execute(
-                "INSERT INTO sales (invoice_number, sale_date, total_amount, notes, shipping_info) VALUES (?, ?, ?, ?,?)",
-                (invoice_num, sale_date, total_amount, recieverInfoJson, shippingPrice),
+        if not valid:
+            return jsonify({"status": "error", "message": "Invalid payment data"}), 400
+
+        saleInput = SaleInput(
+            reciever=cartContent["recieverInfo"],
+            cards=cartContent.get("cards") or [],
+            sealed=cartContent.get("sealed") or [],
+            bulk=cartContent.get("bulkItem"),
+            holo=cartContent.get("holoItem"),
+            ex=cartContent.get("exItem"),
+            shipping=cartContent.get("shipping"),
+            payments=payment_data or [],
+        )
+        db = get_db()
+        try:
+            saleResult = SaleService(db, InvoiceReceiptService()).process_sale(
+                saleInput
             )
-            sale_id = cursor.lastrowid
-
-            try:
-                # Add sale items
-                if len(cards) > 0:
-                    for card in cards:
-                        sell_price = float(card.get("marketValue", 0))
-                        db.execute(
-                            "UPDATE cards SET sold_date = ? WHERE id = ?",
-                            (sale_date, card.get("cardId")),
-                        )
-
-                        db.execute(
-                            "INSERT INTO sale_items (sale_id, card_id, sell_price, profit) "
-                            "VALUES (?, ?, ?, ? - (SELECT card_price FROM cards WHERE id = ?))",
-                            (
-                                sale_id,
-                                card.get("cardId"),
-                                sell_price,
-                                sell_price,
-                                card.get("cardId"),
-                            ),
-                        )
-
-                if sealed:
-                    for item in sealed:
-                        db.execute(
-                            "UPDATE sealed SET sale_id = ? WHERE id = ?",
-                            (sale_id, item.get("sid").replace("s", "")),
-                        )
-
-                if bulk:
-                    db.execute(
-                        "INSERT INTO bulk_sales (sale_id, item_type, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)",
-                        (
-                            sale_id,
-                            "bulk",
-                            bulk.get("quantity", 0),
-                            bulk.get("unit_price", BULK_ITEM_UNIT_PRICES["bulk"]),
-                            bulk.get("sell_price", 0),
-                        ),
-                    )
-                    # I am pretty sure the execudes are not needed
-                    db.execute(
-                        'UPDATE bulk_counter SET counter = counter - ? WHERE counter_name = "bulk"',
-                        (bulk.get("quantity", 0),),
-                    )
-                    # Deduct from bulk_items using FIFO
-                    _deduct_bulk_items_fifo(db, "bulk", bulk.get("quantity", 0))
-
-                if holo:
-                    db.execute(
-                        "INSERT INTO bulk_sales (sale_id, item_type, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)",
-                        (
-                            sale_id,
-                            "holo",
-                            holo.get("quantity", 0),
-                            holo.get("unit_price", BULK_ITEM_UNIT_PRICES["holo"]),
-                            holo.get("sell_price", 0),
-                        ),
-                    )
-                    db.execute(
-                        'UPDATE bulk_counter SET counter = counter - ? WHERE counter_name = "holo"',
-                        (holo.get("quantity", 0),),
-                    )
-                    # Deduct from bulk_items using FIFO
-                    _deduct_bulk_items_fifo(db, "holo", holo.get("quantity", 0))
-
-                if ex:
-                    db.execute(
-                        "INSERT INTO bulk_sales (sale_id, item_type, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)",
-                        (
-                            sale_id,
-                            "ex",
-                            ex.get("quantity", 0),
-                            ex.get("unit_price", BULK_ITEM_UNIT_PRICES["ex"]),
-                            ex.get("sell_price", 0),
-                        ),
-                    )
-                    db.execute(
-                        'UPDATE bulk_counter SET counter = counter - ? WHERE counter_name = "ex"',
-                        (ex.get("quantity", 0),),
-                    )
-                    _deduct_bulk_items_fifo(db, "ex", ex.get("quantity", 0))
-            except Exception as e:
-                db.rollback()
-                logger.exception("Error while adding to sale tables")
-                return jsonify(
-                    {
-                        "status": "error",
-                        "message": f"Something went wrong while adding items do sale tables. {e}",
-                    }
-                ), 400
-
             db.commit()
-
-            # Send the PDF file as a download
-            logger.info(
-                "Invoice generated succesfully | invoice_number: %s | sale_id: %s",
-                invoice_num,
-                sale_id,
+            return (
+                jsonify(
+                    {"status": "success", "pdf_path": saleResult.receipt.file_path}
+                ),
+                200,
             )
-            return jsonify({"status": "success", "pdf_path": pdf_path}), 200
         except Exception as e:
             db.rollback()
             logger.exception("There was a fail during invoice generation | %s", e)

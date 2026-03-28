@@ -1385,7 +1385,7 @@ function shoppingCart() {
                 const clientCity = recieverDiv.querySelector('.client-city')?.value || '';
                 const clientCountry = recieverDiv.querySelector('.client-country')?.value || '';
                 const paybackDate = recieverDiv.querySelector('.date-input')?.value || '';
-                const shippingWay = recieverDiv.querySelector('.shipping-way')?.textContent || '';
+                const shippingWay = 'Doprava / Poštovné – samostatná služba';
                 const shippingPrice = recieverDiv.querySelector('.shipping-price')?.value.replace(',', '.') || '';
 
                 // Calculate total payment amount from payment methods
@@ -1407,10 +1407,9 @@ function shoppingCart() {
                     renderAlert('Please select at least one payment method', 'error');
                     return;
                 }
-
+                cartContent.paymentMethods = paymentMethods;
                 // Update or create recieverInfo (always update payment methods)
                 const recieverInfo = {
-                    paymentMethods: paymentMethods,
                     nameAndSurname: clientName,
                     address: clientAddress,
                     city: clientCity,
