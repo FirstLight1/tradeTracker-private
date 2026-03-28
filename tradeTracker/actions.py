@@ -1879,9 +1879,6 @@ def search():
                 sealed_cart_ids.append(int(cart_id[1:]))
             else:
                 card_cart_ids.append(cart_id)
-
-        # for id in card_cart_ids:
-        #    print(id)
         # Build WHERE clause for CARDS (alias 'c')
         card_where_conditions = []
         card_params = []
