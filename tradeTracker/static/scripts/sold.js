@@ -1,4 +1,4 @@
-import { renderField, renderAlert, scrollOnLoad } from "./main.js";
+import { renderField, renderAlert, scrollOnLoad } from "./utils/renderUtil.js";
 
 const BULK_TYPE_BUY_PRICES = {
     bulk: 0.01,

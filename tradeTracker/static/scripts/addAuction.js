@@ -1,4 +1,5 @@
-import {updateInventoryValueAndTotalProfit, renderAlert} from "./main.js";
+import {updateInventoryValueAndTotalProfit, renderAlert, createNewCard} from "./utils/renderUtil.js";
+import {CardStruct} from './utils/classes.js';
 
 const ALLOWED_PAYMENT_TYPES = new Set([
     'Hotovosť',
@@ -37,49 +38,8 @@ function validatePayments(payments) {
     return { valid: true };
 }
 
-export function createNewCard(newCard){
-     newCard.querySelectorAll('input').forEach(el =>{
-            el.value = '';
-        });
-
-        newCard.querySelectorAll('select').forEach(sel => {
-        sel.selectedIndex = 1;
-        });
-
-        const newCardName = newCard.querySelector('.marketValue');
-        newCardName.oninput = function () {
-        handleCardInput(this);
-        }
-        return newCard;
-}
-
-
-window.handleCardInput = function (input){
-    const container = document.querySelector(".cards-container")
-    const cards = document.querySelectorAll(".card")
-    const currentCard = input.closest('.card');
-    const lastCard = cards[cards.length - 1];
-
-    if(currentCard == lastCard && input.value.trim() !== ''){
-        const newCard = createNewCard(lastCard.cloneNode(true));
-        container.appendChild(newCard)
-    }
-}
-
-export class struct{
-    constructor(){
-        this.cardName = null;
-        this.cardNum = null;
-        this.condition = null;
-        this.buyPrice = null;
-        this.marketValue = null;
-        this.sellPrice = null;
-        this.soldDate = null;
-    }
-}
-
 const cardsArr = [];
-let totalSellValue = 0;
+
 let auctionValueCalculated = 0;
 const saveButton = document.querySelector('.save-btn')
 //add typechecks
@@ -121,7 +81,7 @@ saveButton.addEventListener('click', () =>{
 
     const cards = document.querySelectorAll('.card');
     cards.forEach(ell =>{
-        let card = new struct();
+        let card = new CardStruct();
         const input = (selector) => DOMPurify.sanitize(ell.querySelector(selector)?.value.trim().toUpperCase()) || null;
         const inputNumber = (selector) => {
             const val = DOMPurify.sanitize(ell.querySelector(selector)?.value.trim());

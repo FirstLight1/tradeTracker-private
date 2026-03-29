@@ -1,5 +1,5 @@
-import {createNewCard, struct} from './addAuction.js'
-import {renderAlert} from './main.js'
+import {CardStruct} from './utils/classes.js';
+import {renderAlert, createNewCard} from './utils/renderUtil.js';
 
 const cardsArr = [];
 const saveButton = document.querySelector('.save-btn')
@@ -12,7 +12,7 @@ saveButton.addEventListener('click', () => {
 
     const cards = document.querySelectorAll('.card');
         cards.forEach(ell =>{
-            let card = new struct();
+            let card = new CardStruct();
             const input = (selector) => DOMPurify.sanitize(ell.querySelector(selector)?.value.trim().toUpperCase()) || null;
             const inputNumber = (selector) => {
                 const val = DOMPurify.sanitize(ell.querySelector(selector)?.value.trim());

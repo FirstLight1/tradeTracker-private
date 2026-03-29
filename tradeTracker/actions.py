@@ -1267,7 +1267,7 @@ def createBuyReport(month, year, db):
     return xls_path
 
 
-@bp.route("/addToCollecton", methods=("GET", "POST"))
+@bp.route("/addToCollection", methods=("GET", "POST"))
 def addToCollection():
     if request.method == "POST":
         cards = request.get_json()

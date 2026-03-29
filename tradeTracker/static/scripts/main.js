@@ -1,219 +1,7 @@
-class struct {
-    constructor() {
-        this.cardName = null;
-        this.cardNum = null;
-        this.condition = null;
-        this.buyPrice = null;
-        this.marketValue = null;
-        this.sellPrice = null;
-        this.soldDate = null;
-    }
-}
+import { renderField, renderAlert, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign } from "./utils/renderUtil.js";
+import { CardStruct, queue, CartLine } from "./utils/classes.js";
+import { escapeHtml, sanitizePlainText, sanitizeAttrValue, sanitizeNumericId } from "./utils/sanitizers.js";
 
-class queue {
-    constructor(size) {
-        this.items = [];
-        this.size = size;
-        this.curr = 0;
-        this.next = 1;
-        this.prev = size - 1;
-    }
-    moveNext() {
-        this.prev = this.curr;
-        this.curr = this.next;
-        this.next = (this.next + 1) % this.size;
-    }
-    movePrev() {
-        this.next = this.curr;
-        this.curr = this.prev;
-        this.prev = (this.prev - 1 + this.size) % this.size;
-    }
-
-    enqueue(item) {
-        if (this.items.length < this.size) {
-            this.items.push(item);
-        } else {
-            this.items[this.curr] = item;
-        }
-    }
-    getCurrent() {
-        return this.items[this.curr];
-    }
-    getItem() {
-        return this.items[this.curr];
-    }
-    printQueue() {
-        console.log(this.items);
-    }
-}
-
-class CartLine {
-    constructor(cardName, cardNum, condition, auctionName, marketValue, allIds) {
-        this.cardName = cardName;
-        this.cardNum = cardNum;
-        this.condition = condition;
-        this.auctionName = auctionName;
-        this.marketValue = marketValue;
-        this.cardIds = [allIds[0]];
-        this.reservableIds = allIds.slice(1);
-        this.element = null;
-    }
-
-    get quantity() { return this.cardIds.length; }
-    get canIncrement() { return this.reservableIds.length > 0; }
-    get canDecrement() { return this.cardIds.length > 0; }
-
-    increment() {
-        if (!this.canIncrement) { return null; }
-        const id = this.reservableIds.shift();
-        this.cardIds.push(id);
-        return id;
-    }
-
-    decrement() {
-        if (!this.canDecrement) { return null; }
-        const id = this.cardIds.pop();
-        this.reservableIds.unshift(id);
-        return id;
-    }
-
-    removeAll() {
-        return [...this.cardIds];
-    }
-
-    matches(cardName, cardNum, condition) {
-        return this.cardName === cardName
-            && this.cardNum === cardNum
-            && this.condition === condition;
-    }
-
-    maxQuantity() {
-        const quantity = this.cardIds.push(...this.reservableIds);
-        this.reservableIds.length = 0;
-        return quantity;
-    }
-
-    // For sessionStorage
-    toJSON() {
-        return {
-            cardName: this.cardName,
-            cardNum: this.cardNum,
-            condition: this.condition,
-            auctionName: this.auctionName,
-            marketValue: this.marketValue,
-            cardIds: this.cardIds,
-            reservableIds: this.reservableIds
-        };
-    }
-
-    // Restore from sessionStorage
-    static fromJSON(data) {
-        const line = new CartLine(
-            data.cardName, data.cardNum, data.condition,
-            data.auctionName, data.marketValue,
-            [...data.cardIds, ...(data.reservableIds || [])]
-        );
-        // Override the constructor's default split
-        line.cardIds = data.cardIds;
-        line.reservableIds = data.reservableIds || [];
-        return line;
-    }
-
-    // Expand for /invoice payload
-    toInvoiceItems() {
-        return this.cardIds.map(id => ({
-            cardId: id,
-            cardName: this.cardName,
-            cardNum: this.cardNum,
-            condition: this.condition,
-            marketValue: this.marketValue
-        }));
-    }
-
-    // Lazy backfill: fetch more IDs from server when reservableIds is empty
-    async backfillPool(excludeIds) {
-        if (this.reservableIds.length > 0) return;
-        try {
-            const response = await fetch('/getCardIds', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    card_name: this.cardName,
-                    card_num: this.cardNum,
-                    condition: this.condition,
-                    exclude_ids: [...excludeIds]
-                })
-            });
-            if (!response.ok) {
-                renderAlert('Failed to fetch card IDs: ' + response.status, 'error');
-                return;
-            }
-            const data = await response.json();
-            if (data.status === 'success' && data.card_ids) {
-                this.reservableIds = data.card_ids.filter(id => !this.cardIds.includes(id));
-            }
-        } catch (e) {
-            renderAlert('Error fetching card IDs: ' + e, 'error');
-        }
-    }
-}
-
-
-export function renderField(value, inputType, classList, placeholder, datafield) {
-    const safeInputType = sanitizeAttrValue(inputType || 'text');
-    const safeClassList = Array.isArray(classList)
-        ? classList.map(token => sanitizeClassToken(token)).filter(Boolean).join(' ')
-        : '';
-    const safePlaceholder = sanitizeAttrValue(placeholder || '');
-    const safeDataField = sanitizeAttrValue(datafield || '');
-
-    if (value === null) {
-        return `<input type="${safeInputType}" class="${safeClassList}" placeholder="${safePlaceholder}" data-field="${safeDataField}" autocomplete="off">`;
-    } else {
-        const safeValue = sanitizePlainText(value);
-        return `<p class=" ${safeClassList}" data-field="${safeDataField}">${safeValue}</p>`;
-    }
-}
-
-export function renderAlert(text, type) {
-    const alertDiv = document.querySelector('#alert-div');
-
-    if (type === 'error') {
-        alertDiv.classList.add('alert-error')
-    } else {
-        alertDiv.classList.add('alert-message')
-    }
-
-    const escaped = String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/\r\n|\r|\n/g, '<br>');
-
-    alertDiv.innerHTML = escaped;
-    setTimeout(() => {
-        alertDiv.innerHTML = '';
-        alertDiv.classList.remove(...alertDiv.classList)
-    }, 6000)
-}
-
-export function scrollOnLoad() {
-    window.addEventListener('load', () => {
-        const hash = window.location.hash;
-        console.log(hash);
-        const id = hash.startsWith('#') ? hash.slice(1) : hash;
-        if (id) {
-            const interval = setInterval(() => {
-                const el = document.getElementById(id);
-                if (el) {
-                    el.scrollIntoView({ behavior: 'instant', block: 'center' });
-                    clearInterval(interval);
-                }
-            }, 100);
-        }
-    })
-}
 
 function paymentTypeSelect(className, defaultValue = '') {
     return `
@@ -263,36 +51,6 @@ function parsePaymentMethods(paymentMethodData) {
     return [];
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function sanitizePlainText(value) {
-    return DOMPurify.sanitize(String(value ?? ''), { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
-}
-
-function sanitizeAttrValue(value) {
-    return sanitizePlainText(value)
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-}
-
-function sanitizeClassToken(value) {
-    return sanitizePlainText(value)
-        .toLowerCase()
-        .replace(/\s+/g, '_')
-        .replace(/[^a-z0-9_-]/g, '');
-}
-
-function sanitizeNumericId(value) {
-    const parsed = Number.parseInt(String(value), 10);
-    return Number.isFinite(parsed) && parsed >= 0 ? String(parsed) : '';
-}
 
 const ALLOWED_PAYMENT_TYPES = new Set([
     'Hotovosť',
@@ -381,35 +139,6 @@ function calculateSealedBuyPrice(sealed) {
     return totalBuyPrice.toFixed(2);
 }
 
-function appendEuroSign(value, dataset) {
-    if (dataset === 'card_num' || dataset === 'card_name') {
-        return value;
-    }
-    if (isNaN(value)) {
-        return value;
-    } else {
-        return value + '€';
-    }
-}
-
-export function replaceWithPElement(dataset, value, element) {
-    if (dataset === undefined) {
-        return;
-    }
-    if (value === null) {
-        const p = document.createElement('p');
-        p.dataset.field = dataset;
-        p.classList.add('card-info', dataset.replace('_', '-'));
-        element.replaceWith(p);
-        return
-    }
-    const p = document.createElement('p');
-    p.dataset.field = dataset;
-    p.classList.add('card-info', dataset.replace('_', '-'));
-    p.textContent = appendEuroSign(value, dataset);
-    element.replaceWith(p);
-}
-
 function getInputValueAndPatch(value, element, dataset, cardId) {
     if (!Boolean(value)) {
         return null;
@@ -417,31 +146,6 @@ function getInputValueAndPatch(value, element, dataset, cardId) {
     replaceWithPElement(dataset, value, element);
     patchValue(cardId, value, dataset);
 }
-
-
-async function updateSoldStatus(cardId, isChecked, field) {
-    try {
-        const response = await fetch(`/update/${cardId}`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ field: field, value: isChecked })
-        });
-        const data = await response.json();
-        if (!(data.status === 'success')) {
-            renderAlert('Error updating sold status: ' + JSON.stringify(data), 'error');
-            return;
-        } else {
-            return
-        }
-    } catch (e) {
-        renderAlert('Error updating sold status: ' + e, 'error');
-        return;
-    }
-}
-
-//These two are the same
 
 async function patchValue(id, value, dataset) {
     if (value === " ") {
@@ -488,21 +192,6 @@ function deleteAuction(id, div) {
             renderAlert('Error deleting auction: ' + error, 'error');
         });
 }
-
-
-
-async function setAuctionBuyPrice(cards, sealed, auctionTab) {
-    const auctionBuyPriceElement = auctionTab.querySelector('.auction-price');
-    const cardBuyPrice = calculateCardBuyPrice(cards);
-    const sealedCardPrice = calculateSealedBuyPrice(sealed);
-    const newAuctionBuyPrice = Number(cardBuyPrice) + Number(sealedCardPrice);
-    auctionBuyPriceElement.textContent = appendEuroSign(newAuctionBuyPrice, 'auction-price');
-    const auctionId = auctionTab.getAttribute('data-id');
-    await updateAuction(auctionId, newAuctionBuyPrice, 'auction_price');
-}
-
-
-
 
 async function removeCard(id, div) {
     try {
@@ -653,28 +342,6 @@ function importCSV() {
             }
         }
     })
-}
-
-async function getInventoryValue() {
-    try {
-        const response = await fetch('/inventoryValue');
-        const data = await response.json();
-        return data.value;
-    } catch (e) {
-        renderAlert('Error loading inventory value: ' + e, 'error');
-    }
-}
-
-
-
-export async function updateInventoryValueAndTotalProfit() {
-    const value = await getInventoryValue();
-    const inventoryValueElement = document.querySelector('.inventory-value-value');
-    if (value != null) {
-        inventoryValueElement.textContent = appendEuroSign(value.toFixed(2));
-    } else {
-        inventoryValueElement.textContent = '0.00 €';
-    }
 }
 
 function cartValue(cartContent) {
@@ -2057,7 +1724,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
 
         } else {
             // Handle card display
-            let card = new struct()
+            let card = new CardStruct();
             card.cardName = result.card_name;
             card.cardNum = result.card_num;
             card.condition = result.condition;
@@ -2272,7 +1939,6 @@ async function loadAuctionContent(button) {
                                     if (isNaN(newValue)) {
                                         newValue = newValue.toUpperCase();
                                     }
-                                    const auctionTab = blurEvent.target.closest('.auction-tab');
 
                                     getInputValueAndPatch(newValue || value, input, dataset, cardId);
                                     if (blurEvent.target.classList.contains('card-price') || blurEvent.target.classList.contains('sell-price')) {
@@ -2311,7 +1977,7 @@ async function loadAuctionContent(button) {
                             const cardDiv = button.closest('.card');
                             const cardId = cardDiv.getAttribute('data-id');
                             const auctionId = auctionDiv.getAttribute('data-id');
-                            const card = new struct();
+                            const card = new CardStruct();
                             card.cardName = cardDiv.querySelector('.card-name').textContent;
                             card.cardNum = cardDiv.querySelector('.card-num').textContent;
                             card.condition = cardDiv.querySelector('.condition').textContent;
@@ -2473,8 +2139,7 @@ async function loadAuctionContent(button) {
                         button.addEventListener('click', async () => {
                             const bulkId = button.getAttribute('data-id');
                             const bulkDiv = button.closest('.bulk-item');
-                            const cardsContainer = button.closest('.cards-container');
-                            const auctionId = cardsContainer.closest('.auction-tab').getAttribute('data-id');
+
                             if (button.textContent === 'Confirm') {
                                 const deleted = await removeBulkItem(bulkId, bulkDiv);
                                 if (!deleted) return;
@@ -2639,112 +2304,112 @@ async function loadAuctionContent(button) {
             const auctionId = auctionDiv.getAttribute('data-id');
             let cardsArray = [];
             const newCards = cardsContainer.querySelectorAll('.new-card');
-            //try {
-            newCards.forEach(async (card) => {
-                let cardObj = new struct();
-                cardObj.cardName = DOMPurify.sanitize(card.querySelector('input.card-name').value.trim().toUpperCase()) || null;
-                cardObj.cardNum = DOMPurify.sanitize(card.querySelector('input.card-num').value.trim().toUpperCase()) || null;
-                cardObj.condition = DOMPurify.sanitize(card.querySelector('select.condition').value) || null;
-                cardObj.buyPrice = DOMPurify.sanitize(card.querySelector('input.card-price').value.replace(',', '.').trim()) || null;
-                cardObj.marketValue = DOMPurify.sanitize(card.querySelector('input.market-value').value.replace(',', '.').trim()) || null;
-                cardObj.sellPrice = DOMPurify.sanitize(card.querySelector('input.sell-price').value.replace(',', '.').trim()) || null;
-                cardObj.soldDate = null;
+            try {
+                newCards.forEach(async (card) => {
+                    let cardObj = new CardStruct();
+                    cardObj.cardName = DOMPurify.sanitize(card.querySelector('input.card-name').value.trim().toUpperCase()) || null;
+                    cardObj.cardNum = DOMPurify.sanitize(card.querySelector('input.card-num').value.trim().toUpperCase()) || null;
+                    cardObj.condition = DOMPurify.sanitize(card.querySelector('select.condition').value) || null;
+                    cardObj.buyPrice = DOMPurify.sanitize(card.querySelector('input.card-price').value.replace(',', '.').trim()) || null;
+                    cardObj.marketValue = DOMPurify.sanitize(card.querySelector('input.market-value').value.replace(',', '.').trim()) || null;
+                    cardObj.sellPrice = DOMPurify.sanitize(card.querySelector('input.sell-price').value.replace(',', '.').trim()) || null;
+                    cardObj.soldDate = null;
 
-                if (cardObj.buyPrice === null) cardObj.buyPrice = cardObj.marketValue * 0.85;
-                if (cardObj.sellPrice === null) cardObj.sellPrice = cardObj.marketValue;
-                if (cardObj.cardName !== null && cardObj.marketValue !== null) {
-                    cardsArray.push(cardObj);
-                } else {
-                    card.remove();
-                }
-            });
-
-            itemsToAdd['cards'] = cardsArray;
-
-            const auctionSingles = auctionDiv.classList.contains('singles') ? true : false;
-            for (let i = 0; i < cardsArray.length; i++) {
-                let j = 0;
-                for (const [key, value] of Object.entries(cardsArray[i])) {
-                    if (key === 'soldDate') continue;
-                    const cardElement = newCards[i].children;
-                    replaceWithPElement(cardElement[j].dataset.field, value, cardElement[j]);
-                    j++;
-                }
-            }
-
-            const bulkDiv = cardsContainer.querySelector('.add-bulk-item');
-            if (bulkDiv) {
-                const bulkItems = { 'item_type': 'bulk', 'quantity': null, 'total_price': null };
-                bulkItems.quantity = DOMPurify.sanitize(bulkDiv.querySelector('.bulk-quantity-input').value.trim()) || null;
-                bulkItems.total_price = DOMPurify.sanitize(bulkDiv.querySelector('.bulk-sell-price-input').value.replace(',', '.').trim()) || null;
-                bulkItems.unit_price = bulkItems.total_price / bulkItems.quantity || null;
-                itemsToAdd['bulk'] = bulkItems;
-            }
-
-            const holoDiv = cardsContainer.querySelector('.add-holo-item');
-            if (holoDiv) {
-                const holoItems = { 'item_type': 'holo', 'quantity': null, 'total_price': null };
-                holoItems.quantity = DOMPurify.sanitize(holoDiv.querySelector('.holo-quantity-input').value.trim()) || null;
-                holoItems.total_price = DOMPurify.sanitize(holoDiv.querySelector('.holo-sell-price-input').value.replace(',', '.').trim()) || null;
-                holoItems.unit_price = holoItems.total_price / holoItems.quantity || null;
-                itemsToAdd['holo'] = holoItems;
-            }
-
-            const exDiv = cardsContainer.querySelector('.add-ex-item');
-            if (exDiv) {
-                const exItems = { 'item_type': 'ex', 'quantity': null, 'total_price': null };
-                exItems.quantity = DOMPurify.sanitize(exDiv.querySelector('.ex-quantity-input').value.trim()) || null;
-                exItems.total_price = DOMPurify.sanitize(exDiv.querySelector('.ex-sell-price-input').value.replace(',', '.').trim()) || null;
-                exItems.unit_price = exItems.total_price / exItems.quantity || null;
-                itemsToAdd['ex'] = exItems;
-            }
-
-            // Handle sealed items
-            const sealedDivs = cardsContainer.querySelectorAll('.add-sealed-item');
-            if (sealedDivs.length > 0) {
-                const sealedItems = [];
-                sealedDivs.forEach(sealedDiv => {
-                    const name = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-name-input').value.trim()) || null;
-                    const price = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-price-input').value.trim()) || null;
-                    const marketValue = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-market-value-input').value.trim()) || null;
-                    const date = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-date-input').value) || null;
-
-                    if (name !== null && marketValue !== null) {
-                        sealedItems.push({
-                            name: name,
-                            price: price,
-                            market_value: marketValue,
-                            date: date
-                        });
+                    if (cardObj.buyPrice === null) cardObj.buyPrice = cardObj.marketValue * 0.85;
+                    if (cardObj.sellPrice === null) cardObj.sellPrice = cardObj.marketValue;
+                    if (cardObj.cardName !== null && cardObj.marketValue !== null) {
+                        cardsArray.push(cardObj);
+                    } else {
+                        card.remove();
                     }
                 });
 
-                if (sealedItems.length > 0) {
-                    itemsToAdd['sealed'] = sealedItems;
+                itemsToAdd['cards'] = cardsArray;
+
+                const auctionSingles = auctionDiv.classList.contains('singles') ? true : false;
+                for (let i = 0; i < cardsArray.length; i++) {
+                    let j = 0;
+                    for (const [key, value] of Object.entries(cardsArray[i])) {
+                        if (key === 'soldDate') continue;
+                        const cardElement = newCards[i].children;
+                        replaceWithPElement(cardElement[j].dataset.field, value, cardElement[j]);
+                        j++;
+                    }
                 }
-            }
 
-            const jsonbody = JSON.stringify(itemsToAdd);
-            const response = await fetch(`/addToExistingAuction/${auctionId}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: jsonbody
-            });
-            const data = await response.json();
-            if (!(data.status === 'success')) {
-                renderAlert('Error saving new cards: ' + JSON.stringify(data), 'error');
+                const bulkDiv = cardsContainer.querySelector('.add-bulk-item');
+                if (bulkDiv) {
+                    const bulkItems = { 'item_type': 'bulk', 'quantity': null, 'total_price': null };
+                    bulkItems.quantity = DOMPurify.sanitize(bulkDiv.querySelector('.bulk-quantity-input').value.trim()) || null;
+                    bulkItems.total_price = DOMPurify.sanitize(bulkDiv.querySelector('.bulk-sell-price-input').value.replace(',', '.').trim()) || null;
+                    bulkItems.unit_price = bulkItems.total_price / bulkItems.quantity || null;
+                    itemsToAdd['bulk'] = bulkItems;
+                }
+
+                const holoDiv = cardsContainer.querySelector('.add-holo-item');
+                if (holoDiv) {
+                    const holoItems = { 'item_type': 'holo', 'quantity': null, 'total_price': null };
+                    holoItems.quantity = DOMPurify.sanitize(holoDiv.querySelector('.holo-quantity-input').value.trim()) || null;
+                    holoItems.total_price = DOMPurify.sanitize(holoDiv.querySelector('.holo-sell-price-input').value.replace(',', '.').trim()) || null;
+                    holoItems.unit_price = holoItems.total_price / holoItems.quantity || null;
+                    itemsToAdd['holo'] = holoItems;
+                }
+
+                const exDiv = cardsContainer.querySelector('.add-ex-item');
+                if (exDiv) {
+                    const exItems = { 'item_type': 'ex', 'quantity': null, 'total_price': null };
+                    exItems.quantity = DOMPurify.sanitize(exDiv.querySelector('.ex-quantity-input').value.trim()) || null;
+                    exItems.total_price = DOMPurify.sanitize(exDiv.querySelector('.ex-sell-price-input').value.replace(',', '.').trim()) || null;
+                    exItems.unit_price = exItems.total_price / exItems.quantity || null;
+                    itemsToAdd['ex'] = exItems;
+                }
+
+                // Handle sealed items
+                const sealedDivs = cardsContainer.querySelectorAll('.add-sealed-item');
+                if (sealedDivs.length > 0) {
+                    const sealedItems = [];
+                    sealedDivs.forEach(sealedDiv => {
+                        const name = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-name-input').value.trim()) || null;
+                        const price = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-price-input').value.trim()) || null;
+                        const marketValue = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-market-value-input').value.trim()) || null;
+                        const date = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-date-input').value) || null;
+
+                        if (name !== null && marketValue !== null) {
+                            sealedItems.push({
+                                name: name,
+                                price: price,
+                                market_value: marketValue,
+                                date: date
+                            });
+                        }
+                    });
+
+                    if (sealedItems.length > 0) {
+                        itemsToAdd['sealed'] = sealedItems;
+                    }
+                }
+
+                const jsonbody = JSON.stringify(itemsToAdd);
+                const response = await fetch(`/addToExistingAuction/${auctionId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: jsonbody
+                });
+                const data = await response.json();
+                if (!(data.status === 'success')) {
+                    renderAlert('Error saving new cards: ' + JSON.stringify(data), 'error');
+                    return;
+                }
+
+                await updateInventoryValueAndTotalProfit();
+
+                newCards.forEach(card => card.classList.remove('new-card'));
+            } catch (error) {
+                renderAlert('Error saving new cards: ' + error, 'error');
                 return;
-            }
-
-            await updateInventoryValueAndTotalProfit();
-
-            newCards.forEach(card => card.classList.remove('new-card'));
-            //} catch (error) {
-            //    renderAlert('Error saving new cards: ' + error, 'error');
-            //    return;
-            // }
+             }
             //this could be done better by dynamically adding the cards instead of reloading the whole auction
             window.location.reload();
         });
@@ -3331,18 +2996,16 @@ async function loadAuctions() {
     }
 }
 
-if (document.title === "Trade Tracker") {
-    searchBar();
-    loadAuctions();
-    initializeSealed();
-    importCSV();
-    soldReportBtn();
-    initializeCart();
-    initializeBulkHolo();
-    loadCartContentFromSession();
-    scrollOnLoad();
-    document.addEventListener('DOMContentLoaded', async () => {
-        await updateInventoryValueAndTotalProfit();
-    }, false);
-    startPolling();
-}
+searchBar();
+loadAuctions();
+initializeSealed();
+importCSV();
+soldReportBtn();
+initializeCart();
+initializeBulkHolo();
+loadCartContentFromSession();
+scrollOnLoad();
+document.addEventListener('DOMContentLoaded', async () => {
+    await updateInventoryValueAndTotalProfit();
+}, false);
+startPolling();

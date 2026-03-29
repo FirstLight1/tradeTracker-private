@@ -1,5 +1,5 @@
-import { updateCollectionValue } from "./collection.js";
-import { renderAlert } from "./main.js";
+import { updateCollectionValue } from "./utils/collectionUtil.js";
+import { renderAlert } from "./utils/renderUtil.js";
 
 function createNewCard(newCard){
      newCard.querySelectorAll('input').forEach(el =>{
@@ -70,7 +70,7 @@ saveButton.addEventListener('click', () => {
     });
     const body = JSON.stringify(cardsArr);
 
-    fetch('/addToCollecton', {
+    fetch('/addToCollection', {
         method : 'POST',
         headers: {
             'Content-Type': 'application/json'

@@ -1,19 +1,9 @@
-import {renderField, replaceWithPElement, renderAlert} from './main.js';
+import {renderField, replaceWithPElement, renderAlert} from './utils/renderUtil.js';
+import {updateCollectionValue, updateCollectionValue} from './utils/collectionUtils.js';
 
 function sanitizeNumericId(value) {
     const parsed = Number.parseInt(String(value), 10);
     return Number.isFinite(parsed) && parsed >= 0 ? String(parsed) : '';
-}
-
-function appendEuroSign(value, dataset){
-    if (dataset === 'card_num' || dataset === 'card_name'){
-        return value;
-    }
-    if (isNaN(value)){
-        return value;
-    } else{
-        return value + '€';
-    }
 }
 
 async function removeCard(id, div){
@@ -53,28 +43,6 @@ async function getInputValueAndPatch(value, element, dataset, cardId){
         }
         replaceWithPElement(dataset, value, element);
         await patchValue(cardId, value, dataset);
-}
-
-async function getCollectionValue(){
-    try{
-        const response = await fetch('/collectionValue');
-        const data = await response.json();
-        return data.value;
-    } catch(e){
-        renderAlert('Error loading collection value: ' + e, 'error');
-    }
-}
-
-
-export async function updateCollectionValue() {
-        const value = await getCollectionValue();
-        const inventoryValueElement = document.querySelector('.inventory-value-value');
-        if(value != null){
-            inventoryValueElement.textContent = appendEuroSign(value.toFixed(2));
-        } else{
-            inventoryValueElement.textContent = '0.00€';
-        }
-    
 }
 
 async function fetchCollection(){
