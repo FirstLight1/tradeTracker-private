@@ -1,22 +1,10 @@
 from decimal import Decimal
 import sys
-from flask import (
-    url_for,
-    Flask,
-    request,
-    g,
-    render_template,
-    Blueprint,
-    jsonify,
-    current_app,
-)
+from flask import request, Blueprint, jsonify, current_app
 from flask_cors import CORS
 from tradeTracker.db import get_db
 import datetime
-import csv
-from werkzeug.utils import secure_filename
 import os
-import sqlite3
 import fpdf
 import json
 import pandas as pd
@@ -2006,7 +1994,7 @@ def getCardIds():
 def invoice():
     if request.method == "POST":
         cartContent = request.get_json()
-        payment_data, valid, err, pdf_path = None, False, None, None
+        payment_data, valid, err = None, False, None
         payment_methods_input = cartContent.get("paymentMethods") or []
         if payment_methods_input:
             valid, payment_data, err = validate_and_sanitize_payments(
