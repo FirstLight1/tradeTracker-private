@@ -1,6 +1,6 @@
 import { renderField, renderAlert, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign } from "./utils/renderUtil.js";
 import { CardStruct, queue, CartLine } from "./utils/classes.js";
-import { escapeHtml, sanitizePlainText, sanitizeAttrValue, sanitizeNumericId } from "./utils/sanitizers.js";
+import { escapeHtml, sanitizePlainText, sanitizeAttrValue, sanitizeNumericId, sanitizeClassToken } from "./utils/sanitizers.js";
 
 
 function paymentTypeSelect(className, defaultValue = '') {
