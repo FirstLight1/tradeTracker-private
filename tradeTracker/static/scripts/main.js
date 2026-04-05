@@ -824,6 +824,123 @@ function initializeCart() {
     addExToCart();
 }
 
+async function collectModalData(recieverDiv, cartVal, cartContent, kind){
+    // Collect all payment methods (every time Confirm is clicked)
+    const paymentDivs = recieverDiv.querySelectorAll('.payment-div');
+    const paymentMethods = [];
+    paymentDivs.forEach(div => {
+        const paymentType = div.querySelector('.payment-type')?.value;
+        if (!paymentType || paymentType === '' || paymentType === ' ') {
+            return;
+        }
+        const payment = {
+            type: paymentType,
+            amount: parseFloat(div.querySelector('.amount')?.value.replace(',', '.')) || 0
+        };
+        paymentMethods.push(payment);
+    })
+
+    // Get values by specific class names (every time)
+    const clientName = DOMPurify.sanitize(recieverDiv.querySelector('.client-name')?.value) || '';
+    const clientAddress = DOMPurify.sanitize(recieverDiv.querySelector('.client-address')?.value) || '';
+    const clientCity = DOMPurify.sanitize(recieverDiv.querySelector('.client-city')?.value) || '';
+    const clientCountry = DOMPurify.sanitize(recieverDiv.querySelector('.client-country')?.value) || '';
+    const paybackDate = DOMPurify.sanitize(recieverDiv.querySelector('.date-input')?.value) || '';
+    const shippingWay = 'Doprava / Poštovné – samostatná služba';
+    const shippingPrice = DOMPurify.sanitize(recieverDiv.querySelector('.shipping-price')?.value.replace(',', '.')) || '';
+
+    // Calculate total payment amount from payment methods
+    const paymentTotal = paymentMethods.reduce((sum, payment) => sum + payment.amount, 0);
+    const cartValueInput = DOMPurify.sanitize(document.querySelector('.price-input').value.replace(',', '.')) || cartVal;
+    const expectedTotal = parseFloat(cartValueInput) + Number(shippingPrice);
+
+    // Validate payment amounts match cart total
+    if (paymentMethods.length > 1) {
+        // If multiple payment methods, check that sum matches total
+        if (Math.abs(paymentTotal - expectedTotal) > 0.01) { // Allow 1 cent tolerance for rounding
+            renderAlert(`Payment amount (${paymentTotal.toFixed(2)}€) is not equal to total cart value (${expectedTotal.toFixed(2)}€)`, 'error');
+            return;
+        }
+    } else if (paymentMethods.length === 1) {
+        // If single payment method, auto-set amount to cart total
+        paymentMethods[0].amount = expectedTotal;
+    } else {
+        renderAlert('Please select at least one payment method', 'error');
+        return;
+    }
+    cartContent.paymentMethods = paymentMethods;
+    // Update or create recieverInfo (always update payment methods)
+    const recieverInfo = {
+        nameAndSurname: clientName,
+        address: clientAddress,
+        city: clientCity,
+        state: clientCountry,
+        paybackDate: paybackDate,
+        total: null,
+    };
+    cartContent.recieverInfo = recieverInfo;
+
+    if (shippingPrice !== "") {
+        const shipping = {
+            shippingWay: shippingWay,
+            shippingPrice: shippingPrice.replace(',', '.'),
+        };
+        cartContent.shipping = shipping;
+    }
+
+    // Apply price adjustment if cart value was manually changed
+    if (cartValueInput != cartVal) {
+        const bulkSub = cartContent.bulkItem ? Number(cartContent.bulkItem.sell_price) : 0;
+        const holoSub = cartContent.holoItem ? Number(cartContent.holoItem.sell_price) : 0;
+        const exSub = cartContent.exItem ? Number(cartContent.exItem.sell_price) : 0;
+        const fixedSubtotal = bulkSub + holoSub + exSub;
+        const cardsSub = cartContent.cards ? cartContent.cards.reduce((sum, c) => sum + Number(c.marketValue), 0) : 0;
+        const sealedSub = cartContent.sealed ? cartContent.sealed.reduce((sum, c) => sum + Number(c.marketValue.replace('€', '')), 0) : 0;
+
+        const adjustableSubtotal = cardsSub + sealedSub;
+        const targetAdjustable = cartValueInput - fixedSubtotal;
+
+        if (adjustableSubtotal > 0) {
+            const scale = targetAdjustable / adjustableSubtotal;
+            const allItems = [...(cartContent.cards || 0), ...(cartContent.sealed || 0)];
+
+            let distributed = 0;
+            for (let i = 0; i < allItems.length; i++) {
+                if (i === allItems.length - 1) {
+                    allItems[i].marketValue = (targetAdjustable - distributed).toFixed(2);
+                } else {
+                    const scaled = parseFloat((allItems[i].marketValue * scale).toFixed(2));
+                    allItems[i].marketValue = scaled.toFixed(2);
+                    distributed += scaled;
+                }
+            }
+        }
+    }
+    cartContent.recieverInfo.total = Number(cartValue(cartContent));
+    if (Object.keys(cartContent).length !== 0) {
+        const response = await fetch(`/createSale/${kind}`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(cartContent),
+            });
+        const data = await response.json();
+        if (data.status === 'success') {
+            renderAlert(data.pdf_path, 'message');
+            return true;
+        } else if (data.status === 'error') {
+            // Display error message for insufficient inventory
+            renderAlert('Error: ' + data.message, 'error');
+            return false;
+        } else {
+            renderAlert('Something went wrong generating the invoice', 'error');
+            return false;
+        }
+    }
+}
+
 function shoppingCart() {
     const contentDiv = document.querySelector(".cart-content");
     const bulkCartDiv = document.querySelector(".bulk-cart-content");
@@ -880,7 +997,6 @@ function shoppingCart() {
     confirmButton.addEventListener('click', async () => {
         const cartContent = {};
         if (contentDiv.childElementCount === 1 && contentDiv.children[0].tagName === 'P' && bulkCartDiv.childElementCount === 0 && holoCartDiv.childElementCount === 0 && exCartDiv.childElementCount === 0 && sealedContent.childElementCount === 0) {
-            console.log("cart empty");
             return;
         }
         let recieverDiv = document.querySelector('.reciever-div');
@@ -1016,7 +1132,10 @@ function shoppingCart() {
                     <p class='shipping-way'>Doprava / Poštovné – samostatná služba</p>
                     <input type=text placeholder="Price of shipping" class="shipping-price">
                     </div>
-                    <button class="generate-invoice">Confirm</button>
+                    <div class='invoice-buttons'>
+                        <button class="generate-invoice">Generate Invoice</button>
+                        <button class=sales-invoice>Add sale</button>
+                    </div>
                 </div>
                 `;
             body.append(recieverDiv);
@@ -1061,134 +1180,38 @@ function shoppingCart() {
         }
 
         const generateInvoiceBtn = document.querySelector('.generate-invoice');
-        {
-            generateInvoiceBtn.addEventListener('click', async () => {
-
-                // Collect all payment methods (every time Confirm is clicked)
-                const paymentDivs = recieverDiv.querySelectorAll('.payment-div');
-                const paymentMethods = [];
-                paymentDivs.forEach(div => {
-                    const paymentType = div.querySelector('.payment-type')?.value;
-                    if (!paymentType || paymentType === '' || paymentType === ' ') {
-                        return;
-                    }
-                    const payment = {
-                        type: paymentType,
-                        amount: parseFloat(div.querySelector('.amount')?.value.replace(',', '.')) || 0
-                    };
-                    paymentMethods.push(payment);
-                })
-
-                // Get values by specific class names (every time)
-                const clientName = DOMPurify.sanitize(recieverDiv.querySelector('.client-name')?.value) || '';
-                const clientAddress = DOMPurify.sanitize(recieverDiv.querySelector('.client-address')?.value) || '';
-                const clientCity = DOMPurify.sanitize(recieverDiv.querySelector('.client-city')?.value) || '';
-                const clientCountry = DOMPurify.sanitize(recieverDiv.querySelector('.client-country')?.value) || '';
-                const paybackDate = DOMPurify.sanitize(recieverDiv.querySelector('.date-input')?.value) || '';
-                const shippingWay = 'Doprava / Poštovné – samostatná služba';
-                const shippingPrice = DOMPurify.sanitize(recieverDiv.querySelector('.shipping-price')?.value.replace(',', '.')) || '';
-
-                // Calculate total payment amount from payment methods
-                const paymentTotal = paymentMethods.reduce((sum, payment) => sum + payment.amount, 0);
-                const cartValueInput = DOMPurify.sanitize(document.querySelector('.price-input').value.replace(',', '.')) || cartVal;
-                const expectedTotal = parseFloat(cartValueInput) + Number(shippingPrice);
-
-                // Validate payment amounts match cart total
-                if (paymentMethods.length > 1) {
-                    // If multiple payment methods, check that sum matches total
-                    if (Math.abs(paymentTotal - expectedTotal) > 0.01) { // Allow 1 cent tolerance for rounding
-                        renderAlert(`Payment amount (${paymentTotal.toFixed(2)}€) is not equal to total cart value (${expectedTotal.toFixed(2)}€)`, 'error');
-                        return;
-                    }
-                } else if (paymentMethods.length === 1) {
-                    // If single payment method, auto-set amount to cart total
-                    paymentMethods[0].amount = expectedTotal;
-                } else {
-                    renderAlert('Please select at least one payment method', 'error');
-                    return;
+        generateInvoiceBtn.addEventListener('click', () => {
+            const success = collectModalData(recieverDiv, cartVal, cartContent, 'invoice');
+            if (success) {
+                cards = [];
+                for (const key in cartContent) {
+                    delete cartContent[key];
                 }
-                cartContent.paymentMethods = paymentMethods;
-                // Update or create recieverInfo (always update payment methods)
-                const recieverInfo = {
-                    nameAndSurname: clientName,
-                    address: clientAddress,
-                    city: clientCity,
-                    state: clientCountry,
-                    paybackDate: paybackDate,
-                    total: null,
-                };
-                cartContent.recieverInfo = recieverInfo;
+                deleteCartContent(contentDiv, bulkCartContent, holoCartContent, exCartContent, sealedContent, recieverDiv)
+                loadBulkHoloValues();
 
-                if (shippingPrice !== "") {
-                    const shipping = {
-                        shippingWay: shippingWay,
-                        shippingPrice: shippingPrice.replace(',', '.'),
-                    };
-                    cartContent.shipping = shipping;
+                // Clear sessionStorage on successful invoice generation
+                clearModalDataFromSession();
+                removeCartContentFromSession();
+            }
+        });
+
+        const salesInvoiceBtn = document.querySelector('.sales-invoice');
+        salesInvoiceBtn.addEventListener('click', () => {
+            const success = collectModalData(recieverDiv, cartVal, cartContent, 'sales_invoice');
+            if (success) {
+                cards = [];
+                for (const key in cartContent) {
+                    delete cartContent[key];
                 }
+                deleteCartContent(contentDiv, bulkCartContent, holoCartContent, exCartContent, sealedContent, recieverDiv)
+                loadBulkHoloValues();
 
-                // Apply price adjustment if cart value was manually changed
-                if (cartValueInput != cartVal) {
-                    const bulkSub = cartContent.bulkItem ? Number(cartContent.bulkItem.sell_price) : 0;
-                    const holoSub = cartContent.holoItem ? Number(cartContent.holoItem.sell_price) : 0;
-                    const exSub = cartContent.exItem ? Number(cartContent.exItem.sell_price) : 0;
-                    const fixedSubtotal = bulkSub + holoSub + exSub;
-                    const cardsSub = cartContent.cards ? cartContent.cards.reduce((sum, c) => sum + Number(c.marketValue), 0) : 0;
-                    const sealedSub = cartContent.sealed ? cartContent.sealed.reduce((sum, c) => sum + Number(c.marketValue.replace('€', '')), 0) : 0;
-
-                    const adjustableSubtotal = cardsSub + sealedSub;
-                    const targetAdjustable = cartValueInput - fixedSubtotal;
-
-                    if (adjustableSubtotal > 0) {
-                        const scale = targetAdjustable / adjustableSubtotal;
-                        const allItems = [...(cartContent.cards || 0), ...(cartContent.sealed || 0)];
-
-                        let distributed = 0;
-                        for (let i = 0; i < allItems.length; i++) {
-                            if (i === allItems.length - 1) {
-                                allItems[i].marketValue = (targetAdjustable - distributed).toFixed(2);
-                            } else {
-                                const scaled = parseFloat((allItems[i].marketValue * scale).toFixed(2));
-                                allItems[i].marketValue = scaled.toFixed(2);
-                                distributed += scaled;
-                            }
-                        }
-                    }
-                }
-                cartContent.recieverInfo.total = Number(cartValue(cartContent));
-                if (Object.keys(cartContent).length !== 0) {
-                    const response = await fetch(`/invoice`,
-                        {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify(cartContent),
-                        });
-                    const data = await response.json();
-                    if (data.status === 'success') {
-                        cards = [];
-                        for (const key in cartContent) {
-                            delete cartContent[key];
-                        }
-                        deleteCartContent(contentDiv, bulkCartContent, holoCartContent, exCartContent, sealedContent, recieverDiv)
-                        loadBulkHoloValues();
-
-                        // Clear sessionStorage on successful invoice generation
-                        clearModalDataFromSession();
-                        removeCartContentFromSession();
-
-                        renderAlert(data.pdf_path, 'message')
-                        //recalculate auction price and profit
-                    } else if (data.status === 'error') {
-                        // Display error message for insufficient inventory
-                        renderAlert('Error: ' + data.message, 'error');
-                    } else {
-                        renderAlert('Something went wrong generating the invoice', 'error');
-                    }
-                }
-            });
-        }
+                // Clear sessionStorage on successful invoice generation
+                clearModalDataFromSession();
+                removeCartContentFromSession();
+            }
+        });
     });
 }
 
@@ -1865,8 +1888,8 @@ async function loadAuctionContent(button) {
                         <p>Condition</p>
                         <p>Buy price</p>
                         <p>Market value</p>
-                        <p>Sell price</p>
                         <p>Margin</p>
+                        <p></p>
                         <p></p>
                         <p></p>
                     </div>
@@ -1883,8 +1906,8 @@ async function loadAuctionContent(button) {
                         <p class='card-info condition ${safeCardConditionClass}' data-field="condition">${DOMPurify.sanitize(card.condition) ? DOMPurify.sanitize(card.condition) : 'Unknown'}</p>
                         ${renderField(card.card_price ? DOMPurify.sanitize(card.card_price) + '€' : null, 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
                         ${renderField(card.market_value ? DOMPurify.sanitize(card.market_value) + '€' : null, 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
-                        ${renderField(card.sell_price ? DOMPurify.sanitize(card.sell_price) + '€' : null, 'text', ['card-info', 'sell-price'], 'Sell Price', 'sell_price')}
                         ${renderField(card.card_price !== null && card.market_value !== null ? (card.market_value - card.card_price).toFixed(2) + '€' : ' ', 'text', ['card-info', 'profit'], 'profit', true)}
+                        <p></p>
                         <button class="add-to-cart">Add to cart</button>
                         <span hidden class="card-id">${safeCardId}</span>
                         <button class=delete-card data-id="${safeCardId}">Delete</button>
@@ -2949,20 +2972,6 @@ async function loadAuctions() {
                 }
             });
         });
-
-
-        //TODO - investigate if this does something, look like not
-        const auctionTab = document.querySelectorAll('.auction-tab');
-        auctionTab.forEach((tab) => {
-            const paymentMethodSelects = tab.querySelectorAll('.payment-method-select');
-            if (paymentMethodSelects) {
-                paymentMethodSelects.forEach(select => {
-                    attachPaymentMethodSelectListener(select);
-                });
-
-            }
-        });
-
 
         const deleteButton = document.querySelectorAll('.delete-auction');
         deleteButton.forEach(button => {

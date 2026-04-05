@@ -138,7 +138,7 @@ async function loadHistory() {
         }
         saleElement.innerHTML = `
             <p class="auction-name">Invoice #${DOMPurify.sanitize(sale.invoice_number)} - ${formattedDate}</p>
-            <p class="auction-price">Celková suma: ${DOMPurify.sanitize(sale.total_amount)}€</p>
+            <p class="auction-price">Celková suma: ${DOMPurify.sanitize(Number.isFinite(Number(sale.total_amount)) ? Number(sale.total_amount).toFixed(2) : sale.total_amount)}€</p>
             <p>Marža: ${sale.total_profit ? DOMPurify.sanitize(sale.total_profit.toFixed(2)) : '0.00'}€</p>
             <p>${DOMPurify.sanitize(name)}</p>
             <button class="view-auction" data-id="${safeSaleId}">View</button>
@@ -173,7 +173,6 @@ async function loadHistory() {
                 try {
                     const cnResponse = await fetch(`/generateCreditNote/${saleId}`);
                     const cnData = await cnResponse.json();
-                    //TODO - This needs a refactor, cause CN is generated even tho the return could fail
                     if (cnData.status !== 'success') {
                         renderAlert('Error generating credit note: ' + cnData.message, 'error');
                         returnButton.disabled = false;
@@ -188,9 +187,9 @@ async function loadHistory() {
                         returnButton.textContent = 'Return';
                         return;
                     }
-                    alert(`${cnData.pdf_path}`);
-                    //TODO - improve this, cause rn you can barely see the alert let alone copy it
-                    window.location.reload();
+                    renderAlert(`${cnData.pdf_path}`, 'message');
+                    const saleDiv = returnButton.closest(`.sold-tab`);
+                    saleDiv.remove(); 
                 } catch (e) {
                     renderAlert('Error processing return: ' + e, 'error');
                     returnButton.disabled = false;

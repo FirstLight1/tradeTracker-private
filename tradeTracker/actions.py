@@ -12,7 +12,10 @@ import logging
 from . import generateInvoice, CONSTANTS
 from tradeTracker.services.models import SaleInput
 from tradeTracker.services.sale_service import SaleService
-from tradeTracker.services.reciept_service import InvoiceReceiptService
+from tradeTracker.services.reciept_service import (
+    InvoiceReceiptService,
+    EKasaReceiptService,
+)
 
 bp = Blueprint("actions", __name__)
 logger = logging.getLogger(__name__)
@@ -665,7 +668,6 @@ def bulkCounterValue():
 @bp.route("/loadSoldHistory")
 def loadSoldHistory():
     db = get_db()
-    # TODO: update profit calculation
     sales = db.execute(
         "SELECT s.*, "
         "(COALESCE((SELECT SUM(si.profit) FROM sale_items si WHERE si.sale_id = s.id), 0) + "
@@ -714,7 +716,7 @@ def loadSoldCards(sale_id):
 def unlinkedBarterIds():
     db = get_db()
     ids = db.execute(
-        "SELECT id, invoice_number FROM sales WHERE id NOT IN (SELECT sale_id FROM barter WHERE sale_id IS NOT NULL) ORDER BY id DESC"
+        'SELECT id, invoice_number FROM sales WHERE id NOT IN (SELECT sale_id FROM barter WHERE sale_id IS NOT NULL) AND invoice_number NOT LIKE "S%" ORDER BY id DESC'
     ).fetchall()
     return jsonify({"status": "success", "data": [dict(row) for row in ids]})
 
@@ -1990,12 +1992,15 @@ def getCardIds():
         return jsonify({"status": "success", "card_ids": ids}), 200
 
 
+@bp.route("/createSale/<string:kind>", methods=("GET", "POST"))
 @bp.route("/invoice", methods=("GET", "POST"))
-def invoice():
+def invoice(kind="invoice"):
     if request.method == "POST":
         cartContent = request.get_json()
+
         payment_data, valid, err = None, False, None
         payment_methods_input = cartContent.get("paymentMethods") or []
+
         if payment_methods_input:
             valid, payment_data, err = validate_and_sanitize_payments(
                 payment_methods_input
@@ -2029,21 +2034,35 @@ def invoice():
             shipping=cartContent.get("shipping"),
             payments=payment_data or [],
         )
+        # Validate inventory before processing
         db = get_db()
-        try:
-            saleResult = SaleService(db, InvoiceReceiptService()).process_sale(
-                saleInput
-            )
-            db.commit()
-            return (
-                jsonify(
+        if kind == "invoice":
+            try:
+                saleResult = SaleService(db, InvoiceReceiptService()).process_sale(
+                    saleInput
+                )
+                db.commit()
+                return jsonify(
                     {"status": "success", "pdf_path": saleResult.receipt.file_path}
-                ),
-                200,
-            )
-        except Exception as e:
-            db.rollback()
-            logger.exception("There was a fail during invoice generation | %s", e)
-            return jsonify(
-                {"status": "error", "message": f"There was an error {e}"}
-            ), 400
+                ), 200
+            except Exception as e:
+                db.rollback()
+                return jsonify(
+                    {"status": "error", "message": f"There was an error {e}"}
+                ), 400
+        elif kind == "sales_invoice":
+            try:
+                saleResult = SaleService(db, EKasaReceiptService()).process_sale(
+                    saleInput
+                )
+                db.commit()
+                return jsonify(
+                    {"status": "success", "pdf_path": "Sale addded succesfully"}
+                ), 200
+            except Exception as e:
+                db.rollback()
+                return jsonify(
+                    {"status": "error", "message": f"There was an error {e}"}
+                ), 400
+
+        return jsonify({"status": "error", "message": "Invalid kind of request"}), 400
