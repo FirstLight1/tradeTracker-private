@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="../static/styles/collection-aling.css">
     <link rel="stylesheet" href="../static/styles/collection-style.css">
     <title>Collection</title>
+    <link rel="icon" type="image/x-icon" href="../static/images/cardanvil.ico">
 </head>
 <body>
     <h1>Trade Tracker - COLLECTION</h1>
@@ -14,12 +15,12 @@
         <nav class="nav-bar">
             <div>
                 <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                <button class="auctions"><a href="{{ url_for('actions.renderAuctions') }}">Sales</a></button>
+                <button class="auctions"><a href="{{ url_for('renderers.renderAuctions') }}">Sales</a></button>
                 <span class="arrow right"><img src="../static/images/rightarrow.png" alt="right arrow"></span>
             </div>
             <div>
                 <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                <button class="add-to-collection"><a href="{{ url_for('actions.renderAddCardsToCollection') }}">Add Card(s)</a></button>
+                <button class="add-to-collection"><a href="{{ url_for('renderers.renderAddCardsToCollection') }}">Add Card(s)</a></button>
                 <span class="arrow right"><img src="../static/images/rightarrow.png" alt="right arrow"></span>
             </div>
 
@@ -41,6 +42,9 @@
             <!-- cards go here -->
         </div>
     </main>
-    <script type="module" src="../static/collection.js"></script>
+    <script type="module" src="../static/scripts/utils/collectionUtils.js"></script>
+    <script type="module" src="../static/scripts/utils/renderUtil.js"></script>
+    <script type="module" src="../static/scripts/collection.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 </body>
 </html>

@@ -5,6 +5,7 @@ from flask import current_app, g
 import time
 
 logger = logging.getLogger(__name__)
+slow_log = logging.getLogger("tradetracker.db.slow")
 SLOW_QUERY_THRESHOLD_MS = 200
 
 class LoggingCursor:
@@ -18,7 +19,7 @@ class LoggingCursor:
             duration_ms = (time.perf_counter() - start) * 1000
 
             if duration_ms > SLOW_QUERY_THRESHOLD_MS:
-                logger.warning(
+                slow_log.warning(
                         "Slow query | %.2fms | %s | params: %s",
                         duration_ms, query, params,
                         )
@@ -43,7 +44,7 @@ class LoggingCursor:
             duration_ms = (time.perf_counter() - start) * 1000
 
             if duration_ms > SLOW_QUERY_THRESHOLD_MS:
-                logger.warning(
+                slow_log.warning(
                         "Slow executemany | %.2fms | %s | %d rows",
                         duration_ms, query, len(params_list),
                         )
@@ -254,8 +255,8 @@ CREATE TABLE barter(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     auction_id INTEGER,
     sale_id INTEGER,
-    FOREIGN KEY (auction_id) REFERENCES auctions(id),
-    FOREIGN KEY (sale_id) REFERENCES sales(id)
+    FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE,
+    FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
     );
 '''
         db.executescript(schema)

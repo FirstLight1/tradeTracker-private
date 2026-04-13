@@ -30,38 +30,27 @@ def add_bulk_invoice_item(invoice, item, item_type):
         tax=Decimal("0")
     ))
 
-def generate_invoice(reciever, items=None, sealed=None , bulk=None, holo=None, ex=None, payment_methods=None, shipping=None):
+def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=None, ex=None, payment_methods=None, shipping=None):
     # Read invoice number from env.txt
     if getattr(sys, 'frozen', False):
-        # Running as compiled exe
-        env_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker')
-        os.makedirs(env_dir, exist_ok=True)
-        env_path = os.path.join(env_dir, 'env.txt')
         # Get the base path where PyInstaller unpacks files
         base_path = sys._MEIPASS
         logo_path = os.path.join(base_path, 'tradeTracker', 'static', 'images', 'logo.png')
     else:
         # Running in development
-        env_path = os.path.join(os.path.dirname(__file__), 'env.txt')
         logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
-    
+
     # Read or create env.txt with invoice_num
-    ## TODO error handling
     try:
-        with open(env_path, 'r') as f:
-            invoice_num = f.read().strip()
-            if not invoice_num:
-                return 
-                #return jsonify({'status': 'error', 'message':'Failed to get invoice number'}), 500
-    except FileNotFoundError:
-        return
-        #return jsonify({'status':'error', 'message': 'Failed to open env.txt'}), 500
-    
+        invoice_num = db.execute('SELECT invoice_number FROM sales WHERE invoice_number NOT LIKE "S%" ORDER BY id DESC LIMIT 1').fetchone()[0]
+        invoice_num = int(invoice_num) + 1
+    except:
+        raise Exception("Failed to get invoice_number")
+
     invoice_date = date.today()
     # Set language to Slovak (or English 'en') if supported by your system locale
 
     # 1. Define the Supplier (Dominik Forró - CARD ANVIL)
-    # Data extracted from source: 39-48, 52-63
     provider = Provider(
         summary="Dominik Forró - CARD ANVIL",
         address="Vahovce 94",
@@ -71,7 +60,6 @@ def generate_invoice(reciever, items=None, sealed=None , bulk=None, holo=None, e
         email="dominikforro95@gmail.com",
         bank_name="Tatra banka, a.s.",
         bank_account="SK9511000000002945283029",  # IBAN
-        # Mapping Slovak IDs to library fields:
         ir="57310041",       # IČO
         vat_id="1130287664", # DIČ
         tax_id="SK1130287664", # IČ DPH
@@ -82,10 +70,9 @@ def generate_invoice(reciever, items=None, sealed=None , bulk=None, holo=None, e
     try:
         nameAndSurname = " ".join([part.capitalize() for part in reciever.get("nameAndSurname").split(" ")])
     except:
-        ##TODO - change this to an error message
-        nameAndSurname = ' '
+        raise Exception("Name not found")
+
     # 2. Define the Client
-    # Data extracted from source: 50-51
     client = Client(
         summary = nameAndSurname,
         address=reciever.get("address").capitalize() if reciever.get("address") is not None else ' ',
@@ -195,12 +182,6 @@ def generate_invoice(reciever, items=None, sealed=None , bulk=None, holo=None, e
     pdf.gen(output_path, generate_qr_code=True)
 
     print(f"Successfully generated: {output_path}")
-
-
-    # Write incremented invoice number back
-    with open(env_path, 'w') as f:
-        f.write(str(int(invoice_num) + 1))
-    
     return output_path, invoice_num
 
 def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, ex=None, payment_methods=None, shipping=None, original_invoice_num=None):
@@ -264,7 +245,7 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
             t = payment['type']
             result[t] = result.get(t, 0) + payment['amount']
         unique_payment = [{'type': t, 'amount': round(amt, 2)} for t, amt in result.items()]
-        payment_strings = ", ".join(f"{item['type']} :{item['amount']}€ " for item in unique_payment)
+        payment_strings = ", ".join(f"{item['type']} :-{item['amount']}€ " for item in unique_payment)
         invoice.paytype = payment_strings
     else:
         invoice.paytype = reciever.get("paymentMethod", "Hotovosť")
@@ -325,12 +306,12 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
     if getattr(sys, 'frozen', False):
         app_data_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker', 'Invoices')
         os.makedirs(app_data_dir, exist_ok=True)
-        output_filename = f"Dobropis:{cn_num}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
+        output_filename = f"Dobropis_{cn_num}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
         output_path = os.path.join(app_data_dir, output_filename)
     else:
         invoices_dir = os.path.join(current_app.instance_path, 'invoices')
         os.makedirs(invoices_dir, exist_ok=True)
-        output_filename = f"Dobropis:{cn_num}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
+        output_filename = f"Dobropis_{cn_num}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
         output_path = os.path.join(invoices_dir, output_filename)
 
     pdf.gen(output_path, generate_qr_code=False)

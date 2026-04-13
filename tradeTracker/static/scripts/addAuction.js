@@ -1,4 +1,5 @@
-import {updateInventoryValueAndTotalProfit, renderAlert} from "./main.js";
+import {updateInventoryValueAndTotalProfit, renderAlert, createNewCard} from "./utils/renderUtil.js";
+import {CardStruct} from './utils/classes.js';
 
 const ALLOWED_PAYMENT_TYPES = new Set([
     'Hotovosť',
@@ -37,63 +38,22 @@ function validatePayments(payments) {
     return { valid: true };
 }
 
-export function createNewCard(newCard){
-     newCard.querySelectorAll('input').forEach(el =>{
-            el.value = '';
-        });
-
-        newCard.querySelectorAll('select').forEach(sel => {
-        sel.selectedIndex = 1;
-        });
-
-        const newCardName = newCard.querySelector('.marketValue');
-        newCardName.oninput = function () {
-        handleCardInput(this);
-        }
-        return newCard;
-}
-
-
-window.handleCardInput = function (input){
-    const container = document.querySelector(".cards-container")
-    const cards = document.querySelectorAll(".card")
-    const currentCard = input.closest('.card');
-    const lastCard = cards[cards.length - 1];
-
-    if(currentCard == lastCard && input.value.trim() !== ''){
-        const newCard = createNewCard(lastCard.cloneNode(true));
-        container.appendChild(newCard)
-    }
-}
-
-export class struct{
-    constructor(){
-        this.cardName = null;
-        this.cardNum = null;
-        this.condition = null;
-        this.buyPrice = null;
-        this.marketValue = null;
-        this.sellPrice = null;
-        this.soldDate = null;
-    }
-}
-
 const cardsArr = [];
-let totalSellValue = 0;
+
 let auctionValueCalculated = 0;
 const saveButton = document.querySelector('.save-btn')
 //add typechecks
 saveButton.addEventListener('click', () =>{
-    const auctionName = document.querySelector('.auction-name').value;
-    const auctionBuy = document.querySelector('.auction-buy-price').value;
+    const auctionName = DOMPurify.sanitize(document.querySelector('.auction-name').value);
+    const auctionBuy = DOMPurify.sanitize(document.querySelector('.auction-buy-price').value);
     const date = new Date().toISOString();
     
     // Collect all payment rows
     const paymentRows = document.querySelectorAll('.payment-row');
     const payments = [];
     paymentRows.forEach(row => {
-        const type = row.querySelector('.payment-type-select').value;
-        const amount = parseFloat(row.querySelector('.payment-amount-input').value) || 0;
+        const type = DOMPurify.sanitize(row.querySelector('.payment-type-select').value);
+        const amount = parseFloat(DOMPurify.sanitize(row.querySelector('.payment-amount-input').value)) || 0;
         if (type) {
             payments.push({type, amount});
         }
@@ -121,10 +81,10 @@ saveButton.addEventListener('click', () =>{
 
     const cards = document.querySelectorAll('.card');
     cards.forEach(ell =>{
-        let card = new struct();
-        const input = (selector) => ell.querySelector(selector)?.value.trim().toUpperCase() || null;
+        let card = new CardStruct();
+        const input = (selector) => DOMPurify.sanitize(ell.querySelector(selector)?.value.trim().toUpperCase()) || null;
         const inputNumber = (selector) => {
-            const val = ell.querySelector(selector)?.value.trim();
+            const val = DOMPurify.sanitize(ell.querySelector(selector)?.value.trim());
                 if(!val){
                     return null;
                 }
@@ -140,7 +100,7 @@ saveButton.addEventListener('click', () =>{
             card.sellPrice = card.marketValue;
         }
         if(card.buyPrice === null && card.marketValue !== null){
-            card.buyPrice = parseFloat((card.marketValue * 0.80).toFixed(2));
+            card.buyPrice = parseFloat((DOMPurify.sanitize(card.marketValue) * 0.80).toFixed(2));
         }
         auctionValueCalculated += card.buyPrice || 0;
         if(card.cardName !== null && card.marketValue !== null){
@@ -150,7 +110,7 @@ saveButton.addEventListener('click', () =>{
 
 
     if(!cardsArr[0].buy){
-        cardsArr[0].buy = parseFloat(auctionValueCalculated.toFixed(2));
+        cardsArr[0].buy = parseFloat(DOMPurify.sanitize(auctionValueCalculated.toFixed(2)));
     }
 
     if (cardsArr.length !== 1){

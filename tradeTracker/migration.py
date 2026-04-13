@@ -42,6 +42,8 @@ def migrate_database(db_path):
         addShippingInfoColumn(db_path)
 
         addBarterTable(db_path)
+        # Migration 8: Ensure barter foreign keys are configured with ON DELETE CASCADE
+        ensureBarterOnDeleteCascade(db_path)
         
         print("Database migration check complete.")
     except sqlite3.Error as e:
@@ -140,6 +142,7 @@ def addBarterTable(db_path):
     """
     Check if barter table exists and if not migrate
     """
+    conn = None
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -155,15 +158,81 @@ def addBarterTable(db_path):
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     auction_id INTEGER,
                     sale_id INTEGER,
-                    FOREIGN KEY (auction_id) REFERENCES auctions(id),
-                    FOREIGN KEY (sale_id) REFERENCES sales(id)
+                    FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE,
+                    FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE 
     );
  
             """)
+            conn.commit()
         else:
             print("Barter table already exists, skipping migration")
     except sqlite3.Error as e:
         print(f"Error checking for sales table: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def ensureBarterOnDeleteCascade(db_path):
+    """
+    Ensures barter foreign keys use ON DELETE CASCADE.
+    Recreates the table if old constraints are missing.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='barter'")
+        barterTableExists = cursor.fetchone() is not None
+
+        if not barterTableExists:
+            print("'barter' table not found, skipping cascade migration.")
+            return
+
+        cursor.execute("PRAGMA foreign_key_list(barter)")
+        fkRows = cursor.fetchall()
+
+        onDeleteByColumn = {}
+        for fk in fkRows:
+            fromColumn = fk[3]
+            onDelete = (fk[6] or "").upper()
+            onDeleteByColumn[fromColumn] = onDelete
+
+        auctionCascade = onDeleteByColumn.get("auction_id") == "CASCADE"
+        saleCascade = onDeleteByColumn.get("sale_id") == "CASCADE"
+
+        if auctionCascade and saleCascade:
+            print("'barter' table already has ON DELETE CASCADE constraints.")
+            return
+
+        print("Applying migration: Recreating 'barter' table with ON DELETE CASCADE...")
+
+        cursor.execute("PRAGMA foreign_keys = OFF")
+        cursor.execute("ALTER TABLE barter RENAME TO barter_old")
+        cursor.execute("""
+            CREATE TABLE barter(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                auction_id INTEGER,
+                sale_id INTEGER,
+                FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE,
+                FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            INSERT INTO barter (id, auction_id, sale_id)
+            SELECT id, auction_id, sale_id FROM barter_old
+        """)
+        cursor.execute("DROP TABLE barter_old")
+        conn.commit()
+        cursor.execute("PRAGMA foreign_keys = ON")
+
+        print("'barter' table recreated successfully with ON DELETE CASCADE.")
+    except sqlite3.Error as e:
+        print(f"Error ensuring 'barter' ON DELETE CASCADE constraints: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 def addSealedProductsTable(db_path):
     try:

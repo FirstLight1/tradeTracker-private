@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="../static/styles/header-align.css">
     <link rel="stylesheet" href="../static/styles/modal.css">
     <title>Trade Tracker</title>
+    <link rel="icon" type="image/x-icon" href="../static/images/cardanvil.ico">
 </head>
 <body>
     <main>
@@ -21,22 +22,22 @@
             <nav class="nav-bar">
                 <div>
                     <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                    <button class="addAuction"><a href="{{ url_for('actions.addAuction') }}">Add auction</a></button>
+                    <button class="addAuction"><a href="{{ url_for('renderers.addAuction') }}">Add auction</a></button>
                     <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
                 </div>
                 <div>
                     <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                    <button class="addSingles"><a href="{{ url_for('actions.addSingles') }}">Add Singles</a></button>
+                    <button class="addSingles"><a href="{{ url_for('renderers.addSingles') }}">Add Singles</a></button>
                     <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
                 </div>
                 <div>
                     <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                    <button class="addAuction"><a href="{{ url_for('actions.sold') }}">Sold</a></button>
+                    <button class="addAuction"><a href="{{ url_for('renderers.sold') }}">Sold</a></button>
                     <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
                 </div>
                 <div>
                     <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                    <button class="collection"><a href="{{ url_for('actions.renderCollection')}}">Collection</a></button>
+                    <button class="collection"><a href="{{ url_for('renderers.renderCollection')}}">Collection</a></button>
                     <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
                 </div>
                 <div class="import-sold-csv-container">
@@ -77,7 +78,7 @@
             </div>
             <div class="button-container">
                 <button class="confirm-btn">Complete invoice</button>
-                <button class="delete-cart">Delete cart</button>
+                <button class="delete-cart"><img class="trashcan-icon" src="../static/images/trashcan-icon.webp"></button>
             </div>
         </div>
             <div id='alert-div'></div>
@@ -134,6 +135,10 @@
             </div>
         </div>
     </main>
-    <script type="module" src="../static/main.js"></script>
+    <script type="module" src="../static/scripts/utils/renderUtil.js"></script>
+    <script type="module" src="../static/scripts/utils/classes.js"></script>
+    <script type="module" src="../static/scripts/utils/sanitizers.js"></script>
+    <script type="module" src="../static/scripts/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 </body>
 </html>

@@ -49,7 +49,7 @@ def create_app(test_config=None):
     except OSError:
         pass
 
-    from . import db, tracker, actions, migration
+    from . import db, tracker, actions, migration, renderers
 
     # Run database migration before initializing the app
     migration.migrate_database(app.config["DATABASE"])
@@ -78,5 +78,6 @@ def create_app(test_config=None):
 
     app.register_blueprint(tracker.bp)
     app.register_blueprint(actions.bp)
+    app.register_blueprint(renderers.bp)
 
     return app

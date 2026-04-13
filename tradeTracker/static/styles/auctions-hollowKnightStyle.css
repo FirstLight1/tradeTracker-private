@@ -625,6 +625,13 @@ input[type="file"] {
     pointer-events: auto;
 }
 
+.delete-cart{
+    margin-left: 45px;
+}
+
+.trashcan-icon{
+    width:27px;
+}
 
 .switch {
   position: relative;
