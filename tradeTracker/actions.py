@@ -574,7 +574,7 @@ def bulkCounterValue():
    
     return jsonify({'status': 'success','bulk_counter': bulk_counter, 'holo_counter': holo_counter, 'ex_counter': ex_counter}),200
 
-@bp.route('/loadSoldHistory', methods('GET',))
+@bp.route('/loadSoldHistory', methods = ('GET',))
 @verify_token
 def loadSoldHistory():
     db = get_db()
@@ -1184,7 +1184,7 @@ def updateAuction(auction_id):
         "date_created": "date_created",
         }
 
-    if fiel not in ALLOWED_FIELDS:
+    if field not in ALLOWED_FIELDS:
         logger.warning('Invalid field | auction_id : %s', auction_id)
         return jsonify({'status': 'error', 'message': 'Invalid field'})
     column = ALLOWED_FIELDS[field]
