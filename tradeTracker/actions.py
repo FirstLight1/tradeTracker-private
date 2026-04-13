@@ -59,7 +59,8 @@ def validate_and_sanitize_payments(payments):
         amount = 0
         try:
             amount = payment.get('amount').replace(',','.')
-        except:
+        except Exception as e:
+            logger.warning("Failed to normalize amount '%s': %s", payment.get('amount'), e)
             amount = payment.get('amount')
         # Validate payment type against whitelist
         if payment_type not in CONSTANTS.ALLOWED_PAYMENT_TYPES:
@@ -72,7 +73,8 @@ def validate_and_sanitize_payments(payments):
                 return False, None, 'Payment amount cannot be negative'
             if amount > 1000000:  # Reasonable limit
                 return False, None, 'Payment amount too large'
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
+            logger.warning('Invalid payment amount | %s ',e) 
             return False, None, 'Invalid payment amount'
         amount = round(amount,2)
         sanitized.append({
@@ -100,9 +102,9 @@ def loadExpansions():
             for item in data:
                 for key, value in item.items():
                     all_pokemon_sets[key] = value
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         print(f"Warning: Expansions file not found at {expansions_path}")
-        logger.exception('File not found %s', expansions_path)
+        logger.exception('File not found %s | %s ', expansions_path, e)
         all_pokemon_sets = {}
 
     return all_pokemon_sets
@@ -1363,7 +1365,7 @@ def cardMarketOrder():
                 except (ValueError, TypeError):
                     print('failed to get count')
                     count = 1
-                print(card)
+            
                 rows = db.execute("SELECT c.id FROM cards c LEFT JOIN sale_items si ON c.id = si.card_id WHERE lower(c.card_name) = ? AND lower(c.card_num) = ? and upper(c.condition) = ? AND si.sale_id IS NULL",(card['name'].lower(), card['num'].lower(), card['condition'].upper())).fetchmany(count)
         
                 ids = [row[0] for row in rows]
@@ -1371,7 +1373,6 @@ def cardMarketOrder():
                 card['cardId'] = ids
         
         except Exception as e:
-            print(e)
             print('There was an error while getting card ids')
             logger.exception('cardMarketOrder failed to get card ids')
             return jsonify({'status': 'error', 'message' : 'Failed to match cards to card ids, Error code: Ax16'}), 400
@@ -1736,6 +1737,7 @@ def invoice(kind):
             err = 'No payment method provided'
 
         if err != None:
+            logger.error('Payment validation failed | %s', err)
             return jsonify({'status': 'error', 'message': f'There was an error while validating payments {err}, Error code: Ax22'}), 400
         if not valid:
             return jsonify({'status': 'error', 'message': 'Invalid payment data, Error code: Ax23'}), 400
@@ -1752,21 +1754,31 @@ def invoice(kind):
         )
         # Validate inventory before processing
         db = get_db()
+
         if kind == 'invoice': 
+
             try:
                 saleResult = SaleService(db,InvoiceReceiptService()).process_sale(saleInput)
                 db.commit()
+                logger.info('Invoice created succesfully | %s ', saleResult.sale_id)
                 return jsonify({'status': 'success', 'pdf_path': saleResult.receipt.file_path}), 200
+
             except Exception as e:
                 db.rollback()
+                logger.exception('Failed to create invoice | %s', e)
                 return jsonify({'status': 'error', 'message': f'There was an error {e}, Error code: Ax24'}), 400
+
         elif kind == 'sales_invoice':
+
             try:
                 saleResult = SaleService(db, EKasaReceiptService()).process_sale(saleInput)
                 db.commit()
+                logger.info('Sale created succesfully | %s ', saleResult.sale_id)
                 return jsonify({'status': 'success', 'pdf_path': 'Sale addded succesfully'}), 200
+
             except Exception as e:
                 db.rollback()
+                logger.exception('Failed to create sale | %s', e)
                 return jsonify({'status': 'error', 'message': f'There was an error {e}, Error code: Ax25'}), 400
         
         return jsonify({'status': 'error', 'message': 'Invalid kind of request, Error code: Ax26'}), 400

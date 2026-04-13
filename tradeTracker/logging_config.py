@@ -37,11 +37,26 @@ def configure_logging(app):
                 "file": {
                     "class": "logging.handlers.RotatingFileHandler",
                     "filename": log_file,
-                    "maxBytes": 5_000_000,
+                    "maxBytes": 1024 * 1024 * 10,
                     "backupCount": 5,
                     "encoding": "utf-8",
                     "formatter": "detailed",
                 },
+                "slow_queries": {
+                "class": "logging.handlers.RotatingFileHandler",
+                "filename": os.path.join(log_dir, "slow_queries.log"),
+                "maxBytes": 1024 * 1024 * 5,
+                "backupCount": 3,
+                "encoding": "utf-8",
+                "formatter": "detailed",
+                },
+            },
+            "loggers": {
+                "tradetracker.db.slow": {
+                    "level": "WARNING",
+                    "handlers": ["slow_queries"],
+                    "propagate": False,  # <-- this is the key part
+                }
             },
             "root": {"level": level, "handlers": ["console", "file"]},
         }
