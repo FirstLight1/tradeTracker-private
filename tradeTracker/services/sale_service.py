@@ -10,12 +10,11 @@ class SaleService:
         self.receipt_service = receipt_service
 
     def process_sale(self, sale_input) -> models.SaleResult:
-        with self.db:  # sqlite transaction
-            self._check_inventory(sale_input)
-            receipt = self.receipt_service.issue(sale_input, self.db)
-            sale_id = self._insert_sale_header(sale_input, receipt)
-            self._insert_sale_items(sale_id, sale_input)
-            return models.SaleResult(sale_id=sale_id, receipt=receipt)
+        self._check_inventory(sale_input)
+        receipt = self.receipt_service.issue(sale_input, self.db)
+        sale_id = self._insert_sale_header(sale_input, receipt)
+        self._insert_sale_items(sale_id, sale_input)
+        return models.SaleResult(sale_id=sale_id, receipt=receipt)
 
     def _check_bulk_inventory(self, db, item_type, quantity_needed):
         """Check if sufficient inventory exists for the given item type."""
