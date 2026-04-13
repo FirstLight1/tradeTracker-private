@@ -8,16 +8,18 @@ import os
 import fpdf
 import json
 import pandas as pd
+from dotenv import load_dotenv
 import logging
 from . import generateInvoice, CONSTANTS
 from tradeTracker.services.models import SaleInput
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaReceiptService
+from tradeTracker.services.cfAuth import verify_token
 
-
+load_dotenv()
 bp = Blueprint('actions', __name__)
 logger = logging.getLogger(__name__)
-CORS(bp)
+
 dictKeys = ['Product ID', 'Name', 'Condition', 'Price', 'Card Number']
 li = []
 dataList = []
@@ -177,7 +179,8 @@ def parse_payment_methods(payment_method_text):
     return [{"type": payment_type, "amount": 0} for payment_type in payment_types if payment_type]
 
 
-@bp.route('/add', methods=('GET', 'POST'))
+@bp.route('/add', methods=('POST',))
+@verify_token
 def add():
     if request.method == 'POST':
         cardsArr = request.get_json()
@@ -332,6 +335,7 @@ def _add_bulk_items_helper(db, auction_id, bulk=None, holo=None, ex=None):
         )
 
 @bp.route('/addBulkItems/<int:auction_id>', methods=('POST',))
+@verify_token
 def addBulkItems(auction_id):
     """Route handler for adding bulk items."""
     data = request.get_json()
@@ -348,7 +352,8 @@ def addBulkItems(auction_id):
     db.commit()
     return jsonify({'status': 'success'}), 201
 
-@bp.route('/loadAuctions')
+@bp.route('/loadAuctions', methods=('GET',))
+@verify_token
 def loadAuctions():
     db = get_db()
     auctions = db.execute(
@@ -378,7 +383,8 @@ def loadAuctions():
     db.commit()
     return jsonify(auctions_list)
 
-@bp.route('/loadSealed')
+@bp.route('/loadSealed', methods=('GET',))
+@verify_token
 def loadSealed():
     db = get_db()
 
@@ -386,6 +392,7 @@ def loadSealed():
     return jsonify({'status':'success', 'data' : [dict(product) for product in sealed_products]})
 
 @bp.route('/addSealed', methods=('POST',))
+@verify_token
 def addSealed():
     data = request.get_json()
     db = get_db()
@@ -399,7 +406,8 @@ def addSealed():
     return jsonify({'status':'success'}),200
 
 
-@bp.route('/loadCards/<int:auction_id>')
+@bp.route('/loadCards/<int:auction_id>',methods=('GET',))
+@verify_token
 def loadCards(auction_id):
     db = get_db()
     cards = db.execute(
@@ -408,7 +416,8 @@ def loadCards(auction_id):
         'WHERE c.auction_id = ? AND si.card_id IS NULL', (auction_id,)).fetchall()
     return jsonify([dict(card) for card in cards]),200
 
-@bp.route('/loadBulk/<int:auction_id>')
+@bp.route('/loadBulk/<int:auction_id>', methods=('GET',))
+@verify_token
 def loadBulk(auction_id):
     db = get_db()
 
@@ -417,7 +426,8 @@ def loadBulk(auction_id):
         'WHERE bi.auction_id = ?', (auction_id,)).fetchall()
     return jsonify([dict(item) for item in bulk_items]),200
 
-@bp.route('/loadSealed/<int:auction_id>')
+@bp.route('/loadSealed/<int:auction_id>', methods=('GET',))
+@verify_token
 def loadSealedByAuction(auction_id):
     db = get_db()
     sealed_items = db.execute(
@@ -427,13 +437,15 @@ def loadSealedByAuction(auction_id):
     ).fetchall()
     return jsonify([dict(item) for item in sealed_items]), 200
 
-@bp.route('/loadAllCards/<int:auction_id>')
+@bp.route('/loadAllCards/<int:auction_id>', methods=('GET',))
+@verify_token
 def loadAllCards(auction_id):
     db = get_db()
     cards = db.execute('SELECT * FROM cards WHERE auction_id = ?', (auction_id,)).fetchall()
     return jsonify([dict(card) for card in cards]),200
 
-@bp.route('/inventoryValue')
+@bp.route('/inventoryValue', methods=('GET',))
+@verify_token
 def invertoryValue():
     db = get_db()
     cur = db.cursor()
@@ -446,6 +458,7 @@ def invertoryValue():
 
 
 @bp.route('/deleteCard/<int:card_id>', methods=('DELETE',))
+@verify_token
 def deleteCard(card_id):
     db = get_db()
     db.execute('DELETE FROM cards WHERE id = ?', (card_id,))
@@ -453,6 +466,7 @@ def deleteCard(card_id):
     return jsonify({'status' : 'success'})
 
 @bp.route('/deleteBulkItem/<int:item_id>', methods=('DELETE',))
+@verify_token
 def deleteBulkItem(item_id):
     db = get_db()
     db.execute('DELETE FROM bulk_items WHERE id = ?', (item_id,))
@@ -460,6 +474,7 @@ def deleteBulkItem(item_id):
     return jsonify({'status' : 'success'})
 
 @bp.route('/deleteSealed/<string:sid>', methods=('DELETE',))
+@verify_token
 def deleteSealed(sid):
     id = sid.replace('s', '')
     db = get_db()
@@ -468,6 +483,7 @@ def deleteSealed(sid):
     return jsonify({'status' : 'success'})
 
 @bp.route('/deleteAuction/<int:auction_id>', methods=('DELETE',))
+@verify_token
 def deleteAuction(auction_id):
     db = get_db()
     db.execute('DELETE FROM bulk_items WHERE auction_id = ?', (auction_id,))
@@ -478,6 +494,7 @@ def deleteAuction(auction_id):
     return jsonify({'status': 'success'}),200
 
 @bp.route('/update/<int:card_id>', methods=('PATCH',))
+@verify_token
 def update(card_id):
     db = get_db()
     data = request.get_json()
@@ -496,6 +513,7 @@ def update(card_id):
     return jsonify({'status': 'success'}),200
 
 @bp.route('/addToExistingAuction/<int:auction_id>', methods=('POST',))
+@verify_token
 def addToExistingAuction(auction_id):
     if request.method == 'POST':
         data = request.get_json()
@@ -544,7 +562,8 @@ def addToExistingAuction(auction_id):
             )
             return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax03'}), 400
 
-@bp.route('/bulkCounterValue')
+@bp.route('/bulkCounterValue', methods = ('GET',))
+@verify_token
 def bulkCounterValue():
     db = get_db()
     cur = db.cursor()
@@ -556,7 +575,8 @@ def bulkCounterValue():
    
     return jsonify({'status': 'success','bulk_counter': bulk_counter, 'holo_counter': holo_counter, 'ex_counter': ex_counter}),200
 
-@bp.route('/loadSoldHistory')
+@bp.route('/loadSoldHistory', methods('GET',))
+@verify_token
 def loadSoldHistory():
     db = get_db()
     sales = db.execute(
@@ -571,7 +591,8 @@ def loadSoldHistory():
     ).fetchall()
     return jsonify([dict(sale) for sale in sales])
     
-@bp.route('/loadSoldCards/<int:sale_id>')
+@bp.route('/loadSoldCards/<int:sale_id>', methods=('GET',))
+@verify_token
 def loadSoldCards(sale_id):
     db = get_db()
 
@@ -598,13 +619,15 @@ def loadSoldCards(sale_id):
 
     return jsonify(response)
 
-@bp.route('/unlinkedBarterIds')
+@bp.route('/unlinkedBarterIds',methods=('GET',))
+@verify_token
 def unlinkedBarterIds():
     db = get_db()
     ids = db.execute('SELECT id, invoice_number FROM sales WHERE id NOT IN (SELECT sale_id FROM barter WHERE sale_id IS NOT NULL) AND invoice_number NOT LIKE "S%" ORDER BY id DESC')
     return jsonify({'status': 'success', 'data': [dict(row) for row in ids]})
 
 @bp.route('/linkAuctionToSale/<int:auction_id>',methods=('POST',))
+@verify_token
 def linkAuctionToSale(auction_id):
     db = get_db()
     id = request.get_json()
@@ -614,7 +637,8 @@ def linkAuctionToSale(auction_id):
 
     return jsonify({'status': 'success'})
 
-@bp.route('/orderReturn/<int:saleId>')
+@bp.route('/orderReturn/<int:saleId>', methods=('POST',))
+@verify_token
 def orderReturn(saleId):
     db = get_db()
 
@@ -643,7 +667,8 @@ def orderReturn(saleId):
     return jsonify({'status': 'success'}),200
 
 
-@bp.route('/generateCreditNote/<int:saleId>')
+@bp.route('/generateCreditNote/<int:saleId>', methods=('POST',))
+@verify_token
 def generate_credit_note(saleId):
     db = get_db()
 
@@ -721,6 +746,7 @@ def generate_credit_note(saleId):
 
 
 @bp.route('/generateSoldReport', methods=('GET',))
+@verify_token
 def generateSoldReport():
     db = get_db()
     month = request.args.get('month').zfill(2)
@@ -1065,7 +1091,8 @@ def createBuyReport(month, year, db):
     
     return xls_path
 
-@bp.route('/addToCollection', methods=('GET','POST'))
+@bp.route('/addToCollection', methods=('POST',))
+@verify_token
 def addToCollection():
     if request.method == 'POST':
         cards = request.get_json()
@@ -1084,13 +1111,15 @@ def addToCollection():
         db.commit()
     return jsonify({'status': 'success'}), 201
 
-@bp.route('/loadCollection')
+@bp.route('/loadCollection', methods=('GET',))
+@verify_token
 def loadCollection():
     db = get_db()
     cards = db.execute('SELECT * FROM collection').fetchall()
     return jsonify([dict(card) for card in cards])
 
 @bp.route('/deleteFromCollection/<int:card_id>', methods=('DELETE',))
+@verify_token
 def deleteFromCollection(card_id):
     db = get_db()
     db.execute('DELETE FROM collection WHERE id = ?', (card_id, ))
@@ -1098,6 +1127,7 @@ def deleteFromCollection(card_id):
     return jsonify({'status': 'success'}), 200
 
 @bp.route('/updateCollection/<int:card_id>', methods=('PATCH',))
+@verify_token
 def updateCollection(card_id):
     db = get_db()
     data = request.get_json()
@@ -1110,14 +1140,16 @@ def updateCollection(card_id):
         db.commit()
     return jsonify({'status': 'success'}),200
 
-@bp.route('/collectionValue')
+@bp.route('/collectionValue', methods=('GET',))
+@verify_token
 def collectionValue():
     db = get_db()
     cur = db.cursor()
     value = cur.execute('SELECT SUM(market_value) FROM collection').fetchone()[0]
     return jsonify({'status': 'success','value': value}),200
 
-@bp.route('/addToSingles', methods=('POST', 'GET'))
+@bp.route('/addToSingles', methods=('POST',))
+@verify_token
 def addToSingles():
     if request.method == 'POST':
         db = get_db()
@@ -1140,6 +1172,7 @@ def addToSingles():
     return jsonify({'status': 'success'}), 201
 
 @bp.route('/updateAuction/<int:auction_id>', methods=('PATCH',))
+@verify_token
 def updateAuction(auction_id):
     db = get_db()
     data = request.get_json()
@@ -1150,6 +1183,7 @@ def updateAuction(auction_id):
     return jsonify({'status': 'success'}), 200
 
 @bp.route('/updatePaymentMethod/<int:auction_id>', methods=('PATCH',))
+@verify_token
 def updatePaymentMethod(auction_id):
     db = get_db()
     data = request.get_json()
@@ -1169,7 +1203,8 @@ def updatePaymentMethod(auction_id):
 
 
 
-@bp.route('/recalculateCardPrices/<int:auction_id>/<string:new_auction_price>', methods=('GET',))
+@bp.route('/recalculateCardPrices/<int:auction_id>/<string:new_auction_price>', methods=('POST',))
+@verify_token
 def recalculateCardPrices(auction_id, new_auction_price):
     db = get_db()
     new_auction_price = float(new_auction_price)
@@ -1247,7 +1282,8 @@ def recalculateCardPrices(auction_id, new_auction_price):
     db.commit()
     return jsonify({'status': 'success'}), 200
 
-@bp.route('/groupUnnamed', methods=('GET', 'POST'))
+@bp.route('/groupUnnamed', methods=('GET',))
+@verify_token
 def groupUnnamed():
     if request.method == 'GET':
         db = get_db()
@@ -1259,7 +1295,8 @@ def groupUnnamed():
         return jsonify({'status': 'success'}), 200
 
 #Gets rows of CM table using chrome extension and save them to the datasabe
-@bp.route('/CardMarketTable', methods=('GET', 'POST'))
+@bp.route('/CardMarketTable', methods=('POST',))
+@verify_token
 def cardMarketTable():
     if request.method == 'POST':
         db = get_db()
@@ -1350,6 +1387,7 @@ def cardMarketTable():
             return jsonify({'status': 'error', 'message': 'Error code: Ax15'}), 500
 
 @bp.route('/cardMarketOrder', methods=('POST',))
+@verify_token
 def cardMarketOrder():
     data = request.get_json()
     db = get_db()
@@ -1410,6 +1448,7 @@ def cardMarketOrder():
     return jsonify({'status': 'success'}), 200
 
 @bp.route('/getLatest', methods=('GET',))
+@verify_token
 def getLatest():
     global latest
     last = latest
@@ -1498,6 +1537,7 @@ def allowedFile(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in "csv"
 
 @bp.route('/importSoldCSV', methods=('POST',))
+@verify_token
 def importSoldCSV():
     if request.method == 'POST':
         # Use the same folder as the database
@@ -1590,6 +1630,7 @@ def importSoldCSV():
     return jsonify({'status': 'success'}), 201
 
 @bp.route('/searchCard', methods=('POST',))
+@verify_token
 def search():
     if request.method == 'POST':
         card = request.get_json()
@@ -1675,6 +1716,7 @@ def search():
 
 
 @bp.route('/getCardIds', methods=('POST',))
+@verify_token
 def getCardIds():
     if request.method == 'POST':
         data = request.get_json()
@@ -1719,7 +1761,8 @@ def getCardIds():
         ids = [dict(row)['id'] for row in cardIds]
         return jsonify({'status': 'success', 'card_ids': ids}), 200
 
-@bp.route('/createSale/<string:kind>', methods=('GET', 'POST'))
+@bp.route('/createSale/<string:kind>', methods=('POST',))
+@verify_token
 def invoice(kind):
     if request.method == 'POST':
         cartContent = request.get_json()

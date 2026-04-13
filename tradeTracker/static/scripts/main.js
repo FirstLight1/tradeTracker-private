@@ -378,7 +378,7 @@ function cartValue(cartContent) {
 async function changeCardPricesBasedOnAuctionPrice(auctionTab) {
     const auctionId = auctionTab.getAttribute('data-id');
     let auctionPrice = auctionTab.querySelector('.auction-price').textContent.replace('€', '');
-    const response = await fetch(`/recalculateCardPrices/${auctionId}/${auctionPrice}`, { method: 'GET' });
+    const response = await fetch(`/recalculateCardPrices/${auctionId}/${auctionPrice}`, { method: 'POST' });
     const data = await response.json();
     if (data.status == 'success') {
         window.location.reload();

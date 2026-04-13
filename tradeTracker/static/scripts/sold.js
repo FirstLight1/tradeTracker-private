@@ -171,7 +171,8 @@ async function loadHistory() {
                 returnButton.disabled = true;
                 returnButton.textContent = 'Processing...';
                 try {
-                    const cnResponse = await fetch(`/generateCreditNote/${saleId}`);
+                    const cnResponse = await fetch(`/generateCreditNote/${saleId}`,
+                        {method: 'POST'});
                     const cnData = await cnResponse.json();
                     if (cnData.status !== 'success') {
                         renderAlert('Error generating credit note: ' + cnData.message, 'error');
@@ -179,7 +180,8 @@ async function loadHistory() {
                         returnButton.textContent = 'Return';
                         return;
                     }
-                    const returnResponse = await fetch(`/orderReturn/${saleId}`);
+                    const returnResponse = await fetch(`/orderReturn/${saleId}`,{
+                        method: 'POST'});
                     const returnData = await returnResponse.json();
                     if (returnData.status !== 'success') {
                         renderAlert('Error processing return: ' + returnData.message, 'error');

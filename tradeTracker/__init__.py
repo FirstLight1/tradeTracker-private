@@ -3,7 +3,7 @@ import sys
 from flask import Flask
 import logging
 from werkzeug.exceptions import HTTPException
-
+from dotenv import load_dotenv
 from .logging_config import configure_logging
 from . import actions
 
@@ -22,6 +22,16 @@ def create_app(test_config=None):
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
 
+    load_dotenv()
+    ALLOWED_ORIGINS = [
+    "https://tracker.yourdomain.com",
+    f"chrome-extension://{os.environ['CHROME_EXTENSION_ID']}"
+    ]
+    CORS(app, 
+         origins=ALLOWED_ORIGINS, 
+         supports_credentials=True, 
+         allow_headers=["Content-Type", "X-CSRF-Token"],
+         methods=["GET", "POST", "PATCH", "DELETE"])
     # Use AppData for database storage in production (when frozen)
     if getattr(sys, "frozen", False):
         # Running as compiled exe
