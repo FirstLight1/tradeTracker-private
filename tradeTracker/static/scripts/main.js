@@ -172,7 +172,7 @@ async function patchValue(id, value, dataset) {
             return
         }
     } catch (e) {
-        renderAlert('Error updating value: ' + e, 'error');
+        renderAlert('Error updating value: ' + e + 'Error code: Mx01', 'error');
     }
 }
 
@@ -208,7 +208,7 @@ async function removeCard(id, div) {
             return false;
         }
     } catch (error) {
-        renderAlert('Error deleting card: ' + error, 'error');
+        renderAlert('Error deleting card: ' + error + 'Error code: Mx02', 'error');
         return false;
     }
 }
@@ -227,7 +227,7 @@ async function removeBulkItem(bulkId, bulkDiv) {
             return false;
         }
     } catch (error) {
-        renderAlert('Error deleting bulk item: ' + error, 'error');
+        renderAlert('Error deleting bulk item: ' + error + 'Mx03', 'error');
         return false;
     }
 }
@@ -249,7 +249,7 @@ async function updateAuction(auctionId, value, field) {
             return
         }
     } catch (error) {
-        renderAlert('Error updating auction: ' + error, 'error');
+        renderAlert('Error updating auction: ' + error + 'Mx04', 'error');
         return
     }
 }
@@ -702,7 +702,7 @@ function loadCartContentFromSession() {
         }
 
     } catch (e) {
-        renderAlert('Error loading cart data from sessionStorage: ' + e, 'error');
+        renderAlert('Error loading cart data from sessionStorage: ' + e + 'Error code: Mx03', 'error');
     }
 }
 
@@ -794,7 +794,7 @@ function loadModalDataFromSession(recieverDiv) {
             }
         }
     } catch (e) {
-        renderAlert('Error loading modal data from sessionStorage: ' + e, 'error');
+        renderAlert('Error loading modal data from sessionStorage: ' + e + 'Error code: Mx05', 'error');
     }
 }
 
@@ -865,7 +865,7 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind){
         // If single payment method, auto-set amount to cart total
         paymentMethods[0].amount = expectedTotal;
     } else {
-        renderAlert('Please select at least one payment method', 'error');
+        renderAlert('Please select at least one payment method, Error code: Mx06', 'error');
         return;
     }
     cartContent.paymentMethods = paymentMethods;
@@ -1128,13 +1128,12 @@ function shoppingCart() {
                         <input type=text placeholder="${cartVal}" class="price-input">
                     </div>
                     <div>
-                    <p>Shipping</p>
                     <p class='shipping-way'>Doprava / Poštovné – samostatná služba</p>
                     <input type=text placeholder="Price of shipping" class="shipping-price">
                     </div>
                     <div class='invoice-buttons'>
-                        <button class="generate-invoice">Generate Invoice</button>
                         <button class=sales-invoice>Add sale</button>
+                        <button class="generate-invoice">Generate Invoice</button>
                     </div>
                 </div>
                 `;
@@ -1219,7 +1218,7 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
     // Entry B: From auction tab (cardId provided)
     if (cardId !== null) {
         if (existingIDs.has(cardId)) {
-            renderAlert('This card is already in cart', 'error');
+            renderAlert('This card is already in cart, Error code: Mx07', 'error');
             return;
         }
 
@@ -1273,7 +1272,7 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
                 saveCartContentToSession();
             }
         } else {
-            renderAlert('No more available copies of this card', 'error');
+            renderAlert('No more available copies of this card, Error code: Mx09', 'error');
         }
         return;
     }
@@ -1291,12 +1290,12 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
             })
         });
         if (!response.ok) {
-            renderAlert('Failed to fetch card IDs', 'error');
+            renderAlert('Failed to fetch card IDs, Mx10', 'error');
             return;
         }
         const data = await response.json();
         if (data.status !== 'success' || !data.card_ids || data.card_ids.length === 0) {
-            renderAlert('Card no longer available', 'error');
+            renderAlert('Card no longer available, Error code: Mx11', 'error');
             return;
         }
         const line = new CartLine(
@@ -1308,7 +1307,7 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
         existingIDs.add(line.cardIds[0]);
         renderCartLine(line);
     } catch (e) {
-        renderAlert('Error adding card to cart: ' + e, 'error');
+        renderAlert('Error adding card to cart: ' + e + 'Mx12', 'error');
     }
 }
 
@@ -1362,7 +1361,7 @@ function addBulkToCart() {
         const inventorySize = document.querySelector('.bulk-value').textContent;
         const maxBulk = Number(inventorySize);
         if (Number(value) + currentCartValue('bulk') > maxBulk) {
-            renderAlert(`You can not add more than ${maxBulk} bulk items to the cart`, 'error');
+            renderAlert(`You can not add more than ${maxBulk} bulk items to the cart, Error code: Mx13`, 'error');
             return;
         }
 
@@ -1414,7 +1413,7 @@ function addHoloToCart() {
         const inventorySize = document.querySelector('.holo-value').textContent;
         const maxHolo = Number(inventorySize);
         if (Number(value) + currentCartValue('holo') > maxHolo) {
-            renderAlert(`You can not add more than ${maxHolo} holo items to the cart`, 'error');
+            renderAlert(`You can not add more than ${maxHolo} holo items to the cart, Error code: Mx14`, 'error');
             return;
         }
 
@@ -1466,7 +1465,7 @@ function addExToCart() {
         const inventorySize = document.querySelector('.ex-value').textContent;
         const maxEx = Number(inventorySize);
         if (Number(value) + currentCartValue('ex') > maxEx) {
-            renderAlert(`You can not add more than ${maxEx} ex items to the cart`, 'error');
+            renderAlert(`You can not add more than ${maxEx} ex items to the cart, Error code: Mx15`, 'error');
             return;
         }
 
@@ -1849,10 +1848,10 @@ async function loadBulkHoloValues() {
             holoVal.textContent = data.holo_counter;
             exVal.textContent = data.ex_counter;
         } else {
-            renderAlert('There was a problem loading bulk, holo and ex values', 'error');
+            renderAlert('There was a problem loading bulk, holo and ex values, Error code: Mx16', 'error');
         }
     } catch (e) {
-        renderAlert('Error loading bulk/holo/ex values: ' + e, 'error');
+        renderAlert('Error loading bulk/holo/ex values: ' + e + 'Error code: Mx17', 'error');
     }
 }
 

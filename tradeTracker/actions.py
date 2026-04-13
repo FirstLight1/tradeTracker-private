@@ -221,6 +221,7 @@ def add():
             )
             if not is_valid:
                 return jsonify({"status": "error", "message": error_msg}), 400
+                return jsonify({'status': 'error', 'message': f'{error_msg}, Error code: Ax01'}), 400
             payment_method_json = json.dumps(sanitized_payments)
 
         cursor = db.execute(
@@ -376,6 +377,7 @@ def addBulkItems(auction_id):
         db.rollback()
         logger.exception("failed to add to auction | auction_id : %s", auction_id)
         return jsonify({"status": "error", "message": str(e)}), 400
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax02'}), 400
     db.commit()
     return jsonify({"status": "success"}), 201
 
@@ -642,6 +644,7 @@ def addToExistingAuction(auction_id):
             )
             return jsonify({"status": "error", "message": str(e)}), 400
 
+            return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax03'}), 400
 
 @bp.route("/bulkCounterValue")
 def bulkCounterValue():
@@ -744,6 +747,7 @@ def orderReturn(saleId):
             "UPDATE cards SET sold_date = NULL WHERE id IN (SELECT card_id FROM sale_items WHERE sale_id = ?)",
             (saleId,),
         )
+        db.execute('UPDATE cards SET sold_date = NULL WHERE id IN (SELECT card_id FROM sale_items WHERE sale_id = ?)',(saleId, ))
         bulk_sales_rows = db.execute(
             "SELECT item_type, quantity FROM bulk_sales WHERE sale_id = ?", (saleId,)
         ).fetchall()
@@ -764,6 +768,11 @@ def orderReturn(saleId):
         return jsonify(
             {"status": "error", "message": "There was an error while creating a return"}
         ), 400
+        db.execute('DELETE FROM sales WHERE id = ?', (saleId, ))
+    except:
+         db.rollback()
+         return jsonify({'status': 'error', 'message': 'There was an error while creating a return, Error code: Ax04'}), 400 
+    
     db.commit()
     return jsonify({"status": "success"}), 200
 
@@ -776,6 +785,7 @@ def generate_credit_note(saleId):
     sale = db.execute("SELECT * FROM sales WHERE id = ?", (saleId,)).fetchone()
     if sale is None:
         return jsonify({"status": "error", "message": "Sale not found"}), 404
+        return jsonify({'status': 'error', 'message': 'Sale not found, Error code: Ax05'}), 404
 
     # Parse receiver info stored as JSON in the notes column
     try:
@@ -858,6 +868,7 @@ def generate_credit_note(saleId):
     except Exception as e:
         logger.critical("Credit note generation failed %s", e)
         return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax06'}), 500
 
     logger.info(
         "Credit note generated succesfully | original invoice num: %s",
@@ -932,6 +943,7 @@ def generateSoldReport():
         logger.exception("PDF generation failed")
         print(f"Error generating PDF: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax08'}), 500
 
 
 def generatePDF(month, year, cards, sealed, bulkAndHoloList, shipping):
@@ -1361,6 +1373,8 @@ def updatePaymentMethod(auction_id):
     if not is_valid:
         return jsonify({"status": "error", "message": error_msg}), 400
 
+        return jsonify({'status': 'error', 'message': f'{error_msg}, Error code: Ax09'}), 400
+    
     # Store as JSON string
     payment_method_json = json.dumps(sanitized_payments)
     db.execute(
@@ -1415,6 +1429,11 @@ def recalculateCardPrices(auction_id, new_auction_price):
             return jsonify(
                 {"status": "error", "message": "Some cards have already been sold"}
             ), 400
+        return jsonify({'status': 'error', 'message': 'No unsold cards or sealed items found, Error code: Ax10'}), 400
+
+    for card in cards:
+        if card["card_id"] is not None:
+            return jsonify({'status': 'error', 'message': 'Some cards have already been sold, Error code: Ax11'}), 400
 
     # Check if any sealed items have been sold
     for item in sealed_items:
@@ -1425,6 +1444,7 @@ def recalculateCardPrices(auction_id, new_auction_price):
                     "message": "Some sealed items have already been sold",
                 }
             ), 400
+            return jsonify({'status': 'error', 'message': 'Some sealed items have already been sold, Error code: Ax12'}), 400
 
     # Calculate total market value of unsold cards and sealed items
     total_market_value = sum(card["market_value"] or 0 for card in cards) + sum(
@@ -1436,6 +1456,7 @@ def recalculateCardPrices(auction_id, new_auction_price):
         return jsonify(
             {"status": "error", "message": "Total market value is zero"}
         ), 400
+        return jsonify({'status': 'error', 'message': 'Total market value is zero, Error code: Ax13'}), 400
 
     priceDiff = total_market_value - new_auction_price
 
@@ -1592,6 +1613,7 @@ def cardMarketTable():
             print("DB error:", e)
             return jsonify({"status": "error"}), 500
 
+            return jsonify({'status': 'error', 'message': 'Error code: Ax15'}), 500
 
 @bp.route("/cardMarketOrder", methods=("POST",))
 def cardMarketOrder():
@@ -1643,12 +1665,58 @@ def cardMarketOrder():
             {
                 "status": "error",
                 "message": "There was an error while getting sealed ids",
+    if cards:
+        try:
+            for card in cards:
+                
+                try:
+                    count = int(card.get('count', 1))
+                except (ValueError, TypeError):
+                    print('failed to get count')
+                    count = 1
+                print(card)
+                rows = db.execute("SELECT c.id FROM cards c LEFT JOIN sale_items si ON c.id = si.card_id WHERE lower(c.card_name) = ? AND lower(c.card_num) = ? and upper(c.condition) = ? AND si.sale_id IS NULL",(card['name'].lower(), card['num'].lower(), card['condition'].upper())).fetchmany(count)
+        
+                ids = [row[0] for row in rows]
+                ids += [None] * (count - len(ids))
+                card['cardId'] = ids
+        
+        except Exception as e:
+            print(e)
+            print('There was an error while getting card ids')
+            return jsonify({'status': 'error', 'message' : 'Failed to match cards to card ids, Error code: Ax16'}), 400
+
+
+    sealed = data['sealed']
+    if sealed:
+        try:
+            for item in sealed:
+                try:
+                    count = int(item.get('count',1))
+                except:
+                    count = 1
+
+
+                rows  = db.execute('SELECT id FROM WHERE lower(name) = ? AND sale_id IS NULL',(item['name'].lower(),)).fetchmany(count)
+                ids = [row[0] for row in rows]
+                if len(ids) > 0:
+                  item['id'] = ids
+        except:
+            print("There was an error while getting sealed ids")
+            return jsonify({'status' : 'error', 'message': 'There was an error while getting sealed ids, Error code: Ax17'})
+
+    shipping_info['paybackDate'] = datetime.date.today().strftime("%d/%m/%Y")
+    orderInfo = {
+            "shipping_info" : shipping_info,
+            "cards" : cards,
+            "sealed" : sealed
             }
         )
 
     shipping_info["paybackDate"] = datetime.date.today().strftime("%d/%m/%Y")
     orderInfo = {"shipping_info": shipping_info, "cards": cards, "sealed": sealed}
     global latest
+    print(orderInfo)
     latest = orderInfo
     logger.info("Order succcessfully extracted")
     return jsonify({"status": "success"}), 200
@@ -1847,6 +1915,7 @@ def importSoldCSV():
             logger.exception("Failed to proces CSV file | reason: %s", e)
             print(f"Error processing CSV file: {e}")
             return jsonify({"status": "error", "message": str(e)}), 500
+            return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax19'}), 500
 
     return jsonify({"status": "success"}), 201
 
@@ -1882,6 +1951,11 @@ def search():
             " AND ".join(card_where_conditions) if card_where_conditions else "1=1"
         )
 
+            card_params.append(f'%{term}%')
+        
+        #TODO cant this be a group by conditions?
+        card_where_clause = " AND ".join(card_where_conditions) if card_where_conditions else "1=1"
+        
         # Add card cart exclusion
         if card_cart_ids:
             placeholders = ",".join(["?"] * len(card_cart_ids))
@@ -1946,6 +2020,7 @@ def getCardIds():
         data = request.get_json()
         if not data:
             return jsonify({"status": "error", "message": "Invalid input"}), 400
+            return jsonify({'status': 'error', 'message': 'Invalid input, Error code: Ax20'}), 400
 
         card_name = data.get("card_name")
         card_num = data.get("card_num")
@@ -1956,6 +2031,7 @@ def getCardIds():
             return jsonify(
                 {"status": "error", "message": "Missing required fields"}
             ), 400
+            return jsonify({'status': 'error', 'message': 'Missing required fields, Error code: Ax21'}), 400
 
         db = get_db()
 
@@ -2023,6 +2099,9 @@ def invoice(kind="invoice"):
             )
         if not valid:
             return jsonify({"status": "error", "message": "Invalid payment data"}), 400
+            return jsonify({'status': 'error', 'message': f'There was an error while validating payments {err}, Error code: Ax22'}), 400
+        if not valid:
+            return jsonify({'status': 'error', 'message': 'Invalid payment data, Error code: Ax23'}), 400
 
         saleInput = SaleInput(
             reciever=cartContent["recieverInfo"],
@@ -2051,6 +2130,8 @@ def invoice(kind="invoice"):
                     {"status": "error", "message": f"There was an error {e}"}
                 ), 400
         elif kind == "sales_invoice":
+                return jsonify({'status': 'error', 'message': f'There was an error {e}, Error code: Ax24'}), 400
+        elif kind == 'sales_invoice':
             try:
                 saleResult = SaleService(db, EKasaReceiptService()).process_sale(
                     saleInput
@@ -2066,3 +2147,6 @@ def invoice(kind="invoice"):
                 ), 400
 
         return jsonify({"status": "error", "message": "Invalid kind of request"}), 400
+                return jsonify({'status': 'error', 'message': f'There was an error {e}, Error code: Ax25'}), 400
+        
+        return jsonify({'status': 'error', 'message': 'Invalid kind of request, Error code: Ax26'}), 400

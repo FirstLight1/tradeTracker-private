@@ -306,7 +306,7 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
     if getattr(sys, 'frozen', False):
         app_data_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker', 'Invoices')
         os.makedirs(app_data_dir, exist_ok=True)
-        output_filename = f"Dobropis:{cn_num}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
+        output_filename = f"Dobropis_{cn_num}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
         output_path = os.path.join(app_data_dir, output_filename)
     else:
         invoices_dir = os.path.join(current_app.instance_path, 'invoices')
