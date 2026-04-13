@@ -1,7 +1,6 @@
 from decimal import Decimal
 import sys
 from flask import request, Blueprint, jsonify, current_app
-from flask_cors import CORS
 from tradeTracker.db import get_db
 import datetime
 import os
@@ -1178,7 +1177,18 @@ def updateAuction(auction_id):
     data = request.get_json()
     value = data.get('value')
     field = data.get('field')
-    db.execute(f'UPDATE auctions SET {field} = ? WHERE id = ?', (value, auction_id))
+    
+    ALLOWED_FIELDS = {
+        "auction_name": "auction_name",
+        "auction_price": "auction_price",
+        "date_created": "date_created",
+        }
+
+    if fiel not in ALLOWED_FIELDS:
+        logger.warning('Invalid field | auction_id : %s', auction_id)
+        return jsonify({'status': 'error', 'message': 'Invalid field'})
+    column = ALLOWED_FIELDS[field]
+    db.execute(f'UPDATE auctions SET {column} = ? WHERE id = ?', (value, auction_id))
     db.commit()
     return jsonify({'status': 'success'}), 200
 
