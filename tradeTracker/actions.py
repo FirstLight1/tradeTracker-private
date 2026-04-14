@@ -9,6 +9,8 @@ import json
 import pandas as pd
 from dotenv import load_dotenv
 import logging
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from . import generateInvoice, CONSTANTS
 from tradeTracker.services.models import SaleInput
 from tradeTracker.services.sale_service import SaleService
@@ -18,6 +20,8 @@ from tradeTracker.services.cfAuth import verify_token
 load_dotenv()
 bp = Blueprint('actions', __name__)
 logger = logging.getLogger(__name__)
+limiter = Limiter(key_func=get_remote_address)
+
 
 dictKeys = ['Product ID', 'Name', 'Condition', 'Price', 'Card Number']
 li = []
@@ -745,6 +749,7 @@ def generate_credit_note(saleId):
 
 
 @bp.route('/generateSoldReport', methods=('GET',))
+@limiter.limit("2 per minute")
 @verify_token
 def generateSoldReport():
     db = get_db()
@@ -1397,6 +1402,7 @@ def cardMarketTable():
             return jsonify({'status': 'error', 'message': 'Error code: Ax15'}), 500
 
 @bp.route('/cardMarketOrder', methods=('POST',))
+@limiter.limit('10 per minute')
 @verify_token
 def cardMarketOrder():
     data = request.get_json()
@@ -1772,6 +1778,7 @@ def getCardIds():
         return jsonify({'status': 'success', 'card_ids': ids}), 200
 
 @bp.route('/createSale/<string:kind>', methods=('POST',))
+@limiter.limit("5 per minute")
 @verify_token
 def invoice(kind):
     if request.method == 'POST':

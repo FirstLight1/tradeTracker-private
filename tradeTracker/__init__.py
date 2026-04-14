@@ -2,13 +2,16 @@ import os
 import sys
 from flask import Flask
 from flask_cors import CORS
+from flask_limiter.util import get_remote_address
 from flask_talisman import Talisman
+from flask_limiter import Limiter
 import logging
 from werkzeug.exceptions import HTTPException
 from dotenv import load_dotenv
 from .logging_config import configure_logging
 from . import actions
 
+limiter = Limiter(key_func=get_remote_address)
 
 def resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller"""
@@ -25,6 +28,7 @@ def abort_secret_key():
 def create_app(test_config=None):
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
+    limiter.init_app(app)
 
     load_dotenv()
     ALLOWED_ORIGINS = [
@@ -101,7 +105,7 @@ def create_app(test_config=None):
             print("Database initialized automatically on first run")
 
     app.register_blueprint(tracker.bp)
-    app.register_blueprint(actions.bp)
+    app.register_blueprint(actions.bp) 
     app.register_blueprint(renderers.bp)
 
     return app
