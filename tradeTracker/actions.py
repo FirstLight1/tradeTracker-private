@@ -1,8 +1,10 @@
+import base64
 from decimal import Decimal
 import sys
 from flask import request, Blueprint, jsonify, current_app
 from tradeTracker.db import get_db
 import datetime
+from Crypto.Cipher import AES
 import os
 import fpdf
 import json
@@ -592,6 +594,19 @@ def loadSoldHistory():
         'LEFT JOIN barter b ON b.sale_id = s.id '
         'ORDER BY sale_date DESC'
     ).fetchall()
+    
+    for sale in sales:
+        sale = dict(sale) 
+        crypt = sale['note']
+        nonce = base64.b64decode(crypt["nonce"])
+        ciphertext = base64.b64decode(crypt["ciphertext"])
+        tag = base64.b64decode(crypt["tag"])
+        key = base64.b64decode(os.environ['KEY'])
+        cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
+        decrypted_bytes = cipher.decrypt_and_verify(ciphertext, tag)
+        # Convert back to JSON
+        decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
+        sale['note'] = decrypted_data
     return jsonify([dict(sale) for sale in sales])
     
 @bp.route('/loadSoldCards/<int:sale_id>', methods=('GET',))
@@ -682,7 +697,14 @@ def generate_credit_note(saleId):
 
     # Parse receiver info stored as JSON in the notes column
     try:
-        reciever = json.loads(sale['notes']) if sale['notes'] else {}
+        crypt = sale['notes']
+        nonce = base64.b64decode(crypt['nonce'])
+        cipherText = base64.b64decode(crypt['ciphertext'])
+        tag = base64.b64decode(crypt['tag'])
+        key = base64.b64decode(os.environ['KEY'])
+        cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
+        decrypted = cipher.decrypt_and_verify(cipherText, tag)
+        reciever = json.loads(decrypted.decode("utf-8"))
     except (json.JSONDecodeError, TypeError):
         reciever = {}
 
@@ -1405,6 +1427,7 @@ def cardMarketTable():
 @limiter.limit('10 per minute')
 @verify_token
 def cardMarketOrder():
+    #TODO implement asymetric decryption
     data = request.get_json()
     db = get_db()
     shipping_info = data['shipping_info']
@@ -1782,6 +1805,7 @@ def getCardIds():
 @verify_token
 def invoice(kind):
     if request.method == 'POST':
+        #TODO add asymetric decryption
         cartContent = request.get_json()
 
         payment_data, valid, err = None, False, None
