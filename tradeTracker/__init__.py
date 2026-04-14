@@ -2,6 +2,7 @@ import os
 import sys
 from flask import Flask
 from flask_cors import CORS
+from flask_talisman import Talisman
 import logging
 from werkzeug.exceptions import HTTPException
 from dotenv import load_dotenv
@@ -33,6 +34,14 @@ def create_app(test_config=None):
          supports_credentials=True, 
          allow_headers=["Content-Type", "X-CSRF-Token"],
          methods=["GET", "POST", "PATCH", "DELETE"])
+
+    Talisman(app)
+
+    app.config.update(
+        SESSION_COOKIE_SECURE=True,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE='Lax',
+    )
     # Use AppData for database storage in production (when frozen)
     if getattr(sys, "frozen", False):
         # Running as compiled exe

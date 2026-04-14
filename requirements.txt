@@ -11,6 +11,7 @@ defusedxml==0.7.1
 et_xmlfile==2.0.0
 Flask==3.1.2
 flask-cors==6.0.1
+flask-talisman==1.1.0
 fonttools==4.60.1
 fpdf2==2.8.5
 idna==3.10
@@ -28,8 +29,6 @@ pillow==12.0.0
 pluggy==1.6.0
 pycparser==3.0
 Pygments==2.19.2
-pyinstaller==6.3.0
-pyinstaller-hooks-contrib==2025.9
 PyJWT==2.12.1
 pypng==0.20220715.0
 pytest==9.0.2
