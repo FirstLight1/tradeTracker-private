@@ -1,6 +1,6 @@
 import { renderField, renderAlert, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign } from "./utils/renderUtil.js";
 import { CardStruct, queue, CartLine } from "./utils/classes.js";
-import { escapeHtml, sanitizePlainText, sanitizeAttrValue, sanitizeNumericId, sanitizeClassToken } from "./utils/sanitizers.js";
+import { escapeHtml, sanitizePlainText, sanitizeAttrValue, sanitizeNumericId, sanitizeClassToken, csrfFetch } from "./utils/sanitizers.js";
 
 
 function paymentTypeSelect(className, defaultValue = '') {
@@ -102,7 +102,7 @@ function formatPaymentDisplay(payments) {
 
 async function updatePaymentMethod(auctionId, payments) {
     try {
-        const response = await fetch(`/updatePaymentMethod/${auctionId}`, {
+        const response = await csrfFetch(`/updatePaymentMethod/${auctionId}`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json'
@@ -157,7 +157,7 @@ async function patchValue(id, value, dataset) {
 
     }
     try {
-        const response = await fetch(`/update/${id}`, {
+        const response = await csrfFetch(`/update/${id}`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json'
@@ -177,7 +177,7 @@ async function patchValue(id, value, dataset) {
 }
 
 function deleteAuction(id, div) {
-    fetch(`/deleteAuction/${id}`, {
+    csrfFetch(`/deleteAuction/${id}`, {
         method: 'DELETE',
     })
         .then(response => response.json())
@@ -195,7 +195,7 @@ function deleteAuction(id, div) {
 
 async function removeCard(id, div) {
     try {
-        const response = await fetch(`/deleteCard/${id}`, {
+        const response = await csrfFetch(`/deleteCard/${id}`, {
             method: 'DELETE',
         });
         const data = await response.json();
@@ -215,7 +215,7 @@ async function removeCard(id, div) {
 
 async function removeBulkItem(bulkId, bulkDiv) {
     try {
-        const response = await fetch(`/deleteBulkItem/${bulkId}`, {
+        const response = await csrfFetch(`/deleteBulkItem/${bulkId}`, {
             method: 'DELETE',
         });
         const data = await response.json();
@@ -234,7 +234,7 @@ async function removeBulkItem(bulkId, bulkDiv) {
 
 async function updateAuction(auctionId, value, field) {
     try {
-        const response = await fetch(`/updateAuction/${auctionId}`, {
+        const response = await csrfFetch(`/updateAuction/${auctionId}`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json'
@@ -297,7 +297,7 @@ function soldReportBtn() {
 }
 
 async function generateSoldReport(month, year, div) {
-    const response = await fetch(`/generateSoldReport?month=${month}&year=${year}`);
+    const response = await csrfFetch(`/generateSoldReport?month=${month}&year=${year}`);
     const data = await response.json();
     if (data.status === 'success') {
         console.log('Sold report generated successfully');
@@ -318,7 +318,7 @@ function importCSV() {
         if (file && file.length === 1) {
             const formData = new FormData();
             formData.append("csv-upload", file[0]);
-            const response = await fetch('/importSoldCSV', {
+            const response = await csrfFetch('/importSoldCSV', {
                 method: 'POST',
                 body: formData
             });
@@ -378,7 +378,7 @@ function cartValue(cartContent) {
 async function changeCardPricesBasedOnAuctionPrice(auctionTab) {
     const auctionId = auctionTab.getAttribute('data-id');
     let auctionPrice = auctionTab.querySelector('.auction-price').textContent.replace('€', '');
-    const response = await fetch(`/recalculateCardPrices/${auctionId}/${auctionPrice}`, { method: 'POST' });
+    const response = await csrfFetch(`/recalculateCardPrices/${auctionId}/${auctionPrice}`, { method: 'POST' });
     const data = await response.json();
     if (data.status == 'success') {
         window.location.reload();
@@ -918,7 +918,7 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind){
     }
     cartContent.recieverInfo.total = Number(cartValue(cartContent));
     if (Object.keys(cartContent).length !== 0) {
-        const response = await fetch(`/createSale/${kind}`,
+        const response = await csrfFetch(`/createSale/${kind}`,
             {
                 method: 'POST',
                 headers: {
@@ -1279,7 +1279,7 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
 
     // No existing line — fetch full pool from server
     try {
-        const response = await fetch('/getCardIds', {
+        const response = await csrfFetch('/getCardIds', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1508,7 +1508,7 @@ function addExToCart() {
 function startPolling() {
     setInterval(async () => {
         try {
-            const response = await fetch('/getLatest');
+            const response = await csrfFetch('/getLatest');
             const data = await response.json();
             if (data.status === 'success') {
                 const shippingInfo = data.message.shipping_info;
@@ -1652,7 +1652,7 @@ function searchBar() {
 async function search(searchPrompt) {
 
     const jsonbody = JSON.stringify({ query: searchPrompt, cartIds: [...existingIDs] });
-    const response = await fetch('/searchCard',
+    const response = await csrfFetch('/searchCard',
         {
             method: 'POST',
             headers: {
@@ -1841,7 +1841,7 @@ async function loadBulkHoloValues() {
     let bulkVal = document.querySelector('.bulk-value');
     let exVal = document.querySelector('.ex-value');
     try {
-        const response = await fetch('/bulkCounterValue');
+        const response = await csrfFetch('/bulkCounterValue');
         const data = await response.json();
         if (data.status == 'success') {
             bulkVal.textContent = data.bulk_counter;
@@ -1875,7 +1875,7 @@ async function loadAuctionContent(button) {
 
             // Only fetch if we don't have content already
             if (cardsContainer.childElementCount === 0) {
-                const response = await fetch(cardsUrl);
+                const response = await csrfFetch(cardsUrl);
                 const cards = await response.json();
                 if (isEmpty(cards)) {
                     cardsContainer.innerHTML = '';
@@ -2057,7 +2057,7 @@ async function loadAuctionContent(button) {
 
                 // Load sealed items BEFORE bulk items
                 try {
-                    const responseSealed = await fetch(sealedUrl);
+                    const responseSealed = await csrfFetch(sealedUrl);
                     const sealedData = await responseSealed.json();
 
                     sealedData.forEach(sealedItem => {
@@ -2112,7 +2112,7 @@ async function loadAuctionContent(button) {
                             const sealedDiv = button.closest('.sealed-item');
 
                             if (button.textContent === 'Confirm') {
-                                const response = await fetch(`/deleteSealed/${sid}`, { method: 'DELETE' });
+                                const response = await csrfFetch(`/deleteSealed/${sid}`, { method: 'DELETE' });
                                 const data = await response.json();
 
                                 if (data.status === 'success') {
@@ -2141,7 +2141,7 @@ async function loadAuctionContent(button) {
 
                 // Load bulk items
                 try {
-                    const responseBulk = await fetch(bulkUrl);
+                    const responseBulk = await csrfFetch(bulkUrl);
                     const bulkData = await responseBulk.json();
                     bulkData.forEach(bulkItem => {
                         const bulkDiv = document.createElement('div');
@@ -2412,7 +2412,7 @@ async function loadAuctionContent(button) {
                 }
 
                 const jsonbody = JSON.stringify(itemsToAdd);
-                const response = await fetch(`/addToExistingAuction/${auctionId}`, {
+                const response = await csrfFetch(`/addToExistingAuction/${auctionId}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -2459,7 +2459,7 @@ async function loadSealed(viewButton) {
         // Only fetch if we don't have items already
         if (contentDiv.childElementCount === 0) {
             try {
-                const response = await fetch('/loadSealed');
+                const response = await csrfFetch('/loadSealed');
                 const data = await response.json();
                 if (data.status != 'success') {
                     renderAlert('Failed to load sealed products', 'error');
@@ -2494,7 +2494,7 @@ async function loadSealed(viewButton) {
                     removeSealed.addEventListener('click', async () => {
 
                         if (removeSealed.textContent === 'Confirm') {
-                            const response = await fetch(`/deleteSealed/${sealedData.sid}`, { method: 'DELETE' })
+                            const response = await csrfFetch(`/deleteSealed/${sealedData.sid}`, { method: 'DELETE' })
                             const data = await response.json();
 
                             if (data.status === 'success') {
@@ -2557,7 +2557,7 @@ async function loadSealed(viewButton) {
                     })
                     saveButton.style.display = 'none';
                     if (inputValues.length > 0) {
-                        const response = await fetch('/addSealed', {
+                        const response = await csrfFetch('/addSealed', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'
@@ -2589,7 +2589,7 @@ async function loadSealed(viewButton) {
 
 async function loadUnlinkedIds() {
     try {
-        const response = await fetch('/unlinkedBarterIds');
+        const response = await csrfFetch('/unlinkedBarterIds');
         const data = await response.json();
         if (data.status === 'success') {
             return data.data;
@@ -2616,7 +2616,7 @@ async function renderBarterSelect(select) {
 async function loadAuctions() {
     const auctionContainer = document.querySelector('.auction-container');
     try {
-        const response = await fetch('/loadAuctions');
+        const response = await csrfFetch('/loadAuctions');
         const data = await response.json();
         data.forEach(auction => {
             const safeAuctionId = sanitizeNumericId(auction.id);
@@ -2679,7 +2679,7 @@ async function loadAuctions() {
                 const selected = event.target.value;
                 if (selected === 'null') return;
                 try {
-                    const res = await fetch(`/linkAuctionToSale/${auctionId}`, {
+                    const res = await csrfFetch(`/linkAuctionToSale/${auctionId}`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'

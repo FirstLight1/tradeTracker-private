@@ -1,4 +1,5 @@
 import { renderField, renderAlert, scrollOnLoad } from "./utils/renderUtil.js";
+import { sanitizeNumericId, sanitizeClassToken, csrfFetch } from "./utils/sanitizers.js";
 
 const BULK_TYPE_BUY_PRICES = {
     bulk: 0.01,
@@ -24,7 +25,7 @@ async function loadContent(button, soldDate) {
     const saleEntry = button.closest('.auction-tab');
     const cardsContainer = saleEntry.querySelector('.cards-container');
     if (cardsContainer.childElementCount === 0 || cardsContainer.style.display === 'none') {
-        const response = await fetch('/loadSoldCards/' + saleId);
+        const response = await csrfFetch('/loadSoldCards/' + saleId);
         const soldItems = await response.json();
         cardsContainer.style.display = 'flex';
         button.textContent = 'Hide';
@@ -116,7 +117,7 @@ async function loadContent(button, soldDate) {
 }
 
 async function loadHistory() {
-    const response = await fetch('/loadSoldHistory');
+    const response = await csrfFetch('/loadSoldHistory');
     const sales = await response.json();
     const historyContainer = document.querySelector('.sales-history-container');
     sales.forEach(sale => {
@@ -171,7 +172,7 @@ async function loadHistory() {
                 returnButton.disabled = true;
                 returnButton.textContent = 'Processing...';
                 try {
-                    const cnResponse = await fetch(`/generateCreditNote/${saleId}`,
+                    const cnResponse = await csrfFetch(`/generateCreditNote/${saleId}`,
                         {method: 'POST'});
                     const cnData = await cnResponse.json();
                     if (cnData.status !== 'success') {
@@ -180,7 +181,7 @@ async function loadHistory() {
                         returnButton.textContent = 'Return';
                         return;
                     }
-                    const returnResponse = await fetch(`/orderReturn/${saleId}`,{
+                    const returnResponse = await csrfFetch(`/orderReturn/${saleId}`,{
                         method: 'POST'});
                     const returnData = await returnResponse.json();
                     if (returnData.status !== 'success') {

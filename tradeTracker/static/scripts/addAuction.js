@@ -1,5 +1,6 @@
 import {updateInventoryValueAndTotalProfit, renderAlert, createNewCard} from "./utils/renderUtil.js";
 import {CardStruct} from './utils/classes.js';
+import { csrfFetch } from "./utils/sanitizers.js";
 
 const ALLOWED_PAYMENT_TYPES = new Set([
     'Hotovosť',
@@ -115,7 +116,7 @@ saveButton.addEventListener('click', () =>{
 
     if (cardsArr.length !== 1){
         const jsonbody = JSON.stringify(cardsArr);
-        fetch('/add', {
+        csrfFetch('/add', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

@@ -1,4 +1,4 @@
-import { sanitizeAttrValue, sanitizeClassToken, sanitizePlainText } from "./sanitizers.js";
+import { sanitizeAttrValue, sanitizeClassToken, sanitizePlainText, csrfFetch } from "./sanitizers.js";
 
 export function renderField(value, inputType, classList, placeholder, datafield) {
     const safeInputType = sanitizeAttrValue(inputType || 'text');
@@ -76,7 +76,9 @@ export function replaceWithPElement(dataset, value, element) {
 
 export async function getInventoryValue() {
     try {
-        const response = await fetch('/inventoryValue');
+        const response = await csrfFetch('/inventoryValue', {
+            method: 'GET',
+        });
         const data = await response.json();
         return data.value;
     } catch (e) {

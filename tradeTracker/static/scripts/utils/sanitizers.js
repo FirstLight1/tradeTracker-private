@@ -1,3 +1,14 @@
+const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute("content");
+
+export function csrfFetch(url, options = {}) {
+    const headers = new Headers(options.headers || {});
+    headers.set('X-CSRFToken', csrfToken);
+    return fetch(url, {
+        ...options,
+        headers,
+    });
+}
+
 export function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
