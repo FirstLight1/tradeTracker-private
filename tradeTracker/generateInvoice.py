@@ -94,7 +94,6 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
     invoice.note = "Uplatnený osobitný režim zdaňovania podľa §66 zákona o DPH – daň z pridanej hodnoty je zahrnutá v marži.\nPredmet plnenia je použitý zberateľský tovar – individuálne ocenené kusy.\nReklamácia je možná výlučne pri preukázateľnej neautenticite alebo nesúlade s deklarovaným stavom.\nKupujúci nemá nárok na vrátenie tovaru bez uvedenia dôvodu.\nÚprava zdaňovania prirážky - použitý tovar (§ 74 ods. 1 písm. n) zákona o DPH)"
     
     # Format payment methods for display
-    print(payment_methods)
     if payment_methods and len(payment_methods) > 0:
         result = {}
         for payment in payment_methods:
@@ -118,7 +117,7 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
     else:
         invoice.payback = invoice_date  # Default to today if not provided
     # 4. Add Items
-    if len(items) > 0 and items is not None:
+    if items:
         for item in items:
             mv = item.get("marketValue")
             if mv is None or str(mv) == "":

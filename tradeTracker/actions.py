@@ -1814,7 +1814,7 @@ def invoice(kind):
         )
         # Validate inventory before processing
         db = get_db()
-
+        
         if kind == 'invoice': 
 
             try:
