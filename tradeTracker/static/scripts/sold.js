@@ -1,4 +1,4 @@
-import { renderField, renderAlert, scrollOnLoad } from "./utils/renderUtil.js";
+import { renderField, renderAlert, scrollOnLoad, downloadFile } from "./utils/renderUtil.js";
 import { sanitizeNumericId, sanitizeClassToken, csrfFetch } from "./utils/sanitizers.js";
 
 const BULK_TYPE_BUY_PRICES = {
@@ -160,15 +160,24 @@ async function loadHistory() {
                 returnButton.disabled = true;
                 returnButton.textContent = 'Processing...';
                 try {
+                    
+                    console.log('here0');
                     const cnResponse = await csrfFetch(`/generateCreditNote/${saleId}`,
                         {method: 'POST'});
-                    const cnData = await cnResponse.json();
-                    if (cnData.status !== 'success') {
-                        renderAlert('Error generating credit note: ' + cnData.message, 'error');
+
+                    const contentType = cnResponse.headers.get('content-type') || '';
+                    if (!cnResponse.ok || contentType.includes('application/json')) {
+                        const err = await response.json();
+                        renderAlert('Error: ' + (err.message || 'Unknown error'), 'error');
                         returnButton.disabled = false;
                         returnButton.textContent = 'Return';
                         return;
                     }
+                        try{
+                            downloadFile(cnResponse)
+                        } catch (e){
+                            renderAlert('Error: ' + e, 'error');
+                        }
                     const returnResponse = await csrfFetch(`/orderReturn/${saleId}`,{
                         method: 'POST'});
                     const returnData = await returnResponse.json();
@@ -178,9 +187,11 @@ async function loadHistory() {
                         returnButton.textContent = 'Return';
                         return;
                     }
-                    renderAlert(`${cnData.pdf_path}`, 'message');
+
+
                     const saleDiv = returnButton.closest(`.sold-tab`);
                     saleDiv.remove(); 
+                    
                 } catch (e) {
                     renderAlert('Error processing return: ' + e, 'error');
                     returnButton.disabled = false;

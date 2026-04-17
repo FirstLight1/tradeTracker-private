@@ -179,9 +179,15 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
         output_path = os.path.join(invoices_dir, output_filename)
     
     pdf.gen(output_path, generate_qr_code=True)
+    with open(output_path, "rb") as f:
+         pdf_bytes = f.read()
 
     print(f"Successfully generated: {output_path}")
-    return output_path, invoice_num
+    return {
+            "path": output_path,
+            "filename": os.path.basename(output_filename),
+            "bytes": pdf_bytes,
+        },invoice_num
 
 def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, ex=None, payment_methods=None, shipping=None, original_invoice_num=None):
     if getattr(sys, 'frozen', False):
@@ -191,6 +197,8 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
         logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
 
     cn_num = '1'
+    orig_inv = str(original_invoice_num).strip() if original_invoice_num else "UNKNOWN"
+    orig_inv_safe = orig_inv.replace("/", "-").replace("\\", "-").replace(" ", "")
 
     invoice_date = date.today()
 
@@ -223,7 +231,7 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
     )
 
     invoice = CreditNote(client, provider, Creator("Dominik Forró"))
-    invoice.number = f"CN{cn_num}"
+    invoice.number = f"CN{cn_num} k faktúre č.:{orig_inv_safe}"
     invoice.variable_symbol = f"CN{cn_num}"
     invoice.currency = u'€'
     invoice.currency_locale = 'en_US.UTF-8'
@@ -305,20 +313,23 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
     if getattr(sys, 'frozen', False):
         app_data_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker', 'Invoices')
         os.makedirs(app_data_dir, exist_ok=True)
-        output_filename = f"Dobropis_{cn_num}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
+        output_filename = f"Dobropis_{cn_num}_INV{orig_inv_safe}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
         output_path = os.path.join(app_data_dir, output_filename)
     else:
         invoices_dir = os.path.join(current_app.instance_path, 'invoices')
         os.makedirs(invoices_dir, exist_ok=True)
-        output_filename = f"Dobropis_{cn_num}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
+        output_filename = f"Dobropis_{cn_num}_INV{orig_inv_safe}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
         output_path = os.path.join(invoices_dir, output_filename)
 
-    pdf.gen(output_path, generate_qr_code=False)
-    print(f"Successfully generated credit note: {output_path}")
+    print(output_filename) 
+    pdf.gen(output_path, generate_qr_code=True)
+    with open(output_path, "rb") as f:
+         pdf_bytes = f.read()
 
-    
-    return output_path, f"CN{cn_num}"
+    print(f"Successfully generated: {output_path}")
+    return {
+            "path": output_path,
+            "filename": output_filename,
+            "bytes": pdf_bytes,
+        },cn_num
 
-
-if __name__ == "__main__":
-    generate_invoice()

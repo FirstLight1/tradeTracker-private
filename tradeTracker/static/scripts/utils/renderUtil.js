@@ -136,3 +136,18 @@ window.handleCardInput = function (input){
         container.appendChild(newCard)
     }
 }
+
+export async function downloadFile(response, fallbackName = 'invoice.pdf'){
+    const disposition = response.headers.get('Content-Disposition');
+    const filename = disposition?.match(/filename\*?=["']?(?:UTF-\d+'')?([^"';\n]+)/i)?.[1]
+    ?? fallbackName;
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+
+    const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+    a.click();
+
+    // Revoke after a tick so the browser has time to start the download
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+}

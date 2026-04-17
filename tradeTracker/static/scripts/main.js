@@ -1,4 +1,4 @@
-import { renderField, renderAlert, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign } from "./utils/renderUtil.js";
+import { renderField, renderAlert, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign, downloadFile } from "./utils/renderUtil.js";
 import { CardStruct, queue, CartLine } from "./utils/classes.js";
 import { escapeHtml, sanitizePlainText, sanitizeAttrValue, sanitizeNumericId, sanitizeClassToken, csrfFetch } from "./utils/sanitizers.js";
 
@@ -298,15 +298,18 @@ function soldReportBtn() {
 
 async function generateSoldReport(month, year, div) {
     const response = await csrfFetch(`/generateSoldReport?month=${month}&year=${year}`);
-    const data = await response.json();
-    if (data.status === 'success') {
-        console.log('Sold report generated successfully');
+    const contentType = response.headers.get('content-type') || '';
+
+    if (!response.ok || contentType.includes('application/json')) {
+        const err = await response.json(); 
+        renderAlert(`Error generating sold report: ${err}`, 'error');
+        return;
+    }
+    try{
+        downloadFile(response)
         div.remove();
-        renderAlert(`Sold report:\n${data.pdf_path}\n Buy report:\n${data.xls_path}`, 'message');
-        // Handle successful report generation (e.g., display a success message)
-    } else {
-        // Handle errors (e.g., display an error message)
-        renderAlert(`Error generating sold report: ${data.message}`, 'error');
+    }catch (e){
+        renderAlert('Error: ' + e, 'error'); 
     }
 }
 
@@ -925,21 +928,22 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind){
                 },
                 body: JSON.stringify(cartContent),
             });
-        const data = await response.json();
-        if (data.status === 'success') {
-            renderAlert(data.pdf_path, 'message');
+
+        const contentType = response.headers.get('content-type') || '';
+        if (!response.ok || contentType.includes('application/json')) {
+            const err = await response.json();
+            renderAlert('Error: ' + (err.message || 'Unknown error'), 'error');
+            return false;
+        }
+        try{
+            downloadFile(response)
             return true;
-        } else if (data.status === 'error') {
-            // Display error message for insufficient inventory
-            renderAlert('Error: ' + data.message, 'error');
-            return false;
-        } else {
-            renderAlert('Something went wrong generating the invoice', 'error');
-            return false;
+        }catch (e){
+            renderAlert('Error: ' + e, 'error'); 
         }
     }
 }
-
+ 
 function shoppingCart() {
     const contentDiv = document.querySelector(".cart-content");
     const bulkCartDiv = document.querySelector(".bulk-cart-content");

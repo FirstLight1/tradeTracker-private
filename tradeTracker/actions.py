@@ -1,13 +1,15 @@
 import base64
 from decimal import Decimal
 import sys
-from flask import request, Blueprint, jsonify, current_app
+from flask import request, Blueprint, jsonify, current_app, send_file
 from tradeTracker.db import get_db
+from io import BytesIO
 import datetime
 from Crypto.Cipher import AES
 import os
 import fpdf
 import json
+import zipfile
 import pandas as pd
 from dotenv import load_dotenv
 import logging
@@ -65,7 +67,10 @@ def validate_and_sanitize_payments(payments):
         payment_type = payment.get('type', '').strip()
         amount = 0
         try:
-            amount = payment.get('amount').replace(',','.')
+            if isinstance(payment.get('amount'), str):
+                amount = payment.get('amount').replace(',','.')
+            else:
+                amount = payment.get('amount')
         except Exception as e:
             logger.warning("Failed to normalize amount '%s': %s", payment.get('amount'), e)
             amount = payment.get('amount')
@@ -703,7 +708,7 @@ def generate_credit_note(saleId):
 
     # Parse receiver info stored as JSON in the notes column
     try:
-        crypt = sale['notes']
+        crypt = json.loads(sale['notes'])
         nonce = base64.b64decode(crypt['nonce'])
         cipherText = base64.b64decode(crypt['ciphertext'])
         tag = base64.b64decode(crypt['tag'])
@@ -757,7 +762,7 @@ def generate_credit_note(saleId):
         payment_methods = [{'type': reciever.get('paymentMethod'), 'amount': 0}]
 
     try:
-        pdf_path, cn_num = generateInvoice.generateCreditNote(
+        pdf, cn_num = generateInvoice.generateCreditNote(
             reciever,
             items if items else None,
             sealed if sealed else None,
@@ -768,12 +773,18 @@ def generate_credit_note(saleId):
             shipping,
             original_invoice_num
         )
+        response = send_file(
+                        BytesIO(pdf['bytes']),
+                        download_name=pdf['filename'],
+                        as_attachment=True,
+                        mimetype='application/pdf'
+                        )
+
     except Exception as e:
         logger.critical('Credit note generation failed %s', e)
         return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax06'}), 500
-
     logger.info('Credit note generated succesfully | original invoice num: %s', original_invoice_num)
-    return jsonify({'status': 'success', 'pdf_path': pdf_path, 'cn_num': cn_num}), 200
+    return response 
 
 
 @bp.route('/generateSoldReport', methods=('GET',))
@@ -823,7 +834,20 @@ def generateSoldReport():
         pdf_path = generatePDF(month, year, cards_list, sealedList, bulkAndHoloList, shipping_list)
         xls_path = createBuyReport(month, year, db);
         logger.info('Sold report generated succesfully | month: %s | year: %s', month, year)
-        return jsonify({'status': 'success', 'pdf_path': pdf_path, 'xls_path':xls_path}), 200
+
+        zip_buffer = BytesIO()
+
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.write(pdf_path, arcname=os.path.basename(pdf_path))
+            zip_file.write(xls_path, arcname=os.path.basename(xls_path))
+        zip_buffer.seek(0)
+        return send_file(
+            zip_buffer,
+            as_attachment=True,
+            download_name=f"SoldReport_{month}_{year}.zip",
+            mimetype="application/zip"
+        )
+
     except Exception as e:
         logger.exception('PDF generation failed')
         print(f"Error generating PDF: {e}")
@@ -1849,9 +1873,17 @@ def invoice(kind):
 
             try:
                 saleResult = SaleService(db,InvoiceReceiptService()).process_sale(saleInput)
+                receipt = saleResult.receipt.raw
+                response = send_file(
+                        BytesIO(receipt['bytes']),
+                        download_name=receipt['filename'],
+                        as_attachment=True,
+                        mimetype='application/pdf'
+                        )
                 db.commit()
                 logger.info('Invoice created succesfully | %s ', saleResult.sale_id)
-                return jsonify({'status': 'success', 'pdf_path': saleResult.receipt.file_path}), 200
+                return response 
+                
 
             except Exception as e:
                 db.rollback()
@@ -1862,9 +1894,16 @@ def invoice(kind):
 
             try:
                 saleResult = SaleService(db, EKasaReceiptService()).process_sale(saleInput)
+                receipt = saleResult.receipt.raw
+                response = send_file(
+                        BytesIO(receipt['bytes']),
+                        download_name=receipt['filename'],
+                        as_attachment=True,
+                        mimetype='application/pdf'
+                        )
                 db.commit()
-                logger.info('Sale created succesfully | %s ', saleResult.sale_id)
-                return jsonify({'status': 'success', 'pdf_path': 'Sale addded succesfully'}), 200
+                logger.info('Invoice created succesfully | %s ', saleResult.sale_id)
+                return response 
 
             except Exception as e:
                 db.rollback()
