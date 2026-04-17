@@ -3,6 +3,7 @@ import requests
 import jwt
 import json
 import os
+import functools
 
 
 # The Application Audience (AUD) tag for your application
@@ -29,10 +30,13 @@ def verify_token(f):
     """
     Decorator that wraps a Flask API call to verify the CF Access JWT
     """
-    def wrapper():
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
         # Check for the POLICY_AUD environment variable
         if not POLICY_AUD:
           return "missing required audience", 403
+        if os.getenv("FLASK_ENV") == 'development':
+            return f(*args, **kwargs)
 
         token = ''
         if 'CF_Authorization' in request.cookies:
@@ -54,6 +58,6 @@ def verify_token(f):
         if not valid_token:
             return "invalid token", 403
 
-        return f()
+        return f(*args, **kwargs)
     return wrapper
 

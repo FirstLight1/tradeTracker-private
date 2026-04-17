@@ -13,7 +13,7 @@ from .logging_config import configure_logging
 from . import actions
 
 limiter = Limiter(key_func=get_remote_address)
-crsf = CRSFProtect()
+crsf = CSRFProtect()
 
 def resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller"""
@@ -44,7 +44,19 @@ def create_app(test_config=None):
          allow_headers=["Content-Type", "X-CSRF-Token"],
          methods=["GET", "POST", "PATCH", "DELETE"])
 
-    Talisman(app)
+    csp = {
+        "default-src": ["'self'"],
+        "script-src": ["'self'"],
+        "style-src": ["'self'"],
+        "img-src": ["'self'", "data:"],
+        "font-src": ["'self'"],
+        "connect-src": ["'self'"],
+        "object-src": ["'none'"],
+        "base-uri": ["'self'"],
+        "form-action": ["'self'"],
+        "frame-ancestors": ["'none'"],
+    }
+    Talisman(app, content_security_policy=csp)
 
     app.config.update(
         SESSION_COOKIE_SECURE=True,

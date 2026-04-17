@@ -438,6 +438,7 @@ input[type="text"]:focus, select:focus, textarea:focus {
 
 .import-sold-csv{
   width: 120px;
+  opacity: 0;
   cursor: pointer;
 }
 

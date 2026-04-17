@@ -7,27 +7,15 @@ const BULK_TYPE_BUY_PRICES = {
     ex: 0.15
 };
 
-function sanitizeClassToken(value) {
-    return DOMPurify.sanitize(String(value ?? ''), { ALLOWED_TAGS: [], ALLOWED_ATTR: [] })
-        .toLowerCase()
-        .replace(/\s+/g, '_')
-        .replace(/[^a-z0-9_-]/g, '');
-}
-
-function sanitizeNumericId(value) {
-    const parsed = Number.parseInt(String(value), 10);
-    return Number.isFinite(parsed) && parsed >= 0 ? String(parsed) : '';
-}
-
 async function loadContent(button, soldDate) {
     const formattedDate = `${soldDate.getDate().toString().padStart(2, '0')}.${(soldDate.getMonth() + 1).toString().padStart(2, '0')}.${soldDate.getFullYear()}`;
     const saleId = button.getAttribute('data-id');
     const saleEntry = button.closest('.auction-tab');
     const cardsContainer = saleEntry.querySelector('.cards-container');
-    if (cardsContainer.childElementCount === 0 || cardsContainer.style.display === 'none') {
+    if (cardsContainer.childElementCount === 0 || cardsContainer.hidden) {
         const response = await csrfFetch('/loadSoldCards/' + saleId);
         const soldItems = await response.json();
-        cardsContainer.style.display = 'flex';
+        cardsContainer.hidden = false;
         button.textContent = 'Hide';
 
         if (soldItems.length === 0) {
@@ -111,7 +99,7 @@ async function loadContent(button, soldDate) {
             });
         }
     } else {
-        cardsContainer.style.display = 'none';
+        cardsContainer.hidden = true;
         button.textContent = 'View';
     }
 }
@@ -146,7 +134,7 @@ async function loadHistory() {
             <button class="return" data-id="${safeSaleId}" >Return</button>
             ${sale.auction_id === null ?
                 `<p></p>`
-                : `<span class='auction-link-hint'><a href='/#${safeAuctionId}'><img class='link-img' src="https://upload.wikimedia.org/wikipedia/en/3/3d/480px-Gawr_Gura_-_Portrait_01.png" alt="Show auction"></a></span>`
+                : `<span class='auction-link-hint'><a href='/#${safeAuctionId}'><img class='link-img' src="/static/images/logo.png" alt="Show auction"></a></span>`
             } 
             <div class="cards-container">
             <!-- Cards will be loaded here -->

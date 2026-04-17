@@ -594,20 +594,26 @@ def loadSoldHistory():
         'LEFT JOIN barter b ON b.sale_id = s.id '
         'ORDER BY sale_date DESC'
     ).fetchall()
-    
+    result = []
+
     for sale in sales:
         sale = dict(sale) 
-        crypt = sale['note']
-        nonce = base64.b64decode(crypt["nonce"])
-        ciphertext = base64.b64decode(crypt["ciphertext"])
-        tag = base64.b64decode(crypt["tag"])
-        key = base64.b64decode(os.environ['KEY'])
-        cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
-        decrypted_bytes = cipher.decrypt_and_verify(ciphertext, tag)
-        # Convert back to JSON
-        decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
-        sale['note'] = decrypted_data
-    return jsonify([dict(sale) for sale in sales])
+        try: 
+            crypt = json.loads(sale['notes'])
+
+            nonce = base64.b64decode(crypt["nonce"])
+            ciphertext = base64.b64decode(crypt["ciphertext"])
+            tag = base64.b64decode(crypt["tag"])
+            key = base64.b64decode(os.environ['KEY'])
+            cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
+
+            decrypted_bytes = cipher.decrypt_and_verify(ciphertext, tag)
+            data = decrypted_bytes.decode("utf-8")
+            sale['notes'] = data
+            result.append(sale)
+        except Exception as e:
+            result.append(sale)
+    return jsonify(result)
     
 @bp.route('/loadSoldCards/<int:sale_id>', methods=('GET',))
 @verify_token

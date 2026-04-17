@@ -42,7 +42,6 @@ export function renderAlert(text, type) {
 export function scrollOnLoad() {
     window.addEventListener('load', () => {
         const hash = window.location.hash;
-        console.log(hash);
         const id = hash.startsWith('#') ? hash.slice(1) : hash;
         if (id) {
             const interval = setInterval(() => {
@@ -119,9 +118,9 @@ export function createNewCard(newCard){
         });
 
         const newCardName = newCard.querySelector('.marketValue');
-        newCardName.oninput = function () {
-        handleCardInput(this);
-        }
+        newCardName.addEventListener('input', function () {
+        window.handleCardInput(this);
+        });
         return newCard;
 }
 

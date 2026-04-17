@@ -312,7 +312,6 @@ async function generateSoldReport(month, year, div) {
 
 function importCSV() {
     const input = document.querySelector('.import-sold-csv');
-    input.style.opacity = 0;
     input.addEventListener('change', async (event) => {
         const file = event.target.files;
         if (file && file.length === 1) {
@@ -640,7 +639,7 @@ function loadCartContentFromSession() {
             div.innerHTML = `
                 <p>Bulk</p>
                 <p class='bulk-quantity'>q: ${DOMPurify.sanitize(cartData.bulk.quantity)}</p>
-                <input type='text' class='bulk-sell-price' style='width:70px' value='${DOMPurify.sanitize(cartData.bulk.price)}'>
+                <input type='text' class='bulk-sell-price' value='${DOMPurify.sanitize(cartData.bulk.price)}'>
                 <button class='remove-from-cart'>Remove</button>
             `;
             bulkCartDiv.appendChild(div);
@@ -663,7 +662,7 @@ function loadCartContentFromSession() {
             div.innerHTML = `
                 <p>Holo</p>
                 <p class='holo-quantity'>q: ${DOMPurify.sanitize(cartData.holo.quantity)}</p>
-                <input type='text' class='holo-sell-price' style='width:70px' value='${DOMPurify.sanitize(cartData.holo.price)}'>
+                <input type='text' class='holo-sell-price' value='${DOMPurify.sanitize(cartData.holo.price)}'>
                 <button class='remove-from-cart'>Remove</button>
             `;
             holoCartDiv.appendChild(div);
@@ -686,7 +685,7 @@ function loadCartContentFromSession() {
             div.innerHTML = `
                 <p>Ex</p>
                 <p class='ex-quantity'>q: ${DOMPurify.sanitize(cartData.ex.quantity)}</p>
-                <input type='text' class='ex-sell-price' style='width:70px' value='${DOMPurify.sanitize(cartData.ex.price)}'>
+                <input type='text' class='ex-sell-price' value='${DOMPurify.sanitize(cartData.ex.price)}'>
                 <button class='remove-from-cart'>Remove</button>
             `;
             exCartDiv.appendChild(div);
@@ -1372,7 +1371,7 @@ function addBulkToCart() {
                 div.innerHTML = `
                     <p>Bulk</p>
                     <p class='bulk-quantity'>q: ${DOMPurify.sanitize(value)}</p>
-                    <input type='text' class='bulk-sell-price' style='width:70px'>
+                    <input type='text' class='bulk-sell-price'>
                     <button class='remove-from-cart'>Remove</button>`
 
                 contentDiv.appendChild(div);
@@ -1424,7 +1423,7 @@ function addHoloToCart() {
                 div.innerHTML = `
                     <p>Holo</p>
                     <p class='holo-quantity'>q: ${DOMPurify.sanitize(value)}</p>
-                    <input type='text' class='holo-sell-price' style='width:70px'>
+                    <input type='text' class='holo-sell-price'>
                     <button class='remove-from-cart'>Remove</button>`
                 contentDiv.appendChild(div);
                 const sellPriceInput = contentDiv.querySelector('.holo-sell-price')
@@ -1476,7 +1475,7 @@ function addExToCart() {
                 div.innerHTML = `
                     <p>Ex</p>
                     <p class='ex-quantity'>q: ${DOMPurify.sanitize(value)}</p>
-                    <input type='text' class='ex-sell-price' style='width:70px'>
+                    <input type='text' class='ex-sell-price'>
                     <button class='remove-from-cart'>Remove</button>`;
                 contentDiv.appendChild(div);
                 const sellPriceInput = contentDiv.querySelector('.ex-sell-price');
@@ -1861,7 +1860,7 @@ function initializeBulkHolo() {
 
 
 async function loadAuctionContent(button) {
-    const auctionId = button.getAttribute('data-id');
+    const auctionId = Number(button.getAttribute('data-id'));
     //TODO - make this into a single endpoint
     const cardsUrl = '/loadCards/' + auctionId;
     const bulkUrl = '/loadBulk/' + auctionId;
@@ -1869,8 +1868,8 @@ async function loadAuctionContent(button) {
     const auctionDiv = button.closest('.auction-tab');
     const cardsContainer = auctionDiv.querySelector('.cards-container');
     try {
-        if (cardsContainer.childElementCount === 0 || cardsContainer.style.display === 'none') {
-            cardsContainer.style.display = 'flex';
+        if (cardsContainer.childElementCount === 0 || cardsContainer.hidden) {
+            cardsContainer.hidden = false;
             button.textContent = 'Hide';
 
             // Only fetch if we don't have content already
@@ -2188,7 +2187,7 @@ async function loadAuctionContent(button) {
                 }
             }
         } else {
-            cardsContainer.style.display = 'none';
+            cardsContainer.hidden = true;
             button.textContent = 'View';
         }
     } catch (error) {
@@ -2451,8 +2450,8 @@ async function initializeSealed() {
 async function loadSealed(viewButton) {
     const sealedTab = document.querySelector('.sealed-tab');
     const contentDiv = document.querySelector('.sealed-tab-content')
-    if (sealedTab.style.display === 'none' || sealedTab.childElementCount === 0) {
-        sealedTab.style.display = 'flex';
+    if (sealedTab.hidden || sealedTab.childElementCount === 0) {
+        sealedTab.hidden = false;
         viewButton.innerHTML = 'Hide';
         console.log(sealedTab.childElementCount);
 
@@ -2536,7 +2535,7 @@ async function loadSealed(viewButton) {
                     contentDiv.append(div);
 
                     const saveButton = buttonsContainer.querySelector('.save-sealed-btn');
-                    saveButton.style.display = 'block';
+                    saveButton.hidden = false;
 
                 });
 
@@ -2555,7 +2554,7 @@ async function loadSealed(viewButton) {
                             inputValues.push(row);
                         }
                     })
-                    saveButton.style.display = 'none';
+                    saveButton.hidden = true;
                     if (inputValues.length > 0) {
                         const response = await csrfFetch('/addSealed', {
                             method: 'POST',
@@ -2582,7 +2581,7 @@ async function loadSealed(viewButton) {
             }
         }
     } else {
-        sealedTab.style.display = 'none'
+        sealedTab.hidden = true;
         viewButton.innerHTML = 'View';
     }
 }

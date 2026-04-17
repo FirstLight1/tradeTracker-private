@@ -1,5 +1,5 @@
 from flask import render_template, Blueprint
-from tradeTracker.services import verify_token
+from tradeTracker.services.cfAuth import verify_token
 
 
 bp = Blueprint('renderers', __name__)

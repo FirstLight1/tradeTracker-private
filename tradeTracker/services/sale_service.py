@@ -51,7 +51,6 @@ class SaleService:
         recieverInfoJson = json.dumps(sale_input.reciever).encode("utf-8")
         key = base64.b64decode(os.environ['KEY'])
         cipher = AES.new(key,AES.MODE_GCM)
-        #TODO remove placeholder key
         recieverInfoCrypt, tag = cipher.encrypt_and_digest(recieverInfoJson) 
         nonce = cipher.nonce
 
@@ -61,6 +60,7 @@ class SaleService:
             "tag": base64.b64encode(tag).decode()
 
         }
+        result = json.dumps(result)
 
         if shippingPrice == None:
             shippingPrice = 0

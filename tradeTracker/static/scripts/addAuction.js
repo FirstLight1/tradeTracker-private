@@ -43,6 +43,13 @@ const cardsArr = [];
 
 let auctionValueCalculated = 0;
 const saveButton = document.querySelector('.save-btn')
+const initialMarketValueInput = document.querySelector('.card .marketValue');
+
+if (initialMarketValueInput) {
+    initialMarketValueInput.addEventListener('input', function () {
+        window.handleCardInput(this);
+    });
+}
 //add typechecks
 saveButton.addEventListener('click', () =>{
     const auctionName = DOMPurify.sanitize(document.querySelector('.auction-name').value);

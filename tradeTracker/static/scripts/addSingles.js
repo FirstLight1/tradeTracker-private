@@ -4,6 +4,13 @@ import { csrfFetch } from "./utils/sanitizers.js";
 
 const cardsArr = [];
 const saveButton = document.querySelector('.save-btn')
+const initialMarketValueInput = document.querySelector('.card .marketValue');
+
+if (initialMarketValueInput) {
+    initialMarketValueInput.addEventListener('input', function () {
+        window.handleCardInput(this);
+    });
+}
 
 saveButton.addEventListener('click', () => {
     let auction = {};

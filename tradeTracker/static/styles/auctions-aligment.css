@@ -309,6 +309,12 @@ p{
     pointer-events: auto;
 }
 
+.bulk-sell-price,
+.holo-sell-price,
+.ex-sell-price {
+    width: 70px;
+}
+
 .button-container{
     padding-top: 17px;
 }
