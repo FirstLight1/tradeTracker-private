@@ -20,6 +20,7 @@ def abort_secret_key():
 def create_app(test_config=None):
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
+    app.config['RATELIMIT_STORAGE_URI'] = "redis://localhost:6379/0"
     limiter.init_app(app)
     crsf.init_app(app)
 
