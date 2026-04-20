@@ -2,7 +2,6 @@
 from decimal import Decimal
 from itertools import count
 import os
-import sys
 from datetime import date, datetime
 
 os.environ["INVOICE_LANG"] = "sk"
@@ -31,14 +30,7 @@ def add_bulk_invoice_item(invoice, item, item_type):
     ))
 
 def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=None, ex=None, payment_methods=None, shipping=None):
-    # Read invoice number from env.txt
-    if getattr(sys, 'frozen', False):
-        # Get the base path where PyInstaller unpacks files
-        base_path = sys._MEIPASS
-        logo_path = os.path.join(base_path, 'tradeTracker', 'static', 'images', 'logo.png')
-    else:
-        # Running in development
-        logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
+    logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
 
     # Read or create env.txt with invoice_num
     try:
@@ -94,7 +86,6 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
     invoice.note = "Uplatnený osobitný režim zdaňovania podľa §66 zákona o DPH – daň z pridanej hodnoty je zahrnutá v marži.\nPredmet plnenia je použitý zberateľský tovar – individuálne ocenené kusy.\nReklamácia je možná výlučne pri preukázateľnej neautenticite alebo nesúlade s deklarovaným stavom.\nKupujúci nemá nárok na vrátenie tovaru bez uvedenia dôvodu.\nÚprava zdaňovania prirážky - použitý tovar (§ 74 ods. 1 písm. n) zákona o DPH)"
     
     # Format payment methods for display
-    print(payment_methods)
     if payment_methods and len(payment_methods) > 0:
         result = {}
         for payment in payment_methods:
@@ -118,7 +109,7 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
     else:
         invoice.payback = invoice_date  # Default to today if not provided
     # 4. Add Items
-    if len(items) > 0 and items is not None:
+    if items:
         for item in items:
             mv = item.get("marketValue")
             if mv is None or str(mv) == "":
@@ -166,9 +157,9 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
     pdf = SimpleInvoice(invoice)
     
     # Determine the save path based on environment
-    if getattr(sys, 'frozen', False):
-        # Running as compiled exe
-        app_data_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker', 'Invoices')
+    if os.getenv("FLASK_ENV") == "prod":
+        data_dir = os.getenv("DATA_DIR", current_app.instance_path)
+        app_data_dir = os.path.join(data_dir, 'Invoices')
         os.makedirs(app_data_dir, exist_ok=True)
         output_filename = f"{invoice_num}_Invoice_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
         output_path = os.path.join(app_data_dir, output_filename)
@@ -180,18 +171,22 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
         output_path = os.path.join(invoices_dir, output_filename)
     
     pdf.gen(output_path, generate_qr_code=True)
+    with open(output_path, "rb") as f:
+         pdf_bytes = f.read()
 
     print(f"Successfully generated: {output_path}")
-    return output_path, invoice_num
+    return {
+            "path": output_path,
+            "filename": os.path.basename(output_filename),
+            "bytes": pdf_bytes,
+        },invoice_num
 
 def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, ex=None, payment_methods=None, shipping=None, original_invoice_num=None):
-    if getattr(sys, 'frozen', False):
-        base_path = sys._MEIPASS
-        logo_path = os.path.join(base_path, 'tradeTracker', 'static', 'images', 'logo.png')
-    else:
-        logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
+    logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
 
     cn_num = '1'
+    orig_inv = str(original_invoice_num).strip() if original_invoice_num else "UNKNOWN"
+    orig_inv_safe = orig_inv.replace("/", "-").replace("\\", "-").replace(" ", "")
 
     invoice_date = date.today()
 
@@ -224,7 +219,7 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
     )
 
     invoice = CreditNote(client, provider, Creator("Dominik Forró"))
-    invoice.number = f"CN{cn_num}"
+    invoice.number = f"CN{cn_num} k faktúre č.:{orig_inv_safe}"
     invoice.variable_symbol = f"CN{cn_num}"
     invoice.currency = u'€'
     invoice.currency_locale = 'en_US.UTF-8'
@@ -303,23 +298,27 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
 
     pdf = CreditNoteInvoice(invoice)
 
-    if getattr(sys, 'frozen', False):
-        app_data_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker', 'Invoices')
+    if os.getenv("FLASK_ENV") == "prod":
+        data_dir = os.getenv("DATA_DIR", current_app.instance_path)
+        app_data_dir = os.path.join(data_dir, 'Invoices')
         os.makedirs(app_data_dir, exist_ok=True)
-        output_filename = f"Dobropis_{cn_num}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
+        output_filename = f"Dobropis_{cn_num}_INV{orig_inv_safe}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
         output_path = os.path.join(app_data_dir, output_filename)
     else:
         invoices_dir = os.path.join(current_app.instance_path, 'invoices')
         os.makedirs(invoices_dir, exist_ok=True)
-        output_filename = f"Dobropis_{cn_num}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
+        output_filename = f"Dobropis_{cn_num}_INV{orig_inv_safe}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
         output_path = os.path.join(invoices_dir, output_filename)
 
-    pdf.gen(output_path, generate_qr_code=False)
-    print(f"Successfully generated credit note: {output_path}")
+    print(output_filename) 
+    pdf.gen(output_path, generate_qr_code=True)
+    with open(output_path, "rb") as f:
+         pdf_bytes = f.read()
 
-    
-    return output_path, f"CN{cn_num}"
+    print(f"Successfully generated: {output_path}")
+    return {
+            "path": output_path,
+            "filename": output_filename,
+            "bytes": pdf_bytes,
+        },cn_num
 
-
-if __name__ == "__main__":
-    generate_invoice()

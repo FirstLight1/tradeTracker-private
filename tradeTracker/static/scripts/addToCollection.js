@@ -15,9 +15,9 @@ function createNewCard(newCard){
         });
 
         const newCardName = newCard.querySelector('.marketValue');
-        newCardName.oninput = function () {
-        handleCardInput(this);
-        }
+        newCardName.addEventListener('input', function () {
+        window.handleCardInput(this);
+        });
         return newCard;
 }
 
@@ -45,6 +45,13 @@ class struct{
 
 const saveButton = document.querySelector('.save-btn');
 let cardsArr = []
+const initialCardNameInput = document.querySelector('.card input[name="cardName"]');
+
+if (initialCardNameInput) {
+    initialCardNameInput.addEventListener('input', function () {
+        window.handleCardInput(this);
+    });
+}
 
 saveButton.addEventListener('click', () => {
     const cards = document.querySelectorAll('.card');

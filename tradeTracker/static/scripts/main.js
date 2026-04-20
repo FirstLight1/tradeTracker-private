@@ -1,6 +1,6 @@
-import { renderField, renderAlert, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign } from "./utils/renderUtil.js";
+import { renderField, renderAlert, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign, downloadFile } from "./utils/renderUtil.js";
 import { CardStruct, queue, CartLine } from "./utils/classes.js";
-import { escapeHtml, sanitizePlainText, sanitizeAttrValue, sanitizeNumericId, sanitizeClassToken } from "./utils/sanitizers.js";
+import { escapeHtml, sanitizePlainText, sanitizeAttrValue, sanitizeNumericId, sanitizeClassToken, csrfFetch } from "./utils/sanitizers.js";
 
 
 function paymentTypeSelect(className, defaultValue = '') {
@@ -102,7 +102,7 @@ function formatPaymentDisplay(payments) {
 
 async function updatePaymentMethod(auctionId, payments) {
     try {
-        const response = await fetch(`/updatePaymentMethod/${auctionId}`, {
+        const response = await csrfFetch(`/updatePaymentMethod/${auctionId}`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json'
@@ -157,7 +157,7 @@ async function patchValue(id, value, dataset) {
 
     }
     try {
-        const response = await fetch(`/update/${id}`, {
+        const response = await csrfFetch(`/update/${id}`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json'
@@ -177,7 +177,7 @@ async function patchValue(id, value, dataset) {
 }
 
 function deleteAuction(id, div) {
-    fetch(`/deleteAuction/${id}`, {
+    csrfFetch(`/deleteAuction/${id}`, {
         method: 'DELETE',
     })
         .then(response => response.json())
@@ -195,7 +195,7 @@ function deleteAuction(id, div) {
 
 async function removeCard(id, div) {
     try {
-        const response = await fetch(`/deleteCard/${id}`, {
+        const response = await csrfFetch(`/deleteCard/${id}`, {
             method: 'DELETE',
         });
         const data = await response.json();
@@ -215,7 +215,7 @@ async function removeCard(id, div) {
 
 async function removeBulkItem(bulkId, bulkDiv) {
     try {
-        const response = await fetch(`/deleteBulkItem/${bulkId}`, {
+        const response = await csrfFetch(`/deleteBulkItem/${bulkId}`, {
             method: 'DELETE',
         });
         const data = await response.json();
@@ -234,7 +234,7 @@ async function removeBulkItem(bulkId, bulkDiv) {
 
 async function updateAuction(auctionId, value, field) {
     try {
-        const response = await fetch(`/updateAuction/${auctionId}`, {
+        const response = await csrfFetch(`/updateAuction/${auctionId}`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json'
@@ -297,28 +297,30 @@ function soldReportBtn() {
 }
 
 async function generateSoldReport(month, year, div) {
-    const response = await fetch(`/generateSoldReport?month=${month}&year=${year}`);
-    const data = await response.json();
-    if (data.status === 'success') {
-        console.log('Sold report generated successfully');
+    const response = await csrfFetch(`/generateSoldReport?month=${month}&year=${year}`);
+    const contentType = response.headers.get('content-type') || '';
+
+    if (!response.ok || contentType.includes('application/json')) {
+        const err = await response.json(); 
+        renderAlert(`Error generating sold report: ${err}`, 'error');
+        return;
+    }
+    try{
+        downloadFile(response)
         div.remove();
-        renderAlert(`Sold report:\n${data.pdf_path}\n Buy report:\n${data.xls_path}`, 'message');
-        // Handle successful report generation (e.g., display a success message)
-    } else {
-        // Handle errors (e.g., display an error message)
-        renderAlert(`Error generating sold report: ${data.message}`, 'error');
+    }catch (e){
+        renderAlert('Error: ' + e, 'error'); 
     }
 }
 
 function importCSV() {
     const input = document.querySelector('.import-sold-csv');
-    input.style.opacity = 0;
     input.addEventListener('change', async (event) => {
         const file = event.target.files;
         if (file && file.length === 1) {
             const formData = new FormData();
             formData.append("csv-upload", file[0]);
-            const response = await fetch('/importSoldCSV', {
+            const response = await csrfFetch('/importSoldCSV', {
                 method: 'POST',
                 body: formData
             });
@@ -378,7 +380,7 @@ function cartValue(cartContent) {
 async function changeCardPricesBasedOnAuctionPrice(auctionTab) {
     const auctionId = auctionTab.getAttribute('data-id');
     let auctionPrice = auctionTab.querySelector('.auction-price').textContent.replace('€', '');
-    const response = await fetch(`/recalculateCardPrices/${auctionId}/${auctionPrice}`, { method: 'GET' });
+    const response = await csrfFetch(`/recalculateCardPrices/${auctionId}/${auctionPrice}`, { method: 'POST' });
     const data = await response.json();
     if (data.status == 'success') {
         window.location.reload();
@@ -640,7 +642,7 @@ function loadCartContentFromSession() {
             div.innerHTML = `
                 <p>Bulk</p>
                 <p class='bulk-quantity'>q: ${DOMPurify.sanitize(cartData.bulk.quantity)}</p>
-                <input type='text' class='bulk-sell-price' style='width:70px' value='${DOMPurify.sanitize(cartData.bulk.price)}'>
+                <input type='text' class='bulk-sell-price' value='${DOMPurify.sanitize(cartData.bulk.price)}'>
                 <button class='remove-from-cart'>Remove</button>
             `;
             bulkCartDiv.appendChild(div);
@@ -663,7 +665,7 @@ function loadCartContentFromSession() {
             div.innerHTML = `
                 <p>Holo</p>
                 <p class='holo-quantity'>q: ${DOMPurify.sanitize(cartData.holo.quantity)}</p>
-                <input type='text' class='holo-sell-price' style='width:70px' value='${DOMPurify.sanitize(cartData.holo.price)}'>
+                <input type='text' class='holo-sell-price' value='${DOMPurify.sanitize(cartData.holo.price)}'>
                 <button class='remove-from-cart'>Remove</button>
             `;
             holoCartDiv.appendChild(div);
@@ -686,7 +688,7 @@ function loadCartContentFromSession() {
             div.innerHTML = `
                 <p>Ex</p>
                 <p class='ex-quantity'>q: ${DOMPurify.sanitize(cartData.ex.quantity)}</p>
-                <input type='text' class='ex-sell-price' style='width:70px' value='${DOMPurify.sanitize(cartData.ex.price)}'>
+                <input type='text' class='ex-sell-price' value='${DOMPurify.sanitize(cartData.ex.price)}'>
                 <button class='remove-from-cart'>Remove</button>
             `;
             exCartDiv.appendChild(div);
@@ -918,7 +920,7 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind){
     }
     cartContent.recieverInfo.total = Number(cartValue(cartContent));
     if (Object.keys(cartContent).length !== 0) {
-        const response = await fetch(`/createSale/${kind}`,
+        const response = await csrfFetch(`/createSale/${kind}`,
             {
                 method: 'POST',
                 headers: {
@@ -926,21 +928,22 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind){
                 },
                 body: JSON.stringify(cartContent),
             });
-        const data = await response.json();
-        if (data.status === 'success') {
-            renderAlert(data.pdf_path, 'message');
+
+        const contentType = response.headers.get('content-type') || '';
+        if (!response.ok || contentType.includes('application/json')) {
+            const err = await response.json();
+            renderAlert('Error: ' + (err.message || 'Unknown error'), 'error');
+            return false;
+        }
+        try{
+            downloadFile(response)
             return true;
-        } else if (data.status === 'error') {
-            // Display error message for insufficient inventory
-            renderAlert('Error: ' + data.message, 'error');
-            return false;
-        } else {
-            renderAlert('Something went wrong generating the invoice', 'error');
-            return false;
+        }catch (e){
+            renderAlert('Error: ' + e, 'error'); 
         }
     }
 }
-
+ 
 function shoppingCart() {
     const contentDiv = document.querySelector(".cart-content");
     const bulkCartDiv = document.querySelector(".bulk-cart-content");
@@ -1279,7 +1282,7 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
 
     // No existing line — fetch full pool from server
     try {
-        const response = await fetch('/getCardIds', {
+        const response = await csrfFetch('/getCardIds', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1372,7 +1375,7 @@ function addBulkToCart() {
                 div.innerHTML = `
                     <p>Bulk</p>
                     <p class='bulk-quantity'>q: ${DOMPurify.sanitize(value)}</p>
-                    <input type='text' class='bulk-sell-price' style='width:70px'>
+                    <input type='text' class='bulk-sell-price'>
                     <button class='remove-from-cart'>Remove</button>`
 
                 contentDiv.appendChild(div);
@@ -1424,7 +1427,7 @@ function addHoloToCart() {
                 div.innerHTML = `
                     <p>Holo</p>
                     <p class='holo-quantity'>q: ${DOMPurify.sanitize(value)}</p>
-                    <input type='text' class='holo-sell-price' style='width:70px'>
+                    <input type='text' class='holo-sell-price'>
                     <button class='remove-from-cart'>Remove</button>`
                 contentDiv.appendChild(div);
                 const sellPriceInput = contentDiv.querySelector('.holo-sell-price')
@@ -1476,7 +1479,7 @@ function addExToCart() {
                 div.innerHTML = `
                     <p>Ex</p>
                     <p class='ex-quantity'>q: ${DOMPurify.sanitize(value)}</p>
-                    <input type='text' class='ex-sell-price' style='width:70px'>
+                    <input type='text' class='ex-sell-price'>
                     <button class='remove-from-cart'>Remove</button>`;
                 contentDiv.appendChild(div);
                 const sellPriceInput = contentDiv.querySelector('.ex-sell-price');
@@ -1508,7 +1511,7 @@ function addExToCart() {
 function startPolling() {
     setInterval(async () => {
         try {
-            const response = await fetch('/getLatest');
+            const response = await csrfFetch('/getLatest');
             const data = await response.json();
             if (data.status === 'success') {
                 const shippingInfo = data.message.shipping_info;
@@ -1652,7 +1655,7 @@ function searchBar() {
 async function search(searchPrompt) {
 
     const jsonbody = JSON.stringify({ query: searchPrompt, cartIds: [...existingIDs] });
-    const response = await fetch('/searchCard',
+    const response = await csrfFetch('/searchCard',
         {
             method: 'POST',
             headers: {
@@ -1841,7 +1844,7 @@ async function loadBulkHoloValues() {
     let bulkVal = document.querySelector('.bulk-value');
     let exVal = document.querySelector('.ex-value');
     try {
-        const response = await fetch('/bulkCounterValue');
+        const response = await csrfFetch('/bulkCounterValue');
         const data = await response.json();
         if (data.status == 'success') {
             bulkVal.textContent = data.bulk_counter;
@@ -1861,7 +1864,7 @@ function initializeBulkHolo() {
 
 
 async function loadAuctionContent(button) {
-    const auctionId = button.getAttribute('data-id');
+    const auctionId = Number(button.getAttribute('data-id'));
     //TODO - make this into a single endpoint
     const cardsUrl = '/loadCards/' + auctionId;
     const bulkUrl = '/loadBulk/' + auctionId;
@@ -1869,13 +1872,13 @@ async function loadAuctionContent(button) {
     const auctionDiv = button.closest('.auction-tab');
     const cardsContainer = auctionDiv.querySelector('.cards-container');
     try {
-        if (cardsContainer.childElementCount === 0 || cardsContainer.style.display === 'none') {
-            cardsContainer.style.display = 'flex';
+        if (cardsContainer.childElementCount === 0 || cardsContainer.hidden) {
+            cardsContainer.hidden = false;
             button.textContent = 'Hide';
 
             // Only fetch if we don't have content already
             if (cardsContainer.childElementCount === 0) {
-                const response = await fetch(cardsUrl);
+                const response = await csrfFetch(cardsUrl);
                 const cards = await response.json();
                 if (isEmpty(cards)) {
                     cardsContainer.innerHTML = '';
@@ -2057,7 +2060,7 @@ async function loadAuctionContent(button) {
 
                 // Load sealed items BEFORE bulk items
                 try {
-                    const responseSealed = await fetch(sealedUrl);
+                    const responseSealed = await csrfFetch(sealedUrl);
                     const sealedData = await responseSealed.json();
 
                     sealedData.forEach(sealedItem => {
@@ -2112,7 +2115,7 @@ async function loadAuctionContent(button) {
                             const sealedDiv = button.closest('.sealed-item');
 
                             if (button.textContent === 'Confirm') {
-                                const response = await fetch(`/deleteSealed/${sid}`, { method: 'DELETE' });
+                                const response = await csrfFetch(`/deleteSealed/${sid}`, { method: 'DELETE' });
                                 const data = await response.json();
 
                                 if (data.status === 'success') {
@@ -2141,7 +2144,7 @@ async function loadAuctionContent(button) {
 
                 // Load bulk items
                 try {
-                    const responseBulk = await fetch(bulkUrl);
+                    const responseBulk = await csrfFetch(bulkUrl);
                     const bulkData = await responseBulk.json();
                     bulkData.forEach(bulkItem => {
                         const bulkDiv = document.createElement('div');
@@ -2188,7 +2191,7 @@ async function loadAuctionContent(button) {
                 }
             }
         } else {
-            cardsContainer.style.display = 'none';
+            cardsContainer.hidden = true;
             button.textContent = 'View';
         }
     } catch (error) {
@@ -2412,7 +2415,7 @@ async function loadAuctionContent(button) {
                 }
 
                 const jsonbody = JSON.stringify(itemsToAdd);
-                const response = await fetch(`/addToExistingAuction/${auctionId}`, {
+                const response = await csrfFetch(`/addToExistingAuction/${auctionId}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -2451,15 +2454,15 @@ async function initializeSealed() {
 async function loadSealed(viewButton) {
     const sealedTab = document.querySelector('.sealed-tab');
     const contentDiv = document.querySelector('.sealed-tab-content')
-    if (sealedTab.style.display === 'none' || sealedTab.childElementCount === 0) {
-        sealedTab.style.display = 'flex';
+    if (sealedTab.hidden || sealedTab.childElementCount === 0) {
+        sealedTab.hidden = false;
         viewButton.innerHTML = 'Hide';
         console.log(sealedTab.childElementCount);
 
         // Only fetch if we don't have items already
         if (contentDiv.childElementCount === 0) {
             try {
-                const response = await fetch('/loadSealed');
+                const response = await csrfFetch('/loadSealed');
                 const data = await response.json();
                 if (data.status != 'success') {
                     renderAlert('Failed to load sealed products', 'error');
@@ -2494,7 +2497,7 @@ async function loadSealed(viewButton) {
                     removeSealed.addEventListener('click', async () => {
 
                         if (removeSealed.textContent === 'Confirm') {
-                            const response = await fetch(`/deleteSealed/${sealedData.sid}`, { method: 'DELETE' })
+                            const response = await csrfFetch(`/deleteSealed/${sealedData.sid}`, { method: 'DELETE' })
                             const data = await response.json();
 
                             if (data.status === 'success') {
@@ -2536,7 +2539,7 @@ async function loadSealed(viewButton) {
                     contentDiv.append(div);
 
                     const saveButton = buttonsContainer.querySelector('.save-sealed-btn');
-                    saveButton.style.display = 'block';
+                    saveButton.hidden = false;
 
                 });
 
@@ -2555,9 +2558,9 @@ async function loadSealed(viewButton) {
                             inputValues.push(row);
                         }
                     })
-                    saveButton.style.display = 'none';
+                    saveButton.hidden = true;
                     if (inputValues.length > 0) {
-                        const response = await fetch('/addSealed', {
+                        const response = await csrfFetch('/addSealed', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'
@@ -2582,14 +2585,14 @@ async function loadSealed(viewButton) {
             }
         }
     } else {
-        sealedTab.style.display = 'none'
+        sealedTab.hidden = true;
         viewButton.innerHTML = 'View';
     }
 }
 
 async function loadUnlinkedIds() {
     try {
-        const response = await fetch('/unlinkedBarterIds');
+        const response = await csrfFetch('/unlinkedBarterIds');
         const data = await response.json();
         if (data.status === 'success') {
             return data.data;
@@ -2616,7 +2619,7 @@ async function renderBarterSelect(select) {
 async function loadAuctions() {
     const auctionContainer = document.querySelector('.auction-container');
     try {
-        const response = await fetch('/loadAuctions');
+        const response = await csrfFetch('/loadAuctions');
         const data = await response.json();
         data.forEach(auction => {
             const safeAuctionId = sanitizeNumericId(auction.id);
@@ -2679,7 +2682,7 @@ async function loadAuctions() {
                 const selected = event.target.value;
                 if (selected === 'null') return;
                 try {
-                    const res = await fetch(`/linkAuctionToSale/${auctionId}`, {
+                    const res = await csrfFetch(`/linkAuctionToSale/${auctionId}`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'

@@ -113,12 +113,16 @@ def get_db():
         conn.row_factory = sqlite3.Row
         g.db = LoggingConnection(conn)
         g.db.execute('PRAGMA foreign_keys = ON')
+        g.db.execute('PRAGMA journal_mode = WAL')
+        g.db.execute('PRAGMA busy_timeout = 5000')   # wait up to 5s before failing
+        g.db.execute('PRAGMA synchronous = NORMAL')  # safe with WAL, faster than FULL
     return g.db
 
 def close_db(e=None):
     db = g.pop('db', None)
 
     if db is not None:
+        db.execute('PRAGMA wal_checkpoint(PASSIVE)')
         db.close()
 
 def init_db():

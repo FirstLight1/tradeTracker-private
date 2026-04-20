@@ -1,5 +1,6 @@
 import {updateInventoryValueAndTotalProfit, renderAlert, createNewCard} from "./utils/renderUtil.js";
 import {CardStruct} from './utils/classes.js';
+import { csrfFetch } from "./utils/sanitizers.js";
 
 const ALLOWED_PAYMENT_TYPES = new Set([
     'Hotovosť',
@@ -42,6 +43,13 @@ const cardsArr = [];
 
 let auctionValueCalculated = 0;
 const saveButton = document.querySelector('.save-btn')
+const initialMarketValueInput = document.querySelector('.card .marketValue');
+
+if (initialMarketValueInput) {
+    initialMarketValueInput.addEventListener('input', function () {
+        window.handleCardInput(this);
+    });
+}
 //add typechecks
 saveButton.addEventListener('click', () =>{
     const auctionName = DOMPurify.sanitize(document.querySelector('.auction-name').value);
@@ -115,7 +123,7 @@ saveButton.addEventListener('click', () =>{
 
     if (cardsArr.length !== 1){
         const jsonbody = JSON.stringify(cardsArr);
-        fetch('/add', {
+        csrfFetch('/add', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

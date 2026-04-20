@@ -10,7 +10,7 @@ class RecieptService(ABC):
 
 class InvoiceReceiptService(RecieptService):
     def issue(self, sale_input, db) -> models.ReceiptResult:
-        pdf_path, invoice_num = generateInvoice.generate_invoice(
+        pdf, invoice_num = generateInvoice.generate_invoice(
             reciever=sale_input.reciever or [],
             db=db,
             items=sale_input.cards or [],
@@ -22,7 +22,7 @@ class InvoiceReceiptService(RecieptService):
             shipping=sale_input.shipping,
         )
         return models.ReceiptResult(
-            kind="invoice", number=invoice_num, file_path=pdf_path
+            kind="invoice", number=invoice_num, raw=pdf
         )
 
 

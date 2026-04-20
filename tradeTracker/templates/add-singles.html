@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="stylesheet" href="../static/styles/addSingles.css">
     <link rel="stylesheet" href="../static/styles/header-align.css">
     <link rel="stylesheet" href="../static/styles/addSingles-style.css">
@@ -58,7 +59,7 @@
                         <option value="Poor">Poor</option>
                     </select>
                     <input type="text" name="buyPrice" autocomplete="off">
-                    <input type="text" name="marketValue" class="marketValue" oninput="handleCardInput(this)" autocomplete="off">
+                    <input type="text" name="marketValue" class="marketValue" autocomplete="off">
                     <input type="text" name="sellPrice" autocomplete="off">
                 </dir>
             </dir>
@@ -76,9 +77,10 @@
             </dir>
         </dir>
     </main>
+    <script type="module" src="../static/scripts/utils/sanitizers.js"></script>
     <script type="module" src="../static/scripts/utils/renderUtil.js"></script>
     <script type="module" src="../static/scripts/utils/classes.js"></script>
     <script type="module" src="../static/scripts/addSingles.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+    <script src="../static/vendor/purify.min.js"></script>
 </body>
 </html>

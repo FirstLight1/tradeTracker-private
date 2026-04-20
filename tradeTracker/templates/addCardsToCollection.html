@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">\
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="stylesheet" href="../static/styles/header-align.css">
     <link rel="stylesheet" href="../static/styles/collection-aling.css">
     <link rel="stylesheet" href="../static/styles/collection-style.css">
@@ -40,7 +41,7 @@
         </div>
          <div class="collection cards-container">
             <div class="card">
-                <input type="text" name="cardName" oninput="handleCardInput(this)" autocomplete="off">
+                <input type="text" name="cardName" autocomplete="off">
                 <input type="text" name="cardNum" autocomplete="off">
                 <select name="condition">
                     <option value="Mint">Mint</option>
@@ -67,9 +68,10 @@
             <span class="arrow right"><img src="../static/images/rightarrow.png" alt="right arrow"></span>
         </div>
     </div>
+    <script type="module" src="../static/scripts/utils/sanitizers.js"></script>
     <script type="module" src="../static/scripts/utils/collectionUtils.js"></script>
     <script type="module" src="../static/scripts/utils/renderUtil.js"></script>
     <script src="../static/scripts/addToCollection.js" type="module"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+    <script src="../static/vendor/purify.min.js"></script>
 </body>
 </html>

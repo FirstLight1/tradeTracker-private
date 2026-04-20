@@ -1,8 +1,13 @@
+import os
+from dotenv import load_dotenv
+import base64
 import datetime
 import tradeTracker.services.models as models
 import tradeTracker.CONSTANTS as CONSTANTS
 import json
+from Crypto.Cipher import AES
 
+load_dotenv()
 
 class SaleService:
     def __init__(self, db, receipt_service):
@@ -43,7 +48,19 @@ class SaleService:
         shippingPrice = None
         if sale_input.shipping:
             shippingPrice = sale_input.shipping.get("shippingPrice")
-        recieverInfoJson = json.dumps(sale_input.reciever)
+        recieverInfoJson = json.dumps(sale_input.reciever).encode("utf-8")
+        key = base64.b64decode(os.environ['KEY'])
+        cipher = AES.new(key,AES.MODE_GCM)
+        recieverInfoCrypt, tag = cipher.encrypt_and_digest(recieverInfoJson) 
+        nonce = cipher.nonce
+
+        result ={
+            "nonce": base64.b64encode(nonce).decode(),
+            "ciphertext": base64.b64encode(recieverInfoCrypt).decode(),
+            "tag": base64.b64encode(tag).decode()
+
+        }
+        result = json.dumps(result)
 
         if shippingPrice == None:
             shippingPrice = 0
@@ -56,7 +73,7 @@ class SaleService:
 
         cursor = self.db.execute(
             "INSERT INTO sales (invoice_number, sale_date, total_amount, notes, shipping_info) VALUES (?, ?, ?, ?,?)",
-            (invoice_num, sale_date, total_amount, recieverInfoJson, shippingPrice),
+            (invoice_num, sale_date, total_amount, result, shippingPrice),
         )
 
         sale_id = cursor.lastrowid

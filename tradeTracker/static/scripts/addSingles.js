@@ -1,8 +1,16 @@
 import {CardStruct} from './utils/classes.js';
 import {renderAlert, createNewCard} from './utils/renderUtil.js';
+import { csrfFetch } from "./utils/sanitizers.js";
 
 const cardsArr = [];
 const saveButton = document.querySelector('.save-btn')
+const initialMarketValueInput = document.querySelector('.card .marketValue');
+
+if (initialMarketValueInput) {
+    initialMarketValueInput.addEventListener('input', function () {
+        window.handleCardInput(this);
+    });
+}
 
 saveButton.addEventListener('click', () => {
     let auction = {};
@@ -42,7 +50,7 @@ saveButton.addEventListener('click', () => {
 
         if (cardsArr.length !== 1){
             const jsonbody = JSON.stringify(cardsArr);
-            fetch('/addToSingles', {
+            csrfFetch('/addToSingles', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

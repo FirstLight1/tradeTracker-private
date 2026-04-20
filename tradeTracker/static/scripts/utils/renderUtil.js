@@ -1,4 +1,4 @@
-import { sanitizeAttrValue, sanitizeClassToken, sanitizePlainText } from "./sanitizers.js";
+import { sanitizeAttrValue, sanitizeClassToken, sanitizePlainText, csrfFetch } from "./sanitizers.js";
 
 export function renderField(value, inputType, classList, placeholder, datafield) {
     const safeInputType = sanitizeAttrValue(inputType || 'text');
@@ -42,7 +42,6 @@ export function renderAlert(text, type) {
 export function scrollOnLoad() {
     window.addEventListener('load', () => {
         const hash = window.location.hash;
-        console.log(hash);
         const id = hash.startsWith('#') ? hash.slice(1) : hash;
         if (id) {
             const interval = setInterval(() => {
@@ -76,7 +75,9 @@ export function replaceWithPElement(dataset, value, element) {
 
 export async function getInventoryValue() {
     try {
-        const response = await fetch('/inventoryValue');
+        const response = await csrfFetch('/inventoryValue', {
+            method: 'GET',
+        });
         const data = await response.json();
         return data.value;
     } catch (e) {
@@ -117,9 +118,9 @@ export function createNewCard(newCard){
         });
 
         const newCardName = newCard.querySelector('.marketValue');
-        newCardName.oninput = function () {
-        handleCardInput(this);
-        }
+        newCardName.addEventListener('input', function () {
+        window.handleCardInput(this);
+        });
         return newCard;
 }
 
@@ -134,4 +135,19 @@ window.handleCardInput = function (input){
         const newCard = createNewCard(lastCard.cloneNode(true));
         container.appendChild(newCard)
     }
+}
+
+export async function downloadFile(response, fallbackName = 'invoice.pdf'){
+    const disposition = response.headers.get('Content-Disposition');
+    const filename = disposition?.match(/filename\*?=["']?(?:UTF-\d+'')?([^"';\n]+)/i)?.[1]
+    ?? fallbackName;
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+
+    const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+    a.click();
+
+    // Revoke after a tick so the browser has time to start the download
+    setTimeout(() => URL.revokeObjectURL(url), 0);
 }

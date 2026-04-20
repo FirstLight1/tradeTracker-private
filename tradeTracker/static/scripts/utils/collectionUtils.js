@@ -1,8 +1,11 @@
 import { renderAlert } from "./renderUtil.js";
+import { csrfFetch } from "./sanitizers.js";
 
 export async function getCollectionValue(){
     try{
-        const response = await fetch('/collectionValue');
+        const response = await csrfFetch('/collectionValue', {
+            method: 'GET',
+        });
         const data = await response.json();
         return data.value;
     } catch(e){

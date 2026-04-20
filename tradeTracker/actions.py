@@ -1,23 +1,31 @@
+import base64
 from decimal import Decimal
-import sys
-from flask import request, Blueprint, jsonify, current_app
-from flask_cors import CORS
+from flask import request, Blueprint, jsonify, current_app, send_file
 from tradeTracker.db import get_db
+from io import BytesIO
 import datetime
+from Crypto.Cipher import AES
 import os
 import fpdf
 import json
+import zipfile
 import pandas as pd
+from dotenv import load_dotenv
 import logging
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from . import generateInvoice, CONSTANTS
 from tradeTracker.services.models import SaleInput
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaReceiptService
+from tradeTracker.services.cfAuth import verify_token
 
-
+load_dotenv()
 bp = Blueprint('actions', __name__)
 logger = logging.getLogger(__name__)
-CORS(bp)
+limiter = Limiter(key_func=get_remote_address)
+
+
 dictKeys = ['Product ID', 'Name', 'Condition', 'Price', 'Card Number']
 li = []
 dataList = []
@@ -58,7 +66,10 @@ def validate_and_sanitize_payments(payments):
         payment_type = payment.get('type', '').strip()
         amount = 0
         try:
-            amount = payment.get('amount').replace(',','.')
+            if isinstance(payment.get('amount'), str):
+                amount = payment.get('amount').replace(',','.')
+            else:
+                amount = payment.get('amount')
         except Exception as e:
             logger.warning("Failed to normalize amount '%s': %s", payment.get('amount'), e)
             amount = payment.get('amount')
@@ -85,14 +96,17 @@ def validate_and_sanitize_payments(payments):
     return True, sanitized, None
 
 def loadExpansions():
-    # Load expansion sets (works for both development and .exe)
-    if getattr(sys, 'frozen', False):
-        # Running as compiled exe - use the app data directory
-        app_data_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker')
-        expansions_path = os.path.join(app_data_dir, 'setAbbs.json')
+    # Load expansion sets (works for both development and production)
+    if os.getenv("FLASK_ENV") == "prod" and os.getenv("DATA_DIR"):
+        data_dir = os.getenv("DATA_DIR")
+        expansions_path = os.path.join(data_dir, "setAbbs.json")
     else:
-        # Running in development - use the module directory
-        expansions_path = os.path.join(os.path.dirname(__file__), r'data\expansions\setAbbs.json')
+        expansions_path = os.path.join(
+            os.path.dirname(__file__),
+            "data",
+            "expansions",
+            "setAbbs.json",
+        )
 
     try:
         with open(expansions_path, mode='r', encoding='utf-8') as infile:
@@ -111,28 +125,6 @@ def loadExpansions():
 
 # Load the expansion sets at module import time
 all_pokemon_sets = loadExpansions()
-
-def ensureFontsAvailable():
-    """Ensure fonts are available in the correct location (for .exe deployment)."""
-    if getattr(sys, 'frozen', False):
-        # Running as compiled exe - fonts should be copied to AppData
-        app_data_fonts = os.path.join(os.environ['APPDATA'], 'TradeTracker', 'fonts')
-        os.makedirs(app_data_fonts, exist_ok=True)
-        
-        # Check if fonts need to be copied
-        font_files = ['DejaVuSans.ttf', 'DejaVuSans-Bold.ttf']
-        
-        # Get the bundled fonts directory (in the temp _MEIPASS directory)
-        bundled_fonts_dir = os.path.join(getattr(sys, '_MEIPASS', ''), 'fonts')
-        
-        for font_file in font_files:
-            dest_path = os.path.join(app_data_fonts, font_file)
-            source_path = os.path.join(bundled_fonts_dir, font_file)
-            
-            # Copy if doesn't exist or if source is newer
-            if os.path.exists(source_path) and (not os.path.exists(dest_path) or os.path.getmtime(source_path) > os.path.getmtime(dest_path)):
-                import shutil
-                shutil.copy2(source_path, dest_path)
 
 
 def migrate_payment_method(payment_method_text):
@@ -177,7 +169,8 @@ def parse_payment_methods(payment_method_text):
     return [{"type": payment_type, "amount": 0} for payment_type in payment_types if payment_type]
 
 
-@bp.route('/add', methods=('GET', 'POST'))
+@bp.route('/add', methods=('POST',))
+@verify_token
 def add():
     if request.method == 'POST':
         cardsArr = request.get_json()
@@ -332,6 +325,7 @@ def _add_bulk_items_helper(db, auction_id, bulk=None, holo=None, ex=None):
         )
 
 @bp.route('/addBulkItems/<int:auction_id>', methods=('POST',))
+@verify_token
 def addBulkItems(auction_id):
     """Route handler for adding bulk items."""
     data = request.get_json()
@@ -348,7 +342,8 @@ def addBulkItems(auction_id):
     db.commit()
     return jsonify({'status': 'success'}), 201
 
-@bp.route('/loadAuctions')
+@bp.route('/loadAuctions', methods=('GET',))
+@verify_token
 def loadAuctions():
     db = get_db()
     auctions = db.execute(
@@ -378,7 +373,8 @@ def loadAuctions():
     db.commit()
     return jsonify(auctions_list)
 
-@bp.route('/loadSealed')
+@bp.route('/loadSealed', methods=('GET',))
+@verify_token
 def loadSealed():
     db = get_db()
 
@@ -386,6 +382,7 @@ def loadSealed():
     return jsonify({'status':'success', 'data' : [dict(product) for product in sealed_products]})
 
 @bp.route('/addSealed', methods=('POST',))
+@verify_token
 def addSealed():
     data = request.get_json()
     db = get_db()
@@ -399,7 +396,8 @@ def addSealed():
     return jsonify({'status':'success'}),200
 
 
-@bp.route('/loadCards/<int:auction_id>')
+@bp.route('/loadCards/<int:auction_id>',methods=('GET',))
+@verify_token
 def loadCards(auction_id):
     db = get_db()
     cards = db.execute(
@@ -408,7 +406,8 @@ def loadCards(auction_id):
         'WHERE c.auction_id = ? AND si.card_id IS NULL', (auction_id,)).fetchall()
     return jsonify([dict(card) for card in cards]),200
 
-@bp.route('/loadBulk/<int:auction_id>')
+@bp.route('/loadBulk/<int:auction_id>', methods=('GET',))
+@verify_token
 def loadBulk(auction_id):
     db = get_db()
 
@@ -417,7 +416,8 @@ def loadBulk(auction_id):
         'WHERE bi.auction_id = ?', (auction_id,)).fetchall()
     return jsonify([dict(item) for item in bulk_items]),200
 
-@bp.route('/loadSealed/<int:auction_id>')
+@bp.route('/loadSealed/<int:auction_id>', methods=('GET',))
+@verify_token
 def loadSealedByAuction(auction_id):
     db = get_db()
     sealed_items = db.execute(
@@ -427,13 +427,15 @@ def loadSealedByAuction(auction_id):
     ).fetchall()
     return jsonify([dict(item) for item in sealed_items]), 200
 
-@bp.route('/loadAllCards/<int:auction_id>')
+@bp.route('/loadAllCards/<int:auction_id>', methods=('GET',))
+@verify_token
 def loadAllCards(auction_id):
     db = get_db()
     cards = db.execute('SELECT * FROM cards WHERE auction_id = ?', (auction_id,)).fetchall()
     return jsonify([dict(card) for card in cards]),200
 
-@bp.route('/inventoryValue')
+@bp.route('/inventoryValue', methods=('GET',))
+@verify_token
 def invertoryValue():
     db = get_db()
     cur = db.cursor()
@@ -446,6 +448,7 @@ def invertoryValue():
 
 
 @bp.route('/deleteCard/<int:card_id>', methods=('DELETE',))
+@verify_token
 def deleteCard(card_id):
     db = get_db()
     db.execute('DELETE FROM cards WHERE id = ?', (card_id,))
@@ -453,6 +456,7 @@ def deleteCard(card_id):
     return jsonify({'status' : 'success'})
 
 @bp.route('/deleteBulkItem/<int:item_id>', methods=('DELETE',))
+@verify_token
 def deleteBulkItem(item_id):
     db = get_db()
     db.execute('DELETE FROM bulk_items WHERE id = ?', (item_id,))
@@ -460,6 +464,7 @@ def deleteBulkItem(item_id):
     return jsonify({'status' : 'success'})
 
 @bp.route('/deleteSealed/<string:sid>', methods=('DELETE',))
+@verify_token
 def deleteSealed(sid):
     id = sid.replace('s', '')
     db = get_db()
@@ -468,6 +473,7 @@ def deleteSealed(sid):
     return jsonify({'status' : 'success'})
 
 @bp.route('/deleteAuction/<int:auction_id>', methods=('DELETE',))
+@verify_token
 def deleteAuction(auction_id):
     db = get_db()
     db.execute('DELETE FROM bulk_items WHERE auction_id = ?', (auction_id,))
@@ -478,6 +484,7 @@ def deleteAuction(auction_id):
     return jsonify({'status': 'success'}),200
 
 @bp.route('/update/<int:card_id>', methods=('PATCH',))
+@verify_token
 def update(card_id):
     db = get_db()
     data = request.get_json()
@@ -496,6 +503,7 @@ def update(card_id):
     return jsonify({'status': 'success'}),200
 
 @bp.route('/addToExistingAuction/<int:auction_id>', methods=('POST',))
+@verify_token
 def addToExistingAuction(auction_id):
     if request.method == 'POST':
         data = request.get_json()
@@ -544,7 +552,8 @@ def addToExistingAuction(auction_id):
             )
             return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax03'}), 400
 
-@bp.route('/bulkCounterValue')
+@bp.route('/bulkCounterValue', methods = ('GET',))
+@verify_token
 def bulkCounterValue():
     db = get_db()
     cur = db.cursor()
@@ -556,7 +565,8 @@ def bulkCounterValue():
    
     return jsonify({'status': 'success','bulk_counter': bulk_counter, 'holo_counter': holo_counter, 'ex_counter': ex_counter}),200
 
-@bp.route('/loadSoldHistory')
+@bp.route('/loadSoldHistory', methods = ('GET',))
+@verify_token
 def loadSoldHistory():
     db = get_db()
     sales = db.execute(
@@ -569,9 +579,29 @@ def loadSoldHistory():
         'LEFT JOIN barter b ON b.sale_id = s.id '
         'ORDER BY sale_date DESC'
     ).fetchall()
-    return jsonify([dict(sale) for sale in sales])
+    result = []
+
+    for sale in sales:
+        sale = dict(sale) 
+        try: 
+            crypt = json.loads(sale['notes'])
+
+            nonce = base64.b64decode(crypt["nonce"])
+            ciphertext = base64.b64decode(crypt["ciphertext"])
+            tag = base64.b64decode(crypt["tag"])
+            key = base64.b64decode(os.environ['KEY'])
+            cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
+
+            decrypted_bytes = cipher.decrypt_and_verify(ciphertext, tag)
+            data = decrypted_bytes.decode("utf-8")
+            sale['notes'] = data
+            result.append(sale)
+        except Exception as e:
+            result.append(sale)
+    return jsonify(result)
     
-@bp.route('/loadSoldCards/<int:sale_id>')
+@bp.route('/loadSoldCards/<int:sale_id>', methods=('GET',))
+@verify_token
 def loadSoldCards(sale_id):
     db = get_db()
 
@@ -598,13 +628,15 @@ def loadSoldCards(sale_id):
 
     return jsonify(response)
 
-@bp.route('/unlinkedBarterIds')
+@bp.route('/unlinkedBarterIds',methods=('GET',))
+@verify_token
 def unlinkedBarterIds():
     db = get_db()
     ids = db.execute('SELECT id, invoice_number FROM sales WHERE id NOT IN (SELECT sale_id FROM barter WHERE sale_id IS NOT NULL) AND invoice_number NOT LIKE "S%" ORDER BY id DESC')
     return jsonify({'status': 'success', 'data': [dict(row) for row in ids]})
 
 @bp.route('/linkAuctionToSale/<int:auction_id>',methods=('POST',))
+@verify_token
 def linkAuctionToSale(auction_id):
     db = get_db()
     id = request.get_json()
@@ -614,7 +646,8 @@ def linkAuctionToSale(auction_id):
 
     return jsonify({'status': 'success'})
 
-@bp.route('/orderReturn/<int:saleId>')
+@bp.route('/orderReturn/<int:saleId>', methods=('POST',))
+@verify_token
 def orderReturn(saleId):
     db = get_db()
 
@@ -643,7 +676,8 @@ def orderReturn(saleId):
     return jsonify({'status': 'success'}),200
 
 
-@bp.route('/generateCreditNote/<int:saleId>')
+@bp.route('/generateCreditNote/<int:saleId>', methods=('POST',))
+@verify_token
 def generate_credit_note(saleId):
     db = get_db()
 
@@ -654,7 +688,14 @@ def generate_credit_note(saleId):
 
     # Parse receiver info stored as JSON in the notes column
     try:
-        reciever = json.loads(sale['notes']) if sale['notes'] else {}
+        crypt = json.loads(sale['notes'])
+        nonce = base64.b64decode(crypt['nonce'])
+        cipherText = base64.b64decode(crypt['ciphertext'])
+        tag = base64.b64decode(crypt['tag'])
+        key = base64.b64decode(os.environ['KEY'])
+        cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
+        decrypted = cipher.decrypt_and_verify(cipherText, tag)
+        reciever = json.loads(decrypted.decode("utf-8"))
     except (json.JSONDecodeError, TypeError):
         reciever = {}
 
@@ -701,7 +742,7 @@ def generate_credit_note(saleId):
         payment_methods = [{'type': reciever.get('paymentMethod'), 'amount': 0}]
 
     try:
-        pdf_path, cn_num = generateInvoice.generateCreditNote(
+        pdf, cn_num = generateInvoice.generateCreditNote(
             reciever,
             items if items else None,
             sealed if sealed else None,
@@ -712,15 +753,23 @@ def generate_credit_note(saleId):
             shipping,
             original_invoice_num
         )
+        response = send_file(
+                        BytesIO(pdf['bytes']),
+                        download_name=pdf['filename'],
+                        as_attachment=True,
+                        mimetype='application/pdf'
+                        )
+
     except Exception as e:
         logger.critical('Credit note generation failed %s', e)
         return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax06'}), 500
-
     logger.info('Credit note generated succesfully | original invoice num: %s', original_invoice_num)
-    return jsonify({'status': 'success', 'pdf_path': pdf_path, 'cn_num': cn_num}), 200
+    return response 
 
 
 @bp.route('/generateSoldReport', methods=('GET',))
+@limiter.limit("2 per minute")
+@verify_token
 def generateSoldReport():
     db = get_db()
     month = request.args.get('month').zfill(2)
@@ -765,7 +814,20 @@ def generateSoldReport():
         pdf_path = generatePDF(month, year, cards_list, sealedList, bulkAndHoloList, shipping_list)
         xls_path = createBuyReport(month, year, db);
         logger.info('Sold report generated succesfully | month: %s | year: %s', month, year)
-        return jsonify({'status': 'success', 'pdf_path': pdf_path, 'xls_path':xls_path}), 200
+
+        zip_buffer = BytesIO()
+
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.write(pdf_path, arcname=os.path.basename(pdf_path))
+            zip_file.write(xls_path, arcname=os.path.basename(xls_path))
+        zip_buffer.seek(0)
+        return send_file(
+            zip_buffer,
+            as_attachment=True,
+            download_name=f"SoldReport_{month}_{year}.zip",
+            mimetype="application/zip"
+        )
+
     except Exception as e:
         logger.exception('PDF generation failed')
         print(f"Error generating PDF: {e}")
@@ -773,24 +835,19 @@ def generateSoldReport():
 
 
 def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
-    # Ensure fonts are available (copies them from exe bundle if needed)
-    ensureFontsAvailable()
-    
     # Determine the save path based on environment
-    if getattr(sys, 'frozen', False):
-        # Running as compiled exe
-        app_data_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker', 'Reports')
+    if os.getenv("FLASK_ENV") == "prod":
+        data_dir = os.getenv("DATA_DIR", current_app.instance_path)
+        app_data_dir = os.path.join(data_dir, 'Reports')
         os.makedirs(app_data_dir, exist_ok=True)
         pdf_path = os.path.join(app_data_dir, f'Report_{month}_{year}.pdf')
-        # Font path for exe
-        font_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker', 'fonts')
     else:
         # Running in development
         reports_dir = os.path.join(current_app.instance_path, 'reports')
         os.makedirs(reports_dir, exist_ok=True)
         pdf_path = os.path.join(reports_dir, f'Report_{month}_{year}.pdf')
-        # Font path for development
-        font_dir = os.path.join(os.path.dirname(__file__), 'fonts')
+
+    font_dir = os.path.join(os.path.dirname(__file__), 'fonts')
     
     # Create PDF
     pdf = fpdf.FPDF()
@@ -1004,9 +1061,9 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
     return pdf_path
 
 def createBuyReport(month, year, db):
-    if getattr(sys, 'frozen', False):
-        # Running as compiled exe
-        app_data_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker', 'Reports')
+    if os.getenv("FLASK_ENV") == "prod":
+        data_dir = os.getenv("DATA_DIR", current_app.instance_path)
+        app_data_dir = os.path.join(data_dir, 'Reports')
         os.makedirs(app_data_dir, exist_ok=True)
         xls_path = os.path.join(app_data_dir, f'Nakupy_{month}_{year}.xlsx')
     else:
@@ -1065,7 +1122,8 @@ def createBuyReport(month, year, db):
     
     return xls_path
 
-@bp.route('/addToCollection', methods=('GET','POST'))
+@bp.route('/addToCollection', methods=('POST',))
+@verify_token
 def addToCollection():
     if request.method == 'POST':
         cards = request.get_json()
@@ -1084,13 +1142,15 @@ def addToCollection():
         db.commit()
     return jsonify({'status': 'success'}), 201
 
-@bp.route('/loadCollection')
+@bp.route('/loadCollection', methods=('GET',))
+@verify_token
 def loadCollection():
     db = get_db()
     cards = db.execute('SELECT * FROM collection').fetchall()
     return jsonify([dict(card) for card in cards])
 
 @bp.route('/deleteFromCollection/<int:card_id>', methods=('DELETE',))
+@verify_token
 def deleteFromCollection(card_id):
     db = get_db()
     db.execute('DELETE FROM collection WHERE id = ?', (card_id, ))
@@ -1098,6 +1158,7 @@ def deleteFromCollection(card_id):
     return jsonify({'status': 'success'}), 200
 
 @bp.route('/updateCollection/<int:card_id>', methods=('PATCH',))
+@verify_token
 def updateCollection(card_id):
     db = get_db()
     data = request.get_json()
@@ -1110,14 +1171,16 @@ def updateCollection(card_id):
         db.commit()
     return jsonify({'status': 'success'}),200
 
-@bp.route('/collectionValue')
+@bp.route('/collectionValue', methods=('GET',))
+@verify_token
 def collectionValue():
     db = get_db()
     cur = db.cursor()
     value = cur.execute('SELECT SUM(market_value) FROM collection').fetchone()[0]
     return jsonify({'status': 'success','value': value}),200
 
-@bp.route('/addToSingles', methods=('POST', 'GET'))
+@bp.route('/addToSingles', methods=('POST',))
+@verify_token
 def addToSingles():
     if request.method == 'POST':
         db = get_db()
@@ -1140,16 +1203,29 @@ def addToSingles():
     return jsonify({'status': 'success'}), 201
 
 @bp.route('/updateAuction/<int:auction_id>', methods=('PATCH',))
+@verify_token
 def updateAuction(auction_id):
     db = get_db()
     data = request.get_json()
     value = data.get('value')
     field = data.get('field')
-    db.execute(f'UPDATE auctions SET {field} = ? WHERE id = ?', (value, auction_id))
+    
+    ALLOWED_FIELDS = {
+        "auction_name": "auction_name",
+        "auction_price": "auction_price",
+        "date_created": "date_created",
+        }
+
+    if field not in ALLOWED_FIELDS:
+        logger.warning('Invalid field | auction_id : %s', auction_id)
+        return jsonify({'status': 'error', 'message': 'Invalid field'})
+    column = ALLOWED_FIELDS[field]
+    db.execute(f'UPDATE auctions SET {column} = ? WHERE id = ?', (value, auction_id))
     db.commit()
     return jsonify({'status': 'success'}), 200
 
 @bp.route('/updatePaymentMethod/<int:auction_id>', methods=('PATCH',))
+@verify_token
 def updatePaymentMethod(auction_id):
     db = get_db()
     data = request.get_json()
@@ -1169,7 +1245,8 @@ def updatePaymentMethod(auction_id):
 
 
 
-@bp.route('/recalculateCardPrices/<int:auction_id>/<string:new_auction_price>', methods=('GET',))
+@bp.route('/recalculateCardPrices/<int:auction_id>/<string:new_auction_price>', methods=('POST',))
+@verify_token
 def recalculateCardPrices(auction_id, new_auction_price):
     db = get_db()
     new_auction_price = float(new_auction_price)
@@ -1247,7 +1324,8 @@ def recalculateCardPrices(auction_id, new_auction_price):
     db.commit()
     return jsonify({'status': 'success'}), 200
 
-@bp.route('/groupUnnamed', methods=('GET', 'POST'))
+@bp.route('/groupUnnamed', methods=('GET',))
+@verify_token
 def groupUnnamed():
     if request.method == 'GET':
         db = get_db()
@@ -1259,7 +1337,8 @@ def groupUnnamed():
         return jsonify({'status': 'success'}), 200
 
 #Gets rows of CM table using chrome extension and save them to the datasabe
-@bp.route('/CardMarketTable', methods=('GET', 'POST'))
+@bp.route('/CardMarketTable', methods=('POST',))
+@verify_token
 def cardMarketTable():
     if request.method == 'POST':
         db = get_db()
@@ -1350,7 +1429,10 @@ def cardMarketTable():
             return jsonify({'status': 'error', 'message': 'Error code: Ax15'}), 500
 
 @bp.route('/cardMarketOrder', methods=('POST',))
+@limiter.limit('10 per minute')
+@verify_token
 def cardMarketOrder():
+    #TODO implement asymetric decryption
     data = request.get_json()
     db = get_db()
     shipping_info = data['shipping_info']
@@ -1410,6 +1492,7 @@ def cardMarketOrder():
     return jsonify({'status': 'success'}), 200
 
 @bp.route('/getLatest', methods=('GET',))
+@verify_token
 def getLatest():
     global latest
     last = latest
@@ -1498,14 +1581,14 @@ def allowedFile(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in "csv"
 
 @bp.route('/importSoldCSV', methods=('POST',))
+@verify_token
 def importSoldCSV():
     if request.method == 'POST':
         # Use the same folder as the database
-        if getattr(sys, 'frozen', False):
-            # Running as compiled exe
-            app_data_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker')
-            os.makedirs(app_data_dir, exist_ok=True)
-            check_file_path = os.path.join(app_data_dir, 'checkFile.csv')
+        if os.getenv("FLASK_ENV") == "prod":
+            data_dir = os.getenv("DATA_DIR", current_app.instance_path)
+            os.makedirs(data_dir, exist_ok=True)
+            check_file_path = os.path.join(data_dir, 'checkFile.csv')
         else:
             # Running in development
             check_file_path = os.path.join(current_app.instance_path, 'checkFile.csv')
@@ -1590,6 +1673,7 @@ def importSoldCSV():
     return jsonify({'status': 'success'}), 201
 
 @bp.route('/searchCard', methods=('POST',))
+@verify_token
 def search():
     if request.method == 'POST':
         card = request.get_json()
@@ -1675,6 +1759,7 @@ def search():
 
 
 @bp.route('/getCardIds', methods=('POST',))
+@verify_token
 def getCardIds():
     if request.method == 'POST':
         data = request.get_json()
@@ -1719,9 +1804,12 @@ def getCardIds():
         ids = [dict(row)['id'] for row in cardIds]
         return jsonify({'status': 'success', 'card_ids': ids}), 200
 
-@bp.route('/createSale/<string:kind>', methods=('GET', 'POST'))
+@bp.route('/createSale/<string:kind>', methods=('POST',))
+@limiter.limit("5 per minute")
+@verify_token
 def invoice(kind):
     if request.method == 'POST':
+        #TODO add asymetric decryption
         cartContent = request.get_json()
 
         payment_data, valid, err = None, False, None
@@ -1754,14 +1842,22 @@ def invoice(kind):
         )
         # Validate inventory before processing
         db = get_db()
-
+        
         if kind == 'invoice': 
 
             try:
                 saleResult = SaleService(db,InvoiceReceiptService()).process_sale(saleInput)
+                receipt = saleResult.receipt.raw
+                response = send_file(
+                        BytesIO(receipt['bytes']),
+                        download_name=receipt['filename'],
+                        as_attachment=True,
+                        mimetype='application/pdf'
+                        )
                 db.commit()
                 logger.info('Invoice created succesfully | %s ', saleResult.sale_id)
-                return jsonify({'status': 'success', 'pdf_path': saleResult.receipt.file_path}), 200
+                return response 
+                
 
             except Exception as e:
                 db.rollback()
@@ -1772,9 +1868,16 @@ def invoice(kind):
 
             try:
                 saleResult = SaleService(db, EKasaReceiptService()).process_sale(saleInput)
+                receipt = saleResult.receipt.raw
+                response = send_file(
+                        BytesIO(receipt['bytes']),
+                        download_name=receipt['filename'],
+                        as_attachment=True,
+                        mimetype='application/pdf'
+                        )
                 db.commit()
-                logger.info('Sale created succesfully | %s ', saleResult.sale_id)
-                return jsonify({'status': 'success', 'pdf_path': 'Sale addded succesfully'}), 200
+                logger.info('Invoice created succesfully | %s ', saleResult.sale_id)
+                return response 
 
             except Exception as e:
                 db.rollback()
