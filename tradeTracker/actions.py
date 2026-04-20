@@ -1,6 +1,5 @@
 import base64
 from decimal import Decimal
-import sys
 from flask import request, Blueprint, jsonify, current_app, send_file
 from tradeTracker.db import get_db
 from io import BytesIO
@@ -97,14 +96,17 @@ def validate_and_sanitize_payments(payments):
     return True, sanitized, None
 
 def loadExpansions():
-    # Load expansion sets (works for both development and .exe)
-    if getattr(sys, 'frozen', False):
-        # Running as compiled exe - use the app data directory
-        app_data_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker')
-        expansions_path = os.path.join(app_data_dir, 'setAbbs.json')
+    # Load expansion sets (works for both development and production)
+    if os.getenv("FLASK_ENV") == "prod" and os.getenv("DATA_DIR"):
+        data_dir = os.getenv("DATA_DIR")
+        expansions_path = os.path.join(data_dir, "setAbbs.json")
     else:
-        # Running in development - use the module directory
-        expansions_path = os.path.join(os.path.dirname(__file__), r'data\expansions\setAbbs.json')
+        expansions_path = os.path.join(
+            os.path.dirname(__file__),
+            "data",
+            "expansions",
+            "setAbbs.json",
+        )
 
     try:
         with open(expansions_path, mode='r', encoding='utf-8') as infile:
@@ -123,28 +125,6 @@ def loadExpansions():
 
 # Load the expansion sets at module import time
 all_pokemon_sets = loadExpansions()
-
-def ensureFontsAvailable():
-    """Ensure fonts are available in the correct location (for .exe deployment)."""
-    if getattr(sys, 'frozen', False):
-        # Running as compiled exe - fonts should be copied to AppData
-        app_data_fonts = os.path.join(os.environ['APPDATA'], 'TradeTracker', 'fonts')
-        os.makedirs(app_data_fonts, exist_ok=True)
-        
-        # Check if fonts need to be copied
-        font_files = ['DejaVuSans.ttf', 'DejaVuSans-Bold.ttf']
-        
-        # Get the bundled fonts directory (in the temp _MEIPASS directory)
-        bundled_fonts_dir = os.path.join(getattr(sys, '_MEIPASS', ''), 'fonts')
-        
-        for font_file in font_files:
-            dest_path = os.path.join(app_data_fonts, font_file)
-            source_path = os.path.join(bundled_fonts_dir, font_file)
-            
-            # Copy if doesn't exist or if source is newer
-            if os.path.exists(source_path) and (not os.path.exists(dest_path) or os.path.getmtime(source_path) > os.path.getmtime(dest_path)):
-                import shutil
-                shutil.copy2(source_path, dest_path)
 
 
 def migrate_payment_method(payment_method_text):
@@ -855,24 +835,19 @@ def generateSoldReport():
 
 
 def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
-    # Ensure fonts are available (copies them from exe bundle if needed)
-    ensureFontsAvailable()
-    
     # Determine the save path based on environment
-    if getattr(sys, 'frozen', False):
-        # Running as compiled exe
-        app_data_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker', 'Reports')
+    if os.getenv("FLASK_ENV") == "prod":
+        data_dir = os.getenv("DATA_DIR", current_app.instance_path)
+        app_data_dir = os.path.join(data_dir, 'Reports')
         os.makedirs(app_data_dir, exist_ok=True)
         pdf_path = os.path.join(app_data_dir, f'Report_{month}_{year}.pdf')
-        # Font path for exe
-        font_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker', 'fonts')
     else:
         # Running in development
         reports_dir = os.path.join(current_app.instance_path, 'reports')
         os.makedirs(reports_dir, exist_ok=True)
         pdf_path = os.path.join(reports_dir, f'Report_{month}_{year}.pdf')
-        # Font path for development
-        font_dir = os.path.join(os.path.dirname(__file__), 'fonts')
+
+    font_dir = os.path.join(os.path.dirname(__file__), 'fonts')
     
     # Create PDF
     pdf = fpdf.FPDF()
@@ -1086,9 +1061,9 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
     return pdf_path
 
 def createBuyReport(month, year, db):
-    if getattr(sys, 'frozen', False):
-        # Running as compiled exe
-        app_data_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker', 'Reports')
+    if os.getenv("FLASK_ENV") == "prod":
+        data_dir = os.getenv("DATA_DIR", current_app.instance_path)
+        app_data_dir = os.path.join(data_dir, 'Reports')
         os.makedirs(app_data_dir, exist_ok=True)
         xls_path = os.path.join(app_data_dir, f'Nakupy_{month}_{year}.xlsx')
     else:
@@ -1610,11 +1585,10 @@ def allowedFile(filename):
 def importSoldCSV():
     if request.method == 'POST':
         # Use the same folder as the database
-        if getattr(sys, 'frozen', False):
-            # Running as compiled exe
-            app_data_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker')
-            os.makedirs(app_data_dir, exist_ok=True)
-            check_file_path = os.path.join(app_data_dir, 'checkFile.csv')
+        if os.getenv("FLASK_ENV") == "prod":
+            data_dir = os.getenv("DATA_DIR", current_app.instance_path)
+            os.makedirs(data_dir, exist_ok=True)
+            check_file_path = os.path.join(data_dir, 'checkFile.csv')
         else:
             # Running in development
             check_file_path = os.path.join(current_app.instance_path, 'checkFile.csv')

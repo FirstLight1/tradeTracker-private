@@ -1,16 +1,15 @@
 import logging
 import os
-import sys
 from logging.config import dictConfig
 
 
 def configure_logging(app):
-    is_frozen = getattr(sys, "frozen", False)
+    is_prod = os.getenv("FLASK_ENV") == "prod"
     level = os.getenv("TRADETRACKER_LOG_LEVEL")
     if not level:
-        level = "INFO" if is_frozen else "DEBUG"
-    if is_frozen:
-        base_dir = os.path.join(os.environ["APPDATA"], "TradeTracker")
+        level = "INFO" if is_prod else "DEBUG"
+    if is_prod:
+        base_dir = os.getenv("DATA_DIR", app.instance_path)
     else:
         base_dir = app.instance_path
     log_dir = os.path.join(base_dir, "logs")

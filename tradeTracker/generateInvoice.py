@@ -2,7 +2,6 @@
 from decimal import Decimal
 from itertools import count
 import os
-import sys
 from datetime import date, datetime
 
 os.environ["INVOICE_LANG"] = "sk"
@@ -31,14 +30,7 @@ def add_bulk_invoice_item(invoice, item, item_type):
     ))
 
 def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=None, ex=None, payment_methods=None, shipping=None):
-    # Read invoice number from env.txt
-    if getattr(sys, 'frozen', False):
-        # Get the base path where PyInstaller unpacks files
-        base_path = sys._MEIPASS
-        logo_path = os.path.join(base_path, 'tradeTracker', 'static', 'images', 'logo.png')
-    else:
-        # Running in development
-        logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
+    logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
 
     # Read or create env.txt with invoice_num
     try:
@@ -165,9 +157,9 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
     pdf = SimpleInvoice(invoice)
     
     # Determine the save path based on environment
-    if getattr(sys, 'frozen', False):
-        # Running as compiled exe
-        app_data_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker', 'Invoices')
+    if os.getenv("FLASK_ENV") == "prod":
+        data_dir = os.getenv("DATA_DIR", current_app.instance_path)
+        app_data_dir = os.path.join(data_dir, 'Invoices')
         os.makedirs(app_data_dir, exist_ok=True)
         output_filename = f"{invoice_num}_Invoice_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
         output_path = os.path.join(app_data_dir, output_filename)
@@ -190,11 +182,7 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
         },invoice_num
 
 def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, ex=None, payment_methods=None, shipping=None, original_invoice_num=None):
-    if getattr(sys, 'frozen', False):
-        base_path = sys._MEIPASS
-        logo_path = os.path.join(base_path, 'tradeTracker', 'static', 'images', 'logo.png')
-    else:
-        logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
+    logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
 
     cn_num = '1'
     orig_inv = str(original_invoice_num).strip() if original_invoice_num else "UNKNOWN"
@@ -310,8 +298,9 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
 
     pdf = CreditNoteInvoice(invoice)
 
-    if getattr(sys, 'frozen', False):
-        app_data_dir = os.path.join(os.environ['APPDATA'], 'TradeTracker', 'Invoices')
+    if os.getenv("FLASK_ENV") == "prod":
+        data_dir = os.getenv("DATA_DIR", current_app.instance_path)
+        app_data_dir = os.path.join(data_dir, 'Invoices')
         os.makedirs(app_data_dir, exist_ok=True)
         output_filename = f"Dobropis_{cn_num}_INV{orig_inv_safe}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
         output_path = os.path.join(app_data_dir, output_filename)

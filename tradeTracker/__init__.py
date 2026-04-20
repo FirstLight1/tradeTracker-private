@@ -1,5 +1,4 @@
 import os
-import sys
 from flask import Flask
 from flask_cors import CORS
 from flask_limiter.util import get_remote_address
@@ -15,15 +14,6 @@ from . import actions
 limiter = Limiter(key_func=get_remote_address)
 crsf = CSRFProtect()
 
-def resource_path(relative_path):
-    """Get absolute path to resource, works for dev and for PyInstaller"""
-    try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(os.path.dirname(__file__))
-    return os.path.join(base_path, relative_path)
-
 def abort_secret_key():
     raise RuntimeError
 
@@ -33,7 +23,7 @@ def create_app(test_config=None):
     limiter.init_app(app)
     crsf.init_app(app)
 
-    load_dotenv()
+    load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
     ALLOWED_ORIGINS = [
     "https://tracker.yourdomain.com",
     f"chrome-extension://{os.environ['CHROME_EXTENSION_ID']}"
@@ -63,12 +53,11 @@ def create_app(test_config=None):
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
     )
-    # Use AppData for database storage in production (when frozen)
-    if getattr(sys, "frozen", False):
-        # Running as compiled exe
-        app_data_dir = os.path.join(os.environ["APPDATA"], "TradeTracker")
-        os.makedirs(app_data_dir, exist_ok=True)
-        db_path = os.path.join(app_data_dir, "tradeTracker.sqlite")
+    # Use DATA_DIR for database storage in production
+    if os.getenv("FLASK_ENV") == "prod":
+        data_dir = os.getenv("DATA_DIR", app.instance_path)
+        os.makedirs(data_dir, exist_ok=True)
+        db_path = os.path.join(data_dir, "tradeTracker.sqlite")
     else:
         # Running in development
         db_path = os.path.join(app.instance_path, "tradeTracker.sqlite")
