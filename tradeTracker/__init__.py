@@ -12,7 +12,7 @@ from .logging_config import configure_logging
 from . import actions
 
 limiter = Limiter(key_func=get_remote_address)
-crsf = CSRFProtect()
+csrf = CSRFProtect()
 
 def abort_secret_key():
     raise RuntimeError
@@ -21,7 +21,7 @@ def create_app(test_config=None):
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
     limiter.init_app(app)
-    crsf.init_app(app)
+    csrf.init_app(app)
 
     load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
     ALLOWED_ORIGINS = [

@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 import logging
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from . import generateInvoice, CONSTANTS
+from . import generateInvoice, CONSTANTS, csrf
 from tradeTracker.services.models import SaleInput
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaReceiptService
@@ -1338,8 +1338,12 @@ def groupUnnamed():
 
 #Gets rows of CM table using chrome extension and save them to the datasabe
 @bp.route('/CardMarketTable', methods=('POST',))
+@csrf.exempt
 @verify_token
 def cardMarketTable():
+    origin = request.headers.get("Origin", "")
+    if origin != 'chrome-extension://'+ os.getenv('CHROME_EXTENSION_ID'):
+        abort(403)
     if request.method == 'POST':
         db = get_db()
         data = request.get_json()
@@ -1429,10 +1433,13 @@ def cardMarketTable():
             return jsonify({'status': 'error', 'message': 'Error code: Ax15'}), 500
 
 @bp.route('/cardMarketOrder', methods=('POST',))
+@csrf.exempt
 @limiter.limit('10 per minute')
 @verify_token
 def cardMarketOrder():
-    #TODO implement asymetric decryption
+    origin = request.headers.get("Origin", "")
+    if origin != 'chrome-extension://'+ os.getenv('CHROME_EXTENSION_ID'):
+        abort(403)
     data = request.get_json()
     db = get_db()
     shipping_info = data['shipping_info']
