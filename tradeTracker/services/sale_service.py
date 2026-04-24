@@ -1,5 +1,4 @@
 import os
-from dotenv import load_dotenv
 import base64
 import datetime
 import tradeTracker.services.models as models
@@ -7,7 +6,9 @@ import tradeTracker.CONSTANTS as CONSTANTS
 import json
 from Crypto.Cipher import AES
 
-load_dotenv()
+if os.environ.get("FLASK_ENV") != "production":
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 class SaleService:
     def __init__(self, db, receipt_service):

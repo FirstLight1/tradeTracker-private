@@ -7,7 +7,6 @@ from flask_limiter import Limiter
 from flask_wtf import CSRFProtect
 import logging
 from werkzeug.exceptions import HTTPException
-from dotenv import load_dotenv
 from .logging_config import configure_logging
 limiter = Limiter(key_func=get_remote_address)
 csrf = CSRFProtect()
@@ -21,7 +20,10 @@ def create_app(test_config=None):
     limiter.init_app(app)
     csrf.init_app(app)
 
-    load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+    if os.environ.get("FLASK_ENV") != "production":
+        from dotenv import load_dotenv
+        load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
     ALLOWED_ORIGINS = [
     "https://tracker.yourdomain.com",
     f"chrome-extension://{os.environ['CHROME_EXTENSION_ID']}"

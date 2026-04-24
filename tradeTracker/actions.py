@@ -10,7 +10,6 @@ import fpdf
 import json
 import zipfile
 import pandas as pd
-from dotenv import load_dotenv
 import logging
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -20,7 +19,10 @@ from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaReceiptService
 from tradeTracker.services.cfAuth import verify_token
 
-load_dotenv()
+if os.environ.get("FLASK_ENV") != "production":
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
 bp = Blueprint('actions', __name__)
 logger = logging.getLogger(__name__)
 limiter = Limiter(key_func=get_remote_address)
