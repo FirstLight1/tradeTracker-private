@@ -1,6 +1,6 @@
 import base64
 from decimal import Decimal
-from flask import request, Blueprint, jsonify, current_app, send_file
+from flask import request, Blueprint, jsonify, current_app, send_file, abort
 from tradeTracker.db import get_db
 from io import BytesIO
 import datetime
