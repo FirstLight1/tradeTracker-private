@@ -1,4 +1,5 @@
-from flask import request
+from flask import request, abort
+import hmac
 import requests
 import jwt
 import json
@@ -61,3 +62,14 @@ def verify_token(f):
         return f(*args, **kwargs)
     return wrapper
 
+
+API_TOKEN = os.environ["CHROME_EXTENSION_API_TOKEN"]
+
+def require_api_token(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        if not token or not hmac.compare_digest(token, API_TOKEN):
+            abort(401)
+        return f(*args, **kwargs)
+    return wrapper

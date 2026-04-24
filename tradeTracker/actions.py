@@ -17,7 +17,7 @@ from . import generateInvoice, CONSTANTS, csrf
 from tradeTracker.services.models import SaleInput
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaReceiptService
-from tradeTracker.services.cfAuth import verify_token
+from tradeTracker.services.cfAuth import verify_token, require_api_token
 
 if os.environ.get("FLASK_ENV") != "production":
     from dotenv import load_dotenv
@@ -1341,7 +1341,7 @@ def groupUnnamed():
 #Gets rows of CM table using chrome extension and save them to the datasabe
 @bp.route('/CardMarketTable', methods=('POST',))
 @csrf.exempt
-@verify_token
+@require_api_token
 def cardMarketTable():
     origin = request.headers.get("Origin", "")
     if origin != 'chrome-extension://'+ os.getenv('CHROME_EXTENSION_ID'):
@@ -1437,7 +1437,7 @@ def cardMarketTable():
 @bp.route('/cardMarketOrder', methods=('POST',))
 @csrf.exempt
 @limiter.limit('10 per minute')
-@verify_token
+@require_api_token
 def cardMarketOrder():
     origin = request.headers.get("Origin", "")
     if origin != 'chrome-extension://'+ os.getenv('CHROME_EXTENSION_ID'):
