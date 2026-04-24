@@ -1343,9 +1343,6 @@ def groupUnnamed():
 @csrf.exempt
 @require_api_token
 def cardMarketTable():
-    origin = request.headers.get("Origin", "")
-    if origin != 'chrome-extension://'+ os.getenv('CHROME_EXTENSION_ID'):
-        abort(403)
     if request.method == 'POST':
         db = get_db()
         data = request.get_json()
@@ -1439,9 +1436,6 @@ def cardMarketTable():
 @limiter.limit('10 per minute')
 @require_api_token
 def cardMarketOrder():
-    origin = request.headers.get("Origin", "")
-    if origin != 'chrome-extension://'+ os.getenv('CHROME_EXTENSION_ID'):
-        abort(403)
     data = request.get_json()
     db = get_db()
     shipping_info = data['shipping_info']
