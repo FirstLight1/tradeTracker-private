@@ -25,8 +25,9 @@ def create_app(test_config=None):
         load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
     ALLOWED_ORIGINS = [
-    "https://tracker.yourdomain.com",
-    f"chrome-extension://{os.environ['CHROME_EXTENSION_ID']}"
+        "https://tracker.yourdomain.com",
+        f"chrome-extension://{os.environ['CHROME_EXTENSION_ID']}",
+        "https://www.cardmarket.com"
     ]
     CORS(app, 
          origins=ALLOWED_ORIGINS, 
