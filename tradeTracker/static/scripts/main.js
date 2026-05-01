@@ -2069,7 +2069,7 @@ async function loadAuctionContent(button) {
                         sealedDiv.setAttribute('sid', sealedItem.sid);
 
                         const margin = (Number(sealedItem.market_value) - Number(sealedItem.price)).toFixed(2);
-                        const timeStamp = sealedItem.date.replace('Z', '');
+                        const timeStamp = sealedItem.date?.replace('Z', '');
                         const date = new Date(timeStamp);
                         let formatedDate = date.toLocaleDateString('sk-SK', {
                             year: 'numeric',

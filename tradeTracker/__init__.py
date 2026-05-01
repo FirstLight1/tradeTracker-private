@@ -1,5 +1,5 @@
 import os
-from flask import Flask
+from flask import Flask, request, abort
 from flask_cors import CORS
 from flask_limiter.util import get_remote_address
 from flask_talisman import Talisman
@@ -82,7 +82,7 @@ def create_app(test_config=None):
     except OSError:
         pass
 
-    from . import db, tracker, actions, migration, renderers
+    from . import db, tracker, actions, migration, renderers, api
 
     # Run database migration before initializing the app
     migration.migrate_database(app.config["DATABASE"])
@@ -109,8 +109,19 @@ def create_app(test_config=None):
             db.init_db()
             print("Database initialized automatically on first run")
 
+    app.register_blueprint(api.bp)
     app.register_blueprint(tracker.bp)
-    app.register_blueprint(actions.bp) 
+    app.register_blueprint(actions.bp)
     app.register_blueprint(renderers.bp)
+
+    @app.before_request
+    def restrict_by_host():
+        host = request.host.split(':')[0]
+        endpoint = request.endpoint or ''
+        is_api_endpoint = endpoint.startswith('api.')
+        if host == 'api.cardanvil.sk' and not is_api_endpoint:
+            abort(404)
+        if host == 'app.cardanvil.sk' and is_api_endpoint:
+            abort(404)
 
     return app
