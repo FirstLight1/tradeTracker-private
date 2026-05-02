@@ -4,6 +4,7 @@ import datetime
 import logging
 from . import csrf, limiter
 from tradeTracker.services.cfAuth import require_api_token
+from tradeTracker import actions
 
 
 bp = Blueprint('api', __name__)
@@ -160,9 +161,8 @@ def cardMarketOrder():
             "cards" : cards,
             "sealed" : sealed
             }
-    global latest
     print(orderInfo)
-    latest = orderInfo
+    actions.latest = orderInfo
     logger.info('Order succcessfully extracted')
     return jsonify({'status': 'success'}), 200
 
