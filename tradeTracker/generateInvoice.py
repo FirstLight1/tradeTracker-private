@@ -37,7 +37,8 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
         invoice_num = db.execute('SELECT invoice_number FROM sales WHERE invoice_number NOT LIKE "S%" ORDER BY id DESC LIMIT 1').fetchone()[0]
         invoice_num = int(invoice_num) + 1
     except:
-        raise Exception("Failed to get invoice_number")
+        invoice_num = 936;
+        #raise Exception("Failed to get invoice_number")
 
     invoice_date = date.today()
     # Set language to Slovak (or English 'en') if supported by your system locale
