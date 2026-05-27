@@ -89,7 +89,7 @@ def add_bulk_sales_table(db_path):
                     quantity INTEGER NOT NULL,
                     unit_price REAL NOT NULL,
                     total_price REAL NOT NULL,
-                    FOREIGN KEY (auction_id) REFERENCES auctions (id),
+                    FOREIGN KEY (auction_id) REFERENCES auctions (id) ON DELETE CASCADE,
                     UNIQUE(auction_id, item_type)
                 )
             """)

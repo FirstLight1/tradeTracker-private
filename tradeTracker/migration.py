@@ -44,7 +44,9 @@ def migrate_database(db_path):
         addBarterTable(db_path)
         # Migration 8: Ensure barter foreign keys are configured with ON DELETE CASCADE
         ensureBarterOnDeleteCascade(db_path)
-        
+        # Migration 9: Ensure cards/bulk_items/sealed cascade when their auction is deleted
+        ensureAuctionsOnDeleteCascade(db_path)
+
         print("Database migration check complete.")
     except sqlite3.Error as e:
         print(f"Database migration failed: {e}")
@@ -234,6 +236,185 @@ def ensureBarterOnDeleteCascade(db_path):
         if conn:
             conn.close()
 
+def _recoverStrandedOldTable(cursor, table):
+    """
+    If a prior un-transactioned rebuild of `table` crashed, the database may
+    contain `<table>_old` (or both `<table>` and `<table>_old`). Restore a
+    consistent state so the rebuild path can re-run safely.
+    """
+    oldName = f"{table}_old"
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        (oldName,),
+    )
+    if cursor.fetchone() is None:
+        return
+
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        (table,),
+    )
+    mainExists = cursor.fetchone() is not None
+
+    if not mainExists:
+        print(f"Recovering '{table}': renaming stranded '{oldName}' back (prior run crashed mid-rebuild).")
+        cursor.execute(f"ALTER TABLE {oldName} RENAME TO {table}")
+        return
+
+    cursor.execute(f"SELECT COUNT(*) FROM {table}")
+    newCount = cursor.fetchone()[0]
+    cursor.execute(f"SELECT COUNT(*) FROM {oldName}")
+    oldCount = cursor.fetchone()[0]
+
+    if newCount == 0 and oldCount > 0:
+        print(f"Recovering '{table}': new table is empty ({newCount}), restoring from '{oldName}' ({oldCount} rows).")
+        cursor.execute(f"DROP TABLE {table}")
+        cursor.execute(f"ALTER TABLE {oldName} RENAME TO {table}")
+    elif newCount >= oldCount:
+        print(f"'{oldName}' looks like leftover residue (new={newCount}, old={oldCount}); dropping it.")
+        cursor.execute(f"DROP TABLE {oldName}")
+    else:
+        print(
+            f"WARNING: both '{table}' ({newCount} rows) and '{oldName}' ({oldCount} rows) "
+            f"contain data — manual inspection required, leaving as-is."
+        )
+
+
+def ensureAuctionsOnDeleteCascade(db_path):
+    """
+    Ensures the auction_id foreign keys on cards, bulk_items, and sealed
+    use ON DELETE CASCADE. Each table is recreated only if its existing
+    constraint is not already CASCADE. Indexes are preserved.
+    """
+    targets = [
+        (
+            "cards",
+            """
+                CREATE TABLE cards (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    auction_id INTEGER NOT NULL,
+                    card_name TEXT NOT NULL,
+                    card_num TEXT,
+                    condition TEXT,
+                    card_price REAL,
+                    market_value REAL,
+                    sold_date TEXT,
+                    FOREIGN KEY (auction_id) REFERENCES auctions (id) ON DELETE CASCADE
+                )
+            """,
+        ),
+        (
+            "bulk_items",
+            """
+                CREATE TABLE bulk_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    auction_id INTEGER NOT NULL,
+                    item_type TEXT NOT NULL,
+                    quantity INTEGER NOT NULL,
+                    unit_price REAL NOT NULL,
+                    total_price REAL NOT NULL,
+                    FOREIGN KEY (auction_id) REFERENCES auctions (id) ON DELETE CASCADE,
+                    UNIQUE(auction_id, item_type)
+                )
+            """,
+        ),
+        (
+            "sealed",
+            """
+                CREATE TABLE sealed (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    price REAL,
+                    market_value REAL,
+                    date TEXT,
+                    sale_id INTEGER,
+                    auction_id INTEGER,
+                    FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE CASCADE,
+                    FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE
+                )
+            """,
+        ),
+    ]
+
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        # Autocommit mode so we control BEGIN/COMMIT/ROLLBACK explicitly.
+        conn.isolation_level = None
+        cursor = conn.cursor()
+
+        # Recover any *_old tables stranded by a prior crashed run before
+        # this hardening landed. Done first so the rebuild below sees a
+        # consistent starting state.
+        for table, _ in targets:
+            _recoverStrandedOldTable(cursor, table)
+
+        for table, newCreateSql in targets:
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            )
+            if cursor.fetchone() is None:
+                print(f"'{table}' table not found, skipping auctions cascade migration.")
+                continue
+
+            cursor.execute(f"PRAGMA foreign_key_list({table})")
+            fkRows = cursor.fetchall()
+            onDeleteByColumn = {fk[3]: (fk[6] or "").upper() for fk in fkRows}
+
+            if onDeleteByColumn.get("auction_id") == "CASCADE":
+                print(f"'{table}' already has ON DELETE CASCADE on auction_id.")
+                continue
+
+            print(f"Applying migration: Recreating '{table}' with ON DELETE CASCADE on auction_id...")
+
+            cursor.execute(f"PRAGMA table_info({table})")
+            existingColumns = [col[1] for col in cursor.fetchall()]
+
+            cursor.execute(
+                "SELECT sql FROM sqlite_master "
+                "WHERE type='index' AND tbl_name=? AND sql IS NOT NULL",
+                (table,),
+            )
+            indexSqls = [row[0] for row in cursor.fetchall()]
+
+            # foreign_keys can only be toggled outside a transaction.
+            cursor.execute("PRAGMA foreign_keys = OFF")
+            try:
+                cursor.execute("BEGIN IMMEDIATE")
+                cursor.execute(f"ALTER TABLE {table} RENAME TO {table}_old")
+                cursor.execute(newCreateSql)
+
+                cursor.execute(f"PRAGMA table_info({table})")
+                newColumns = [col[1] for col in cursor.fetchall()]
+                sharedColumns = [c for c in existingColumns if c in newColumns]
+                colList = ", ".join(sharedColumns)
+                cursor.execute(
+                    f"INSERT INTO {table} ({colList}) SELECT {colList} FROM {table}_old"
+                )
+                cursor.execute(f"DROP TABLE {table}_old")
+
+                for idxSql in indexSqls:
+                    cursor.execute(idxSql)
+
+                cursor.execute("COMMIT")
+            except Exception:
+                try:
+                    cursor.execute("ROLLBACK")
+                except sqlite3.Error:
+                    pass
+                raise
+            finally:
+                cursor.execute("PRAGMA foreign_keys = ON")
+
+            print(f"'{table}' recreated successfully with ON DELETE CASCADE on auction_id.")
+    except sqlite3.Error as e:
+        print(f"Error ensuring auctions ON DELETE CASCADE constraints: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
 def addSealedProductsTable(db_path):
     try:
         conn = sqlite3.connect(db_path)
@@ -256,7 +437,7 @@ def addSealedProductsTable(db_path):
                     sale_id INTEGER,
                     auction_id INTEGER,
                     FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE CASCADE,
-                    FOREIGN KEY (auction_id) REFERENCES auctions(id)
+                    FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE
                 )
             """)
             cursor.execute("CREATE INDEX idx_sealed_name ON sealed(name)")

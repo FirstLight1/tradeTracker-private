@@ -161,7 +161,7 @@ CREATE TABLE cards (
     condition TEXT,
     card_price REAL,
     market_value REAL,
-    FOREIGN KEY (auction_id) REFERENCES auctions (id)
+    FOREIGN KEY (auction_id) REFERENCES auctions (id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_cards_card_name ON cards(card_name);
@@ -212,7 +212,7 @@ CREATE TABLE bulk_items(
     quantity INTEGER NOT NULL,
     unit_price REAL NOT NULL,
     total_price REAL NOT NULL,
-    FOREIGN KEY (auction_id) REFERENCES auctions (id),
+    FOREIGN KEY (auction_id) REFERENCES auctions (id) ON DELETE CASCADE,
     UNIQUE(auction_id, item_type)
 );
 
@@ -240,7 +240,7 @@ CREATE TABLE sealed(
     sale_id INTEGER,
     auction_id INTEGER,
     FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE CASCADE,
-    FOREIGN KEY (auction_id) REFERENCES auctions(id)
+    FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE
     );
 
 CREATE INDEX idx_sealed_name ON sealed(name);
