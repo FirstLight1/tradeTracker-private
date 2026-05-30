@@ -211,6 +211,7 @@ def ensureBarterOnDeleteCascade(db_path):
         print("Applying migration: Recreating 'barter' table with ON DELETE CASCADE...")
 
         cursor.execute("PRAGMA foreign_keys = OFF")
+        cursor.execute("PRAGMA legacy_alter_table = ON")
         cursor.execute("ALTER TABLE barter RENAME TO barter_old")
         cursor.execute("""
             CREATE TABLE barter(
@@ -227,6 +228,7 @@ def ensureBarterOnDeleteCascade(db_path):
         """)
         cursor.execute("DROP TABLE barter_old")
         conn.commit()
+        cursor.execute("PRAGMA legacy_alter_table = OFF")
         cursor.execute("PRAGMA foreign_keys = ON")
 
         print("'barter' table recreated successfully with ON DELETE CASCADE.")
@@ -235,6 +237,84 @@ def ensureBarterOnDeleteCascade(db_path):
     finally:
         if conn:
             conn.close()
+
+def _repairSaleItemsFkAfterCardsRename(cursor):
+    """
+    On SQLite >= 3.25, `ALTER TABLE cards RENAME TO cards_old` silently
+    rewrites the FK clause in `sale_items` to reference `cards_old`. After
+    the rebuild drops `cards_old`, sale_items is left with a dangling FK
+    and any later INSERT/DELETE raises "no such table: main.cards_old".
+
+    Detect by inspecting sale_items' FK list. If broken, rebuild sale_items
+    with the correct FK pointing back at `cards`. Runs unconditionally so
+    it self-heals databases that were already damaged by an earlier run.
+    """
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='sale_items'"
+    )
+    if cursor.fetchone() is None:
+        return
+
+    cursor.execute("PRAGMA foreign_key_list(sale_items)")
+    fkRows = cursor.fetchall()
+    # fk[2] is the referenced table name
+    broken = any(fk[2] == "cards_old" for fk in fkRows)
+    if not broken:
+        return
+
+    print(
+        "Repairing 'sale_items': FK was rewritten to 'cards_old' by an earlier migration; "
+        "rebuilding with correct reference to 'cards'..."
+    )
+
+    cursor.execute("PRAGMA table_info(sale_items)")
+    existingColumns = [col[1] for col in cursor.fetchall()]
+
+    cursor.execute(
+        "SELECT sql FROM sqlite_master "
+        "WHERE type='index' AND tbl_name='sale_items' AND sql IS NOT NULL"
+    )
+    indexSqls = [row[0] for row in cursor.fetchall()]
+
+    try:
+        cursor.execute("BEGIN IMMEDIATE")
+        cursor.execute("ALTER TABLE sale_items RENAME TO sale_items_old_repair")
+        cursor.execute("""
+            CREATE TABLE sale_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sale_id INTEGER NOT NULL,
+                card_id INTEGER NOT NULL,
+                sell_price REAL NOT NULL,
+                sold_cm INTEGER DEFAULT 0,
+                sold INTEGER DEFAULT 0,
+                profit REAL,
+                FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE CASCADE,
+                FOREIGN KEY (card_id) REFERENCES cards (id) ON DELETE CASCADE
+            )
+        """)
+
+        cursor.execute("PRAGMA table_info(sale_items)")
+        newColumns = [col[1] for col in cursor.fetchall()]
+        sharedColumns = [c for c in existingColumns if c in newColumns]
+        colList = ", ".join(sharedColumns)
+        cursor.execute(
+            f"INSERT INTO sale_items ({colList}) "
+            f"SELECT {colList} FROM sale_items_old_repair"
+        )
+        cursor.execute("DROP TABLE sale_items_old_repair")
+
+        for idxSql in indexSqls:
+            cursor.execute(idxSql)
+
+        cursor.execute("COMMIT")
+        print("'sale_items' FK repaired successfully.")
+    except Exception:
+        try:
+            cursor.execute("ROLLBACK")
+        except sqlite3.Error:
+            pass
+        raise
+
 
 def _recoverStrandedOldTable(cursor, table):
     """
@@ -343,6 +423,10 @@ def ensureAuctionsOnDeleteCascade(db_path):
         conn.isolation_level = None
         cursor = conn.cursor()
 
+        # Self-heal a previously damaged sale_items.card_id FK before doing
+        # anything else (see _repairSaleItemsFkAfterCardsRename for context).
+        _repairSaleItemsFkAfterCardsRename(cursor)
+
         # Recover any *_old tables stranded by a prior crashed run before
         # this hardening landed. Done first so the rebuild below sees a
         # consistent starting state.
@@ -379,7 +463,12 @@ def ensureAuctionsOnDeleteCascade(db_path):
             indexSqls = [row[0] for row in cursor.fetchall()]
 
             # foreign_keys can only be toggled outside a transaction.
+            # legacy_alter_table stops SQLite >= 3.25 from rewriting FK
+            # references in OTHER tables when we RENAME below — without it,
+            # sale_items' FK to cards silently becomes a FK to cards_old and
+            # is left dangling once cards_old is dropped.
             cursor.execute("PRAGMA foreign_keys = OFF")
+            cursor.execute("PRAGMA legacy_alter_table = ON")
             try:
                 cursor.execute("BEGIN IMMEDIATE")
                 cursor.execute(f"ALTER TABLE {table} RENAME TO {table}_old")
@@ -405,6 +494,7 @@ def ensureAuctionsOnDeleteCascade(db_path):
                     pass
                 raise
             finally:
+                cursor.execute("PRAGMA legacy_alter_table = OFF")
                 cursor.execute("PRAGMA foreign_keys = ON")
 
             print(f"'{table}' recreated successfully with ON DELETE CASCADE on auction_id.")
