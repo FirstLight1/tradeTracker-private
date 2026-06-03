@@ -363,6 +363,7 @@ def loadAuctions():
     auctions_list = []
     for auction in auctions:
         auction_dict = dict(auction)
+        """
         if auction_dict.get('payment_method'):
             # Check if migration needed
             migrated = migrate_payment_method(auction_dict['payment_method'])
@@ -372,6 +373,7 @@ def loadAuctions():
                           (migrated, auction_dict['id']))
                 auction_dict['payment_method'] = migrated
         auctions_list.append(auction_dict)
+        """
     db.commit()
     return jsonify(auctions_list)
 

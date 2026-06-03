@@ -33,11 +33,11 @@ def verify_token(f):
     """
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
+        if os.getenv("FLASK_ENV") == 'development':
+            return f(*args, **kwargs)
         # Check for the POLICY_AUD environment variable
         if not POLICY_AUD:
           return "missing required audience", 403
-        if os.getenv("FLASK_ENV") == 'development':
-            return f(*args, **kwargs)
 
         token = ''
         if 'CF_Authorization' in request.cookies:
