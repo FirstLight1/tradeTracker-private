@@ -535,6 +535,11 @@ exposed write surface**, so security/abuse handling drives most of the design.
 
 ## 13. Fix "Total Positive Margin" calculation on the monthly sold report (bug)
 
+> **Related: item 15 (normal-DPH vs margin-scheme split).** Do these together — both touch the
+> same margin loops (`actions.py:886`–`903`). Item 13 fixes the sign bug; item 15 stops counting
+> normal-VAT goods in the margin at all. Don't fix one without the other or the buckets stay wrong.
+
+
 **What.** The monthly sold report's **Total Positive Margin** is wrong. The cards and sealed loops
 correctly split each item's margin into positive vs negative by sign, but the **bulk/holo loop adds
 its margin to `total_pos_margin` unconditionally — no sign check** — so a *negative* bulk margin
@@ -587,3 +592,60 @@ positive/negative split no longer means what the labels say.
 - Pure read/display change — no schema or migration needed (`sales.sale_date` already exists).
 - Optionally extend the same date column to the sealed and bulk tables for consistency, but bulk rows
   are GROUP BY'd across the month (`:791`–`796`) so they have no single sale date — leave bulk as-is.
+
+---
+
+## 15. Keep normal-DPH goods out of the margin — report them separately (bug + feature)
+
+**What.** The business runs the **§66 margin scheme** (used collectibles — DPH is included in the
+margin, `tax=Decimal("0")` is hardcoded in every invoice line, see `generateInvoice.py:124` and the
+§66 notes at `:59`/`:87`/`:234`). But **not everything is margin-scheme**: sealed/new goods bought
+from a distributor carry **normal 23% DPH** — the app already half-knows this (the "no VAT" column
+divides sealed price by 1.23, `templates/index.html:119` + `static/scripts/main.js:2483`). The
+**monthly sold report folds every item into the same positive/negative margin buckets** regardless of
+tax regime (`actions.py:886`–`903`), so normal-DPH goods get counted as if they were margin-scheme
+goods — **the margin total is wrong** (margin is a §66 concept and shouldn't include normal-VAT items).
+
+**Goal.** Normal-DPH items must **not** be added to `total_pos_margin` / `total_neg_margin`. They
+**still belong in the sales report** (buy/sell/profit totals + their own table) but as a **separate
+section** with their own DPH breakdown (base / 23% DPH / total), kept apart from the margin items.
+
+**Where.**
+- `tradeTracker/migration.py` — new idempotent flag marking an item's tax regime (none today).
+- `tradeTracker/actions.py` — `generateSoldReport()` queries (`:779`–`796`) must select the flag;
+  `generatePDF()` margin loops (`:886`–`903`) must skip normal-DPH items; totals print at `:912`–`919`.
+- `tradeTracker/actions.py` `/addSealed` (`:386`) + the Chrome-extension import payload — set the flag
+  on intake (sealed/distributor goods default to normal-DPH; singles default to margin-scheme).
+- `tradeTracker/static/scripts/main.js` (add/import forms) + `templates/index.html` — flag input/column.
+
+**How.**
+1. **Decide the flag's home (open choice — suggested default below).**
+   - *Suggested default:* a per-item boolean on `cards`/`sealed` (and `bulk_items`), e.g.
+     `is_margin_scheme INTEGER NOT NULL DEFAULT 1` (existing rows = margin, the current behaviour).
+     Set it to `0` for normal-DPH goods. Most flexible, mixes regimes within one auction tab.
+   - *Alternatives:* a tax-regime flag on the **auction tab** (`auctions`), or infer from item kind
+     (all sealed = normal-DPH) — simpler but wrong if a sealed item is ever resold as margin goods.
+     **Confirm with the user / accountant which granularity they actually need.**
+2. **Migration** — add the column(s) via the `PRAGMA table_info` idempotent pattern
+   (`migration.py:52` `_add_sold_date_to_cards`), register in `migrate_database()`.
+3. **Intake** — `/addSealed` + extension import accept the regime; default sealed/new goods to
+   normal-DPH, singles to margin-scheme. Add the toggle to the manual forms.
+4. **Report — exclude from margin.** In the three margin loops (`:886`–`903`), `continue` when the
+   item is normal-DPH so it never touches `total_pos_margin`/`total_neg_margin`. (Do this **on top of**
+   item 13's sign fix — the bulk loop also needs the `> 0` split.)
+5. **Report — separate DPH section.** Accumulate normal-DPH items into their own totals
+   (base = sell/1.23, DPH = sell − base, like the existing `total_shipping_*` block at `:905`–`910`)
+   and render a distinct "Normal DPH goods" table + subtotal, separate from the margin tables.
+6. **Keep them in the headline totals.** `total_buy_price`/`total_sell_price`/`total_profit`
+   (`:874`–`880`) should still include normal-DPH items (they're real sales) — only the **margin**
+   buckets exclude them. Make the report state both figures clearly so the accountant sees the split.
+
+**Notes / risks.**
+- **Accounting-facing correctness** — margin (§66) and normal-DPH (§2) are different tax regimes that
+  must not be commingled; mislabeling either way is a tax error. Confirm the exact split + wording
+  with the accountant before locking the report layout.
+- Tightly coupled to **item 13** — same loops; ship them in one pass (see the cross-ref on item 13).
+- The `total_pos_margin + total_neg_margin == total_profit` identity from item 13 step 3 **no longer
+  holds** once normal-DPH items are excluded from margin but kept in profit — update that check to
+  `margin_buckets == profit_of_margin_items_only`.
+- Ties to item 8 (Unicode) only incidentally; no overlap with the carrier/Shopify items.
