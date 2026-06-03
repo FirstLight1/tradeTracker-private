@@ -706,7 +706,7 @@ def generate_credit_note(saleId):
 
     # Load cards
     cards_rows = db.execute(
-        'SELECT c.card_name, c.card_num, si.sell_price as marketValue '
+        'SELECT c.card_name, c.card_num, si.sell_price as marketValue,  '
         'FROM cards c '
         'JOIN sale_items si ON c.id = si.card_id '
         'WHERE si.sale_id = ?',
@@ -778,14 +778,14 @@ def generateSoldReport():
     month = request.args.get('month').zfill(2)
     year = request.args.get('year')
     cards = db.execute(
-        'SELECT c.card_name, c.card_num, c.card_price, si.sell_price '
+        'SELECT c.card_name, c.card_num, c.card_price, si.sell_price, s.sale_date '
         'FROM cards c '
         'JOIN sale_items si ON c.id = si.card_id '
         'JOIN sales s ON si.sale_id = s.id '
         'WHERE strftime("%Y", s.sale_date) = ? AND strftime("%m", s.sale_date) = ?', 
         (year, month)).fetchall()
    
-    sealed = db.execute('SELECT se.name, se.price, se.market_value, se.auction_id FROM sealed se JOIN sales s ON se.sale_id = s.id WHERE strftime("%Y", s.sale_date) = ? AND strftime("%m", s.sale_date) = ? ',
+    sealed = db.execute('SELECT se.name, se.price, se.market_value, se.auction_id, s.sale_date FROM sealed se JOIN sales s ON se.sale_id = s.id WHERE strftime("%Y", s.sale_date) = ? AND strftime("%m", s.sale_date) = ? ',
                         (year, month)).fetchall()
     sealedList = [dict(item) for item in sealed]
 
@@ -835,6 +835,18 @@ def generateSoldReport():
         logger.exception('PDF generation failed')
         print(f"Error generating PDF: {e}")
         return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax08'}), 500
+
+
+def format_iso_date(iso_str):
+    """Convert an ISO formatted date string to DD.MM.YYYY."""
+    if not iso_str:
+        return 'N/A'
+    try:
+        date_part = str(iso_str)[:10]
+        dt = datetime.datetime.strptime(date_part, '%Y-%m-%d')
+        return dt.strftime('%d.%m.%Y')
+    except (ValueError, TypeError):
+        return str(iso_str)
 
 
 def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
@@ -951,13 +963,14 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
     
     # Table header
     pdf.set_font(font_family, '', 10)
-    pdf.cell(50, 10, 'Card Name', 1, 0, 'C')
-    pdf.cell(35, 10, 'Card Number', 1, 0, 'C')
-    pdf.cell(30, 10, 'Buy Price', 1, 0, 'C')
-    pdf.cell(30, 10, 'Sell Price', 1, 0, 'C')
-    pdf.cell(30, 10, 'Margin', 1, 0, 'C')
+    pdf.cell(45, 10, 'Card Name', 1, 0, 'C')
+    pdf.cell(30, 10, 'Card Number', 1, 0, 'C')
+    pdf.cell(25, 10, 'Buy Price', 1, 0, 'C')
+    pdf.cell(25, 10, 'Sell Price', 1, 0, 'C')
+    pdf.cell(25, 10, 'Margin', 1, 0, 'C')
+    pdf.cell(25, 10, 'Sold Date', 1, 0, 'C')
     pdf.ln()
-    
+
     # Table content
     pdf.set_font(font_family, '', 9)
     for card in cards:
@@ -966,99 +979,106 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
         buy_price = f"{card['card_price']:.2f}€" if card['card_price'] else 'N/A'
         sell_price = f"{card['sell_price']:.2f}€" if card['sell_price'] else 'N/A'
         card_profit = f"{(card['sell_price'] - card['card_price']):.2f}€" if card['sell_price'] and card['card_price'] else 'N/A'
-        
+        sold_date = format_iso_date(card['sale_date'])
+
         # Estimate height needed for card name (more conservative)
-        # With font size 9 and line height 4, approximately 25 chars per line in 50mm width
-        chars_per_line = 25
+        # With font size 9 and line height 4, approximately 22 chars per line in 45mm width
+        chars_per_line = 22
         estimated_lines = max(1, (len(card_name) + chars_per_line - 1) // chars_per_line)
         estimated_height = estimated_lines * 4
-        
+
         # Check if we need a page break BEFORE drawing anything
         if pdf.get_y() + estimated_height > pdf.h - pdf.b_margin - 10:
             pdf.add_page()
             # Redraw table header on new page
             pdf.set_font(font_family, '', 10)
-            pdf.cell(50, 10, 'Card Name', 1, 0, 'C')
-            pdf.cell(35, 10, 'Card Number', 1, 0, 'C')
-            pdf.cell(30, 10, 'Buy Price', 1, 0, 'C')
-            pdf.cell(30, 10, 'Sell Price', 1, 0, 'C')
-            pdf.cell(30, 10, 'Margin', 1, 0, 'C')
+            pdf.cell(45, 10, 'Card Name', 1, 0, 'C')
+            pdf.cell(30, 10, 'Card Number', 1, 0, 'C')
+            pdf.cell(25, 10, 'Buy Price', 1, 0, 'C')
+            pdf.cell(25, 10, 'Sell Price', 1, 0, 'C')
+            pdf.cell(25, 10, 'Margin', 1, 0, 'C')
+            pdf.cell(25, 10, 'Sold Date', 1, 0, 'C')
             pdf.ln()
             pdf.set_font(font_family, '', 9)
-        
+
         # Store starting position
         x_start = pdf.get_x()
         y_start = pdf.get_y()
-        
+
         # Draw card name with multi_cell
-        pdf.multi_cell(50, 4, card_name, border=1, align='L')
-        
+        pdf.multi_cell(45, 4, card_name, border=1, align='L')
+
         # Calculate actual height used
         y_after_name = pdf.get_y()
         actual_height = y_after_name - y_start
-        
+
         # Draw other cells aligned with the card name
-        pdf.set_xy(x_start + 50, y_start)
-        pdf.cell(35, actual_height, card_num, 1, 0, 'C')
-        pdf.cell(30, actual_height, buy_price, 1, 0, 'R')
-        pdf.cell(30, actual_height, sell_price, 1, 0, 'R')
-        pdf.cell(30, actual_height, card_profit, 1, 0, 'R')
-        
+        pdf.set_xy(x_start + 45, y_start)
+        pdf.cell(30, actual_height, card_num, 1, 0, 'C')
+        pdf.cell(25, actual_height, buy_price, 1, 0, 'R')
+        pdf.cell(25, actual_height, sell_price, 1, 0, 'R')
+        pdf.cell(25, actual_height, card_profit, 1, 0, 'R')
+        pdf.cell(25, actual_height, sold_date, 1, 0, 'C')
+
         # Move to next row
         pdf.set_xy(x_start, y_after_name)
     
     # Table header
     pdf.set_font(font_family, '', 10)
-    pdf.cell(85, 10, 'Product Name', 1, 0, 'C')
+    pdf.cell(70, 10, 'Product Name', 1, 0, 'C')
     pdf.cell(30, 10, 'Buy Price', 1, 0, 'C')
     pdf.cell(30, 10, 'Sell Price', 1, 0, 'C')
-    pdf.cell(30, 10, 'Margin', 1, 0, 'C')
+    pdf.cell(20, 10, 'Margin', 1, 0, 'C')
+    pdf.cell(25, 10, 'Sold Date', 1, 0, 'C')
     pdf.ln()
-    
+
     # Table content
-    # Sealed items   
+    # Sealed items
     pdf.set_font(font_family, '', 9)
     for item in sealed:
         name = item['name'] or 'N/A'
         buy_price = f"{item['price']:.2f}€" if item['price'] else 'N/A'
         sell_price = f"{item['market_value']:.2f}€" if item['market_value'] else 'N/A'
         card_profit = f"{(item['market_value'] - item['price']):.2f}€" if item['market_value'] and item['price'] else 'N/A'
-        
+        sold_date = format_iso_date(item['sale_date'])
+
         # Estimate height needed for product name
-        # With font size 9 and line height 4, approximately 40 chars per line in 85mm width
-        chars_per_line = 40
+        # With font size 9 and line height 4, approximately 33 chars per line in 70mm width
+        chars_per_line = 33
         estimated_lines = max(1, (len(name) + chars_per_line - 1) // chars_per_line)
         estimated_height = estimated_lines * 4
-        
+
         # Check if we need a page break BEFORE drawing anything
         if pdf.get_y() + estimated_height > pdf.h - pdf.b_margin - 10:
             pdf.add_page()
             # Redraw table header on new page
             pdf.set_font(font_family, '', 10)
-            pdf.cell(85, 10, 'Product Name', 1, 0, 'C')
+            pdf.cell(70, 10, 'Product Name', 1, 0, 'C')
             pdf.cell(30, 10, 'Buy Price', 1, 0, 'C')
             pdf.cell(30, 10, 'Sell Price', 1, 0, 'C')
-            pdf.cell(30, 10, 'Margin', 1, 0, 'C')
+            pdf.cell(20, 10, 'Margin', 1, 0, 'C')
+            pdf.cell(25, 10, 'Sold Date', 1, 0, 'C')
             pdf.ln()
             pdf.set_font(font_family, '', 9)
-        
+
         # Store starting position
         x_start = pdf.get_x()
         y_start = pdf.get_y()
-        
+
         # Draw product name with multi_cell
-        pdf.multi_cell(85, 4, name, border=1, align='L')
-        
+        pdf.multi_cell(70, 4, name, border=1, align='L')
+
         # Calculate actual height used
         y_after_name = pdf.get_y()
         actual_height = y_after_name - y_start
-        
+
         # Draw other cells aligned with the product name
-        pdf.set_xy(x_start + 85, y_start)
+        pdf.set_xy(x_start + 70, y_start)
         pdf.cell(30, actual_height, buy_price, 1, 0, 'R')
         pdf.cell(30, actual_height, sell_price, 1, 0, 'R')
-        pdf.cell(30, actual_height, card_profit, 1, 0, 'R')
-        
+        pdf.cell(20, actual_height, card_profit, 1, 0, 'R')
+        pdf.cell(25, actual_height, sold_date, 1, 0, 'C')
+
         # Move to next row
         pdf.set_xy(x_start, y_after_name)
     # Save PDF
