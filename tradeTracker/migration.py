@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import re
 import sys
 # Import the sales history migration logic
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -46,6 +47,11 @@ def migrate_database(db_path):
         ensureBarterOnDeleteCascade(db_path)
         # Migration 9: Ensure cards/bulk_items/sealed cascade when their auction is deleted
         ensureAuctionsOnDeleteCascade(db_path)
+
+        # Migration 10: Repair any FKs left dangling by a prior buggy run of
+        # the rebuild migrations (SQLite >= 3.25 silently rewrote child-table
+        # FK clauses to point at *_old during ALTER TABLE RENAME).
+        repairDanglingForeignKeys(db_path)
 
         print("Database migration check complete.")
     except sqlite3.Error as e:
@@ -211,6 +217,7 @@ def ensureBarterOnDeleteCascade(db_path):
         print("Applying migration: Recreating 'barter' table with ON DELETE CASCADE...")
 
         cursor.execute("PRAGMA foreign_keys = OFF")
+        cursor.execute("PRAGMA legacy_alter_table = ON")
         cursor.execute("ALTER TABLE barter RENAME TO barter_old")
         cursor.execute("""
             CREATE TABLE barter(
@@ -227,6 +234,7 @@ def ensureBarterOnDeleteCascade(db_path):
         """)
         cursor.execute("DROP TABLE barter_old")
         conn.commit()
+        cursor.execute("PRAGMA legacy_alter_table = OFF")
         cursor.execute("PRAGMA foreign_keys = ON")
 
         print("'barter' table recreated successfully with ON DELETE CASCADE.")
@@ -379,7 +387,12 @@ def ensureAuctionsOnDeleteCascade(db_path):
             indexSqls = [row[0] for row in cursor.fetchall()]
 
             # foreign_keys can only be toggled outside a transaction.
+            # legacy_alter_table stops SQLite >= 3.25 from rewriting FK
+            # references in OTHER tables when we RENAME below — without it,
+            # sale_items' FK to cards silently becomes a FK to cards_old and
+            # is left dangling once cards_old is dropped.
             cursor.execute("PRAGMA foreign_keys = OFF")
+            cursor.execute("PRAGMA legacy_alter_table = ON")
             try:
                 cursor.execute("BEGIN IMMEDIATE")
                 cursor.execute(f"ALTER TABLE {table} RENAME TO {table}_old")
@@ -405,6 +418,7 @@ def ensureAuctionsOnDeleteCascade(db_path):
                     pass
                 raise
             finally:
+                cursor.execute("PRAGMA legacy_alter_table = OFF")
                 cursor.execute("PRAGMA foreign_keys = ON")
 
             print(f"'{table}' recreated successfully with ON DELETE CASCADE on auction_id.")
@@ -475,4 +489,139 @@ def addShippingInfoColumn(db_path):
             raise e
 
 
+def repairDanglingForeignKeys(db_path):
+    """
+    Scan every user table for foreign-key clauses that reference a missing
+    table, and rebuild the affected table with the FK retargeted to the
+    obvious replacement (strip a trailing `_old` and use the base name if
+    that table now exists).
+
+    Why this exists: on SQLite >= 3.25, `ALTER TABLE X RENAME TO X_old`
+    silently rewrites FK clauses in every child table to point at `X_old`.
+    When the rebuild later drops `X_old`, those FK references become
+    dangling, and the next write to a child table raises
+    "no such table: main.X_old". This function self-heals that damage.
+
+    Runs unconditionally: cheap on healthy databases (one PRAGMA per table,
+    no rewrites), restorative on damaged ones.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.isolation_level = None  # autocommit; we own BEGIN/COMMIT
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )
+        allTables = {row[0] for row in cursor.fetchall()}
+
+        # tableName -> { brokenRefName: replacementName }
+        repairPlan = {}
+        for tableName in allTables:
+            cursor.execute(f"PRAGMA foreign_key_list({tableName})")
+            for fk in cursor.fetchall():
+                referenced = fk[2]
+                if referenced in allTables:
+                    continue
+                if referenced.endswith("_old") and referenced[:-4] in allTables:
+                    repairPlan.setdefault(tableName, {})[referenced] = referenced[:-4]
+                else:
+                    print(
+                        f"WARNING: '{tableName}' has a FK referencing missing "
+                        f"table '{referenced}'; no obvious replacement — leaving as-is."
+                    )
+
+        if not repairPlan:
+            print("FK repair: no dangling foreign-key references found.")
+            return
+
+        for tableName, rewrites in repairPlan.items():
+            print(
+                f"FK repair: '{tableName}' has dangling reference(s) "
+                f"{rewrites}; rebuilding with corrected FK clause(s)..."
+            )
+
+            cursor.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                (tableName,),
+            )
+            currentCreateSql = cursor.fetchone()[0]
+
+            newCreateSql = currentCreateSql
+            failed = False
+            for brokenName, fixName in rewrites.items():
+                # Match `REFERENCES <brokenName>` with optional quoting,
+                # bounded so we don't touch substrings of other identifiers.
+                pattern = re.compile(
+                    r"(REFERENCES\s+)"
+                    r"(?:\"" + re.escape(brokenName) + r"\""
+                    r"|`" + re.escape(brokenName) + r"`"
+                    r"|\[" + re.escape(brokenName) + r"\]"
+                    r"|\b" + re.escape(brokenName) + r"\b)",
+                    re.IGNORECASE,
+                )
+                newCreateSql, n = pattern.subn(
+                    r"\g<1>" + fixName, newCreateSql
+                )
+                if n == 0:
+                    print(
+                        f"WARNING: could not locate 'REFERENCES {brokenName}' "
+                        f"in '{tableName}' CREATE SQL — skipping this table, manual repair needed."
+                    )
+                    failed = True
+                    break
+
+            if failed or newCreateSql == currentCreateSql:
+                continue
+
+            cursor.execute(f"PRAGMA table_info({tableName})")
+            existingColumns = [col[1] for col in cursor.fetchall()]
+
+            cursor.execute(
+                "SELECT sql FROM sqlite_master "
+                "WHERE type='index' AND tbl_name=? AND sql IS NOT NULL",
+                (tableName,),
+            )
+            indexSqls = [row[0] for row in cursor.fetchall()]
+
+            tempName = f"{tableName}_fkrepair_old"
+
+            cursor.execute("PRAGMA foreign_keys = OFF")
+            cursor.execute("PRAGMA legacy_alter_table = ON")
+            try:
+                cursor.execute("BEGIN IMMEDIATE")
+                cursor.execute(f"ALTER TABLE {tableName} RENAME TO {tempName}")
+                cursor.execute(newCreateSql)
+
+                cursor.execute(f"PRAGMA table_info({tableName})")
+                newColumns = [col[1] for col in cursor.fetchall()]
+                sharedColumns = [c for c in existingColumns if c in newColumns]
+                colList = ", ".join(sharedColumns)
+                cursor.execute(
+                    f"INSERT INTO {tableName} ({colList}) "
+                    f"SELECT {colList} FROM {tempName}"
+                )
+                cursor.execute(f"DROP TABLE {tempName}")
+
+                for idxSql in indexSqls:
+                    cursor.execute(idxSql)
+
+                cursor.execute("COMMIT")
+                print(f"FK repair: '{tableName}' rebuilt successfully.")
+            except Exception:
+                try:
+                    cursor.execute("ROLLBACK")
+                except sqlite3.Error:
+                    pass
+                raise
+            finally:
+                cursor.execute("PRAGMA legacy_alter_table = OFF")
+                cursor.execute("PRAGMA foreign_keys = ON")
+    except sqlite3.Error as e:
+        print(f"Error repairing dangling foreign keys: {e}")
+    finally:
+        if conn:
+            conn.close()
 
