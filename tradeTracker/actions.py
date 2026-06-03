@@ -903,6 +903,7 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
         unit_price = get_bulk_item_unit_price(item['item_type'])
         total_pos_margin += Decimal(item['total_price'] - item['quantity'] * unit_price)
 
+    total_margin_profit = total_pos_margin + total_neg_margin
     for s in shipping:
         s = Decimal(s)
         removeVat = Decimal(1.23)
@@ -913,6 +914,7 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
     pdf.cell(0, 8, f'Total Buy Price: {total_buy_price:.2f}€', 0, 1)
     pdf.cell(0, 8, f'Total Sell Price: {total_sell_price:.2f}€', 0, 1)
     pdf.cell(0, 8, f'Total Profit: {total_profit:.2f}€', 0, 1)
+    pdf.cell(w=0, h=8, text=f'Total Margin Profit: {total_margin_profit:.2f}€', border=0, ln=1)
     pdf.cell(0, 8, f'Total Negative Margin: {total_neg_margin:.2f}€', 0, 1)
     pdf.cell(0, 8, f'Total Positive Margin: {total_pos_margin:.2f}€', 0, 1)
     pdf.cell(0, 8, f'Shipping + DPH: {total_shipping_with_VAT:.2f}€', 0, 1)
