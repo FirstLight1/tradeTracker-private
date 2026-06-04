@@ -53,6 +53,9 @@ def migrate_database(db_path):
         # FK clauses to point at *_old during ALTER TABLE RENAME).
         repairDanglingForeignKeys(db_path)
 
+        # Migration 11: Add quantity to sealed table
+        addQuantityToSealedTable(db_path)
+
         print("Database migration check complete.")
     except sqlite3.Error as e:
         print(f"Database migration failed: {e}")
@@ -625,3 +628,23 @@ def repairDanglingForeignKeys(db_path):
         if conn:
             conn.close()
 
+def addQuantityToSealedTable(db_path):
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Check if the column already exists
+        cursor.execute("PRAGMA table_info(sealed)")
+        columns = [info[1] for info in cursor.fetchall()]
+        if 'quantity' not in columns:
+            print("Applying migration: Adding 'quantity' to 'sealed' table...")
+            cursor.execute("ALTER TABLE sealed ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1")
+            print("'quantity' column added successfully.")
+        else:
+            print("'quantity' column already exists in 'sealed' table.")
+    except sqlite3.Error as e:
+        # This can happen if the table doesn't exist yet, which is fine.
+        if "no such table: sealed" in str(e):
+            print("'sealed' table not found, skipping 'quantity' column migration.")
+        else:
+            raise e

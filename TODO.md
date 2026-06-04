@@ -532,8 +532,8 @@ exposed write surface**, so security/abuse handling drives most of the design.
   TCGPlayer marketplace integration was meant instead).
 
 ---
-
-## 13. Fix "Total Positive Margin" calculation on the monthly sold report (bug)
+# DONE
+##  13. Fix "Total Positive Margin" calculation on the monthly sold report (bug)
 
 > **Related: item 15 (normal-DPH vs margin-scheme split).** Do these together — both touch the
 > same margin loops (`actions.py:886`–`903`). Item 13 fixes the sign bug; item 15 stops counting
@@ -569,6 +569,7 @@ positive/negative split no longer means what the labels say.
 
 ---
 
+# DONE
 ## 14. Show sale date (dátum predaja) per card on the monthly sold report
 
 **What.** The monthly sold report lists each sold card (name, number, buy/sell price, margin) but

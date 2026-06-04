@@ -234,6 +234,7 @@ CREATE INDEX idx_bulk_sales_sale_id ON bulk_sales(sale_id);
 CREATE TABLE sealed(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
     price REAL,
     market_value REAL,
     date TEXT,
