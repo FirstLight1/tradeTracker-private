@@ -133,7 +133,7 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
                 tax = Decimal("0")
                 price = Decimal(str(item.get("marketValue").replace("€","")))
             invoice.add_item(Item(
-                count=1,
+                count=int(item.get("quantity", 1)),
                 price=price,
                 unit="ks",
                 description=item.get("sealedName"),

@@ -381,7 +381,7 @@ def loadAuctions():
 def loadSealed():
     db = get_db()
 
-    sealed_products =  db.execute("SELECT 's' || id as sid, name, price, market_value, date FROM sealed WHERE sale_id is NULL AND auction_id is NULL").fetchall()
+    sealed_products =  db.execute("SELECT 's' || id as sid, name, quantity, price, market_value, date FROM sealed WHERE sale_id is NULL AND auction_id is NULL").fetchall()
     return jsonify({'status':'success', 'data' : [dict(product) for product in sealed_products]})
 
 @bp.route('/addSealed', methods=('POST',))
@@ -424,7 +424,7 @@ def loadBulk(auction_id):
 def loadSealedByAuction(auction_id):
     db = get_db()
     sealed_items = db.execute(
-        "SELECT 's' || id as sid, name, price, market_value, date FROM sealed "
+        "SELECT 's' || id as sid, name, price, market_value, date, quantity FROM sealed "
         "WHERE auction_id = ? AND sale_id is NULL", 
         (auction_id,)
     ).fetchall()
@@ -444,7 +444,7 @@ def invertoryValue():
     cur = db.cursor()
     cardMarketValue = cur.execute('SELECT SUM(market_value) FROM cards c LEFT JOIN sale_items si ON c.id = si.card_id WHERE si.card_id IS NULL').fetchone()[0]
     bulkValue = cur.execute('SELECT SUM(total_price) FROM bulk_items').fetchone()[0]
-    sealedValue = cur.execute('SELECT SUM(market_value) FROM sealed WHERE sale_id IS NULL').fetchone()[0]
+    sealedValue = cur.execute('SELECT SUM(market_value * quantity) FROM sealed WHERE sale_id IS NULL').fetchone()[0]
     value = (cardMarketValue if cardMarketValue is not None else 0) + (bulkValue if bulkValue is not None else 0) + (sealedValue if sealedValue is not None else 0)
 
     return jsonify({'status': 'success','value': value}),200
@@ -534,8 +534,8 @@ def addToExistingAuction(auction_id):
                     price = float(item.get("price").replace(',','.')) if item.get("price") is not None else marketValue * 0.80
                     date = item.get('date') if item.get('date') is not None else datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
                     db.execute(
-                        "INSERT INTO sealed(name, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?)",
-                        (item.get("name"), price, marketValue, date, auction_id)
+                        "INSERT INTO sealed(name, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?)",
+                        (item.get("name"),item.get("quantity"), price, marketValue, date, auction_id)
                     )
 
             bulk = data.get('bulk')
@@ -575,7 +575,7 @@ def loadSoldHistory():
     sales = db.execute(
         'SELECT s.*, '
         '(COALESCE((SELECT SUM(si.profit) FROM sale_items si WHERE si.sale_id = s.id), 0) + '
-        'COALESCE((SELECT SUM(market_value - price) FROM sealed WHERE sale_id = s.id),0) + '
+        'COALESCE((SELECT SUM(market_value * quantity - price * quantity) FROM sealed WHERE sale_id = s.id),0) + '
         'COALESCE((SELECT SUM(bs.total_price - bs.quantity * bs.unit_price) FROM bulk_sales bs WHERE bs.sale_id = s.id), 0)) '
         'as total_profit, b.auction_id '
         'FROM sales s '
@@ -652,6 +652,7 @@ def linkAuctionToSale(auction_id):
 @bp.route('/orderReturn/<int:saleId>', methods=('POST',))
 @verify_token
 def orderReturn(saleId):
+    # TODO: SEALED NOT HERE FOR SOME REASON
     db = get_db()
 
     try:
@@ -682,6 +683,7 @@ def orderReturn(saleId):
 @bp.route('/generateCreditNote/<int:saleId>', methods=('POST',))
 @verify_token
 def generate_credit_note(saleId):
+    # TODO: add quantity, also to invoice
     db = get_db()
 
     # Load the sale record (contains receiver info in notes and invoice_number)
@@ -785,7 +787,7 @@ def generateSoldReport():
         'WHERE strftime("%Y", s.sale_date) = ? AND strftime("%m", s.sale_date) = ?', 
         (year, month)).fetchall()
    
-    sealed = db.execute('SELECT se.name, se.price, se.market_value, se.auction_id, s.sale_date FROM sealed se JOIN sales s ON se.sale_id = s.id WHERE strftime("%Y", s.sale_date) = ? AND strftime("%m", s.sale_date) = ? ',
+    sealed = db.execute('SELECT se.name,se.quantity, se.price, se.market_value, se.auction_id, s.sale_date FROM sealed se JOIN sales s ON se.sale_id = s.id WHERE strftime("%Y", s.sale_date) = ? AND strftime("%m", s.sale_date) = ? ',
                         (year, month)).fetchall()
     sealedList = [dict(item) for item in sealed]
 
@@ -880,16 +882,16 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
     
     # Add summary
     pdf.set_font(font_family, '', 12)
-    pdf.cell(0, 10, f'Total Cards Sold: {len(cards) + sum(item["quantity"] for item in bulkAndHoloList) + len(sealed)}', 0, 1)
+    pdf.cell(0, 10, f'Total Cards Sold: {len(cards) + sum(item["quantity"] for item in bulkAndHoloList) + sum(item["quantity"] for item in sealed)}', 0, 1)
     pdf.ln(5)
     
     # Calculate totals
     total_buy_price = (
         sum(card['card_price'] or 0 for card in cards)
-        + sum(item['price'] or 0 for item in sealed)
+        + sum((item['price'] * item['quantity']) or 0 for item in sealed)
         + sum(item['quantity'] * get_bulk_item_unit_price(item['item_type']) for item in bulkAndHoloList)
     )
-    total_sell_price = sum(card['sell_price'] or 0 for card in cards) + sum(item['market_value'] or 0 for item in sealed) + sum(item['total_price'] or 0 for item in bulkAndHoloList)
+    total_sell_price = sum(card['sell_price'] or 0 for card in cards) + sum((item['market_value'] * item['quantity']) or 0 for item in sealed) + sum(item['total_price'] or 0 for item in bulkAndHoloList)
     total_profit = total_sell_price - total_buy_price
     total_neg_margin = 0
     total_pos_margin = 0
@@ -905,7 +907,7 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
 
     for item in sealed:
         if item['auction_id'] is not None:
-            curr_margin = Decimal(item['market_value'] - item['price'])
+            curr_margin = Decimal(item['market_value'] * item['quantity'] - item['price'] * item['quantity'])
             if curr_margin > 0:
                 total_pos_margin += curr_margin
             else:
@@ -1025,7 +1027,8 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
     
     # Table header
     pdf.set_font(font_family, '', 10)
-    pdf.cell(70, 10, 'Product Name', 1, 0, 'C')
+    pdf.cell(60, 10, 'Product Name', 1, 0, 'C')
+    pdf.cell(10, 10, 'Quantity', 1, 0, 'C')
     pdf.cell(30, 10, 'Buy Price', 1, 0, 'C')
     pdf.cell(30, 10, 'Sell Price', 1, 0, 'C')
     pdf.cell(20, 10, 'Margin', 1, 0, 'C')
@@ -1037,9 +1040,10 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
     pdf.set_font(font_family, '', 9)
     for item in sealed:
         name = item['name'] or 'N/A'
+        quantity = str(item['quantity']) or "1"
         buy_price = f"{item['price']:.2f}€" if item['price'] else 'N/A'
         sell_price = f"{item['market_value']:.2f}€" if item['market_value'] else 'N/A'
-        card_profit = f"{(item['market_value'] - item['price']):.2f}€" if item['market_value'] and item['price'] else 'N/A'
+        card_profit = f"{((item['market_value'] - item['price']) * item['quantity']):.2f}€" if item['market_value'] and item['price'] else 'N/A'
         sold_date = format_iso_date(item['sale_date'])
 
         # Estimate height needed for product name
@@ -1053,7 +1057,8 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
             pdf.add_page()
             # Redraw table header on new page
             pdf.set_font(font_family, '', 10)
-            pdf.cell(70, 10, 'Product Name', 1, 0, 'C')
+            pdf.cell(60, 10, 'Product Name', 1, 0, 'C')
+            pdf.cell(10, 10, 'Quantity', 1, 0, 'C')
             pdf.cell(30, 10, 'Buy Price', 1, 0, 'C')
             pdf.cell(30, 10, 'Sell Price', 1, 0, 'C')
             pdf.cell(20, 10, 'Margin', 1, 0, 'C')
@@ -1066,14 +1071,15 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
         y_start = pdf.get_y()
 
         # Draw product name with multi_cell
-        pdf.multi_cell(70, 4, name, border=1, align='L')
+        pdf.multi_cell(60, 4, name, border=1, align='L')
 
         # Calculate actual height used
         y_after_name = pdf.get_y()
         actual_height = y_after_name - y_start
 
         # Draw other cells aligned with the product name
-        pdf.set_xy(x_start + 70, y_start)
+        pdf.set_xy(x_start + 60, y_start)
+        pdf.cell(10, actual_height, quantity, 1, 0, 'R')
         pdf.cell(30, actual_height, buy_price, 1, 0, 'R')
         pdf.cell(30, actual_height, sell_price, 1, 0, 'R')
         pdf.cell(20, actual_height, card_profit, 1, 0, 'R')
@@ -1273,6 +1279,7 @@ def updatePaymentMethod(auction_id):
 @bp.route('/recalculateCardPrices/<int:auction_id>/<string:new_auction_price>', methods=('POST',))
 @verify_token
 def recalculateCardPrices(auction_id, new_auction_price):
+    # TODO: Switch to decimal
     db = get_db()
     new_auction_price = float(new_auction_price)
 
@@ -1294,7 +1301,7 @@ def recalculateCardPrices(auction_id, new_auction_price):
 
     # Get unsealed items from the auction
     sealed_items = db.execute(
-        'SELECT s.id, s.market_value, s.sale_id '
+        'SELECT s.id, s.market_value, s.sale_id,s.quantity '
         'FROM sealed s '
         'WHERE s.auction_id = ?',
         (auction_id,)
@@ -1315,7 +1322,7 @@ def recalculateCardPrices(auction_id, new_auction_price):
 
     # Calculate total market value of unsold cards and sealed items
     total_market_value = sum(card['market_value'] or 0 for card in cards) + \
-                         sum(item['market_value'] or 0 for item in sealed_items)
+                         sum((float(item['market_value']) * int(item['quantity'])) for item in sealed_items if item['market_value'] is not None)
     
     if total_market_value == 0:
         logger.warning('Market value is 0 | auction_id: %s', auction_id)
@@ -1609,7 +1616,7 @@ def search():
         
         # Search sealed items
         sealed_matches = db.execute(
-            f"SELECT 's' || s.id as sid, s.name, s.market_value, s.auction_id,COUNT(*) as available_count, a.auction_name FROM sealed s "
+            f"SELECT 's' || s.id as sid, s.name, s.market_value, s.auction_id,SUM(s.quantity) as available_count, a.auction_name FROM sealed s "
             "LEFT JOIN auctions a ON s.auction_id = a.id "
             f"WHERE ({sealed_where_clause}) AND s.sale_id IS NULL "
             f"GROUP BY UPPER(s.name) ORDER BY s.id ASC LIMIT 8",
@@ -1710,7 +1717,7 @@ def invoice(kind):
             shipping=cartContent.get('shipping'),
             payments=payment_data or [],
         )
-        # Validate inventory before processing
+
         db = get_db()
         
         if kind == 'invoice': 

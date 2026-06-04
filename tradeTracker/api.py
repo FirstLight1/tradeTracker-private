@@ -71,29 +71,25 @@ def cardMarketTable():
 
             sealedToInsert = []
             for item in sealed:
-                try:
-                    count = int(item.get('count', 1))
-                except (ValueError, TypeError):
-                    count = 1
-                for _ in range(count):
-                    marketValue = item.get('marketValue', 0)
-                    marketValue = float(marketValue) if marketValue is not None else None
+                marketValue = item.get('marketValue', 0)
+                marketValue = float(marketValue) if marketValue is not None else None
 
-                    if marketValue:
-                        buyPrice = round(marketValue * 0.80, 2)
-                    else:
-                        buyPrice = 0
+                if marketValue:
+                    buyPrice = round(marketValue * 0.80, 2)
+                else:
+                    buyPrice = 0
 
-                    sealedToInsert.append((
-                        item.get('name', None),
-                        buyPrice,
-                        marketValue,
-                        date,
-                        auction_id
-                    ))
+                sealedToInsert.append((
+                    item.get('name', None),
+                    item.get('count'),
+                    buyPrice,
+                    marketValue,
+                    date,
+                    auction_id
+                ))
 
             db.executemany(
-                'INSERT INTO sealed (name, price, market_value, date,auction_id) VALUES (?, ?, ?, ?, ?)', sealedToInsert
+                'INSERT INTO sealed (name, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?)', sealedToInsert
             )
 
             db.commit()
@@ -146,10 +142,18 @@ def cardMarketOrder():
                 except:
                     count = 1
 
-                rows  = db.execute('SELECT id FROM sealed WHERE lower(name) = ? AND sale_id IS NULL',(item['name'].lower(),)).fetchmany(count)
-                ids = [row[0] for row in rows]
-                if len(ids) > 0:
-                  item['id'] = ids
+                available = db.execute(
+                    'SELECT COALESCE(SUM(quantity), 0) FROM sealed WHERE lower(name) = ? AND sale_id IS NULL',
+                    (item['name'].lower(),)
+                ).fetchone()[0]
+                first = db.execute(
+                    'SELECT id FROM sealed WHERE lower(name) = ? AND sale_id IS NULL ORDER BY id ASC LIMIT 1',
+                    (item['name'].lower(),)
+                ).fetchone()
+                if first is not None and available > 0:
+                    item['id'] = [first[0]]
+                    item['quantity'] = min(count, available)
+                    item['available'] = available
         except:
             print("There was an error while getting sealed ids")
             logger.exception('cardMarketOrder failed to get sealed ids')

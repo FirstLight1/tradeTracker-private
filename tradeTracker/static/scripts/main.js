@@ -358,7 +358,7 @@ function cartValue(cartContent) {
 
     if (cartContent.sealed) {
         cartContent.sealed.forEach(item => {
-            sum += Number(item.marketValue);
+            sum += Number(item.marketValue) * (Number(item.quantity) || 1);
         })
     };
 
@@ -533,7 +533,9 @@ function saveCartContentToSession() {
                 sid: item.getAttribute('sid'),
                 auctionId: item.getAttribute('auction_id'),
                 name: item.querySelector('.sealed-name').textContent,
-                price: item.querySelector('.sealed-price').textContent
+                marketValue: item.querySelector('.sealed-price').textContent.replace('€', '').replace(',', '.').trim(),
+                quantity: item.querySelector('.sealed-qty-display')?.textContent || '1',
+                available: item.getAttribute('data-available') || ''
             }
             sealedData.push(sealed);
         }
@@ -599,38 +601,18 @@ function loadCartContentFromSession() {
 
         // Restore sealed items
         if (cartData.sealed && cartData.sealed.length > 0) {
-            const sealedContent = document.querySelector('.sealed-content');
-
             cartData.sealed.forEach(item => {
-                const itemDiv = document.createElement('div');
-                itemDiv.classList.add('sealed-item-cart');
-                itemDiv.setAttribute('sid', item.sid);
-                if (item.auctionId) {
-                    itemDiv.setAttribute('auction_id', item.auctionId);
-                }
-
-                // Add ID to existingIDs Set
-                if (item.sid) {
-                    existingIDs.add(item.sid);
-                }
-
-                itemDiv.innerHTML = `
-                    <p class='sealed-name'>${DOMPurify.sanitize(item.name)}</p>
-                    <p class='sealed-price'>${DOMPurify.sanitize(item.price)}</p>
-                    <button class='remove-from-cart'>Remove</button>
-                `;
-
-                const removeFromCart = itemDiv.querySelector('.remove-from-cart');
-                removeFromCart.addEventListener('click', () => {
-                    const sid = itemDiv.getAttribute('sid');
-                    if (sid) {
-                        existingIDs.delete(sid);
-                    }
-                    itemDiv.remove();
-                    saveCartContentToSession();
-                });
-
-                sealedContent.appendChild(itemDiv);
+                // Backward compat: older sessions stored `price` (with €) instead of `marketValue`
+                const marketValue = item.marketValue != null
+                    ? item.marketValue
+                    : (item.price ? item.price.replace('€', '').replace(',', '.').trim() : '');
+                addSealedToCart(
+                    { name: item.name, market_value: marketValue },
+                    item.sid,
+                    item.auctionId || null,
+                    Number(item.quantity) || 1,
+                    item.available ? Number(item.available) : null
+                );
             });
         }
 
@@ -1020,13 +1002,12 @@ function shoppingCart() {
                 const sid = item.getAttribute('sid');
                 const auctionId = item.getAttribute('auction_id') || null;
 
-                const paragraphs = item.querySelectorAll('p');
-
                 const sealedData = {
                     sid: sid,
                     auctionId: auctionId,
-                    sealedName: paragraphs[0]?.textContent || '',
-                    marketValue: paragraphs[1]?.textContent.replace('€', '').replace(',', '.').trim() || ''
+                    sealedName: item.querySelector('.sealed-name')?.textContent || '',
+                    marketValue: item.querySelector('.sealed-price')?.textContent.replace('€', '').replace(',', '.').trim() || '',
+                    quantity: Number(item.querySelector('.sealed-qty-display')?.textContent) || 1
                 };
                 sealed.push(sealedData);
             });
@@ -1324,7 +1305,7 @@ function currentCartValue(type) {
     }
 }
 
-function addSealedToCart(sealed, sid, auctionId = null) {
+function addSealedToCart(sealed, sid, auctionId = null, quantity = 1, available = null) {
     if (!existingIDs.has(sid)) {
         existingIDs.add(sid);
         const sealedDiv = document.querySelector('.sealed-content');
@@ -1334,19 +1315,39 @@ function addSealedToCart(sealed, sid, auctionId = null) {
         if (auctionId != null) {
             itemDiv.setAttribute('auction_id', auctionId)
         }
-        itemDiv.innerHTML = `
-        <p class='sealed-name'>${DOMPurify.sanitize(sealed.name)}</p>
-        <p class='sealed-price'>${DOMPurify.sanitize(sealed.market_value)}€</p>
-        <button class='remove-from-cart'>Remove</button>
-        `
 
-        const removeFromCart = itemDiv.querySelector('.remove-from-cart');
-        removeFromCart.addEventListener('click', () => {
-            existingIDs.delete(sid);
-            itemDiv.remove();
-            saveCartContentToSession();
-        });
+        const max = Number(available) > 0 ? Number(available) : (Number(quantity) || 1);
+        let qty = Math.min(Math.max(Number(quantity) || 1, 1), max);
+        itemDiv.setAttribute('data-available', max);
 
+        const renderSealed = () => {
+            const minusDisabled = qty <= 1 ? 'disabled' : '';
+            const plusDisabled = qty >= max ? 'disabled' : '';
+            itemDiv.innerHTML = `
+            <p class='sealed-name'>${DOMPurify.sanitize(sealed.name)}</p>
+            <p class='sealed-price'>${DOMPurify.sanitize(sealed.market_value)}€</p>
+            <div class="qty-controls">
+                <button class="sealed-qty-minus" ${minusDisabled}>-</button>
+                <span class="sealed-qty-display">${qty}</span>
+                <button class="sealed-qty-plus" ${plusDisabled}>+</button>
+            </div>
+            <button class='remove-from-cart'>Remove</button>
+            `;
+
+            itemDiv.querySelector('.sealed-qty-minus').addEventListener('click', () => {
+                if (qty > 1) { qty--; renderSealed(); saveCartContentToSession(); }
+            });
+            itemDiv.querySelector('.sealed-qty-plus').addEventListener('click', () => {
+                if (qty < max) { qty++; renderSealed(); saveCartContentToSession(); }
+            });
+            itemDiv.querySelector('.remove-from-cart').addEventListener('click', () => {
+                existingIDs.delete(sid);
+                itemDiv.remove();
+                saveCartContentToSession();
+            });
+        };
+
+        renderSealed();
         sealedDiv.appendChild(itemDiv);
         saveCartContentToSession();
     }
@@ -1550,14 +1551,13 @@ function startPolling() {
 
                 sealed.forEach((item) => {
                     const sealedIds = Array.isArray(item.id) ? item.id : [item.id];
-                    if (sealedIds.every(id => id === null)) {
+                    if (sealedIds.length === 0 || sealedIds.every(id => id == null)) {
                         spawnMissingIdModal(item);
                         return;
                     }
-                    const count = item.count || sealedIds.length || 1;
-                    for (let i = 0; i < count; i++) {
-                        addSealedToCart({ name: item.name, market_value: item.market_value }, sealedIds[i]);
-                    }
+                    const qty = Number(item.quantity) || item.count || 1;
+                    const available = item.available != null ? Number(item.available) : null;
+                    addSealedToCart({ name: item.name, market_value: item.market_value }, sealedIds[0], null, qty, available);
                 });
             }
         } catch (error) {
@@ -1705,7 +1705,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
                 <p class="result result-sealed-name">${DOMPurify.sanitize(result.name || 'N/A')}</p>
                 <p class="result result-market-value">${DOMPurify.sanitize(result.market_value ? result.market_value + '€' : 'N/A')}</p>
                 <p class="result result-auction-name">${DOMPurify.sanitize(result.auction_name || (result.auction_id ? result.auction_id - 1 : 'Unassigned'))}</p>
-                <span class="result-type-badge sealed-badge">Sealed</span>
+                <span class="result-type-badge sealed-badge">Sealed${result.available_count ? ' ·' + result.available_count : ''}</span>
                 ${result.auction_id || result.auction_name ? `<p class="result result-auction-name">${DOMPurify.sanitize(result.auction_name || result.auction_id - 1)}</p>` : `<p></p>`}
                 <button class="add-to-cart-btn">Add to cart</button>
                 ${safeAuctionId ? `<button class="view-auction" data-id="${safeAuctionId}">View</button>` : ''}
@@ -1743,7 +1743,8 @@ function displaySearchResults(results, resultsQueue, searchInput) {
 
             // Add to cart handler for sealed items
             div.addEventListener('click', async () => {
-                addSealedToCart(sealed, result.sid, result.auction_id);
+                const available = result.available_count != null ? Number(result.available_count) : null;
+                addSealedToCart(sealed, result.sid, result.auction_id, 1, available);
                 searchContainer.innerHTML = '';
             });
 
@@ -2067,6 +2068,9 @@ async function loadAuctionContent(button) {
                         const sealedDiv = document.createElement('div');
                         sealedDiv.classList.add('sealed-item');
                         sealedDiv.setAttribute('sid', sealedItem.sid);
+                        if (sealedItem.quantity != null) {
+                            sealedDiv.setAttribute('data-quantity', sealedItem.quantity);
+                        }
 
                         const margin = (Number(sealedItem.market_value) - Number(sealedItem.price)).toFixed(2);
                         const timeStamp = sealedItem.date?.replace('Z', '');
@@ -2103,7 +2107,8 @@ async function loadAuctionContent(button) {
                                 market_value: DOMPurify.sanitize(sealedDiv.querySelector('.sealed-market-value').textContent.replace('€', ''))
                             };
 
-                            addSealedToCart(sealedData, sid, auctionId);
+                            const available = Number(sealedDiv.getAttribute('data-quantity')) || null;
+                            addSealedToCart(sealedData, sid, auctionId, 1, available);
                         });
                     });
 
@@ -2490,7 +2495,8 @@ async function loadSealed(viewButton) {
 
                     const addToCart = sealedDiv.querySelector('.add-to-cart');
                     addToCart.addEventListener('click', () => {
-                        addSealedToCart(sealedData, sealedData.sid)
+                        const available = sealedData.quantity ? Number(sealedData.quantity) : null;
+                        addSealedToCart(sealedData, sealedData.sid, null, 1, available)
                     });
 
                     const removeSealed = sealedDiv.querySelector('.delete-sealed');

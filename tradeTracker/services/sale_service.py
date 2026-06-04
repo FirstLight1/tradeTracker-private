@@ -45,6 +45,19 @@ class SaleService:
             if not self._check_bulk_inventory(self.db, "ex", ex.get("quantity", 0)):
                 raise ValueError
 
+        sealed = sale_input.sealed
+        if sealed:
+            for item in sealed:
+                name = item.get("sealedName")
+                needed = int(item.get("quantity", 1))
+                available = self.db.execute(
+                    "SELECT COALESCE(SUM(quantity), 0) FROM sealed "
+                    "WHERE lower(name) = lower(?) AND sale_id IS NULL",
+                    (name,),
+                ).fetchone()[0]
+                if available < needed:
+                    raise ValueError
+
     def _insert_sale_header(self, sale_input, receipt):
         shippingPrice = None
         if sale_input.shipping:
@@ -105,9 +118,8 @@ class SaleService:
         sealed = sale_input.sealed
         if sealed:
             for item in sealed:
-                self.db.execute(
-                    "UPDATE sealed SET sale_id = ? WHERE id = ?",
-                    (sale_id, item.get("sid").replace("s", "")),
+                self._deduct_sealed_fifo(
+                    item.get("sealedName"), int(item.get("quantity", 1)), sale_id
                 )
 
         bulk = sale_input.bulk
@@ -196,5 +208,52 @@ class SaleService:
                     "UPDATE bulk_items SET quantity = ?, total_price = quantity * unit_price "
                     "WHERE id = ?",
                     (new_quantity, item_id),
+                )
+                remaining = 0
+
+    def _deduct_sealed_fifo(self, name, sell_qty, sale_id):
+        """Deduct sealed units for a product using FIFO (oldest rows first).
+
+        When a row is only partially sold it is split: the inventory row's
+        quantity is reduced and a new row carrying the sold units (with the
+        same per-unit price/market_value, purchase date and auction) is
+        inserted against this sale, so reports stay accurate per source row.
+        """
+        remaining = sell_qty
+
+        rows = self.db.execute(
+            "SELECT id, name, quantity, price, market_value, date, auction_id FROM sealed "
+            "WHERE lower(name) = lower(?) AND sale_id IS NULL ORDER BY id ASC",
+            (name,),
+        ).fetchall()
+
+        for row in rows:
+            if remaining <= 0:
+                break
+
+            if row["quantity"] <= remaining:
+                # Whole row consumed - attach it to this sale (keeps its quantity)
+                self.db.execute(
+                    "UPDATE sealed SET sale_id = ? WHERE id = ?", (sale_id, row["id"])
+                )
+                remaining -= row["quantity"]
+            else:
+                # Partial - shrink the inventory row and record the sold units
+                self.db.execute(
+                    "UPDATE sealed SET quantity = quantity - ? WHERE id = ?",
+                    (remaining, row["id"]),
+                )
+                self.db.execute(
+                    "INSERT INTO sealed(name, quantity, price, market_value, date, auction_id, sale_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        row["name"],
+                        remaining,
+                        row["price"],
+                        row["market_value"],
+                        row["date"],
+                        row["auction_id"],
+                        sale_id,
+                    ),
                 )
                 remaining = 0
