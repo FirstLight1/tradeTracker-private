@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,6 +12,7 @@
     <title>Trade Tracker</title>
     <link rel="icon" type="image/x-icon" href="../static/images/cardanvil.ico">
 </head>
+
 <body>
     <main>
         <h1>Trade<span class="shadow"></span> Tracker</h1>
@@ -38,15 +40,16 @@
                 </div>
                 <div>
                     <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                    <button class="collection"><a href="{{ url_for('renderers.renderCollection')}}">Collection</a></button>
+                    <button class="collection"><a
+                            href="{{ url_for('renderers.renderCollection')}}">Collection</a></button>
                     <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
                 </div>
                 <div class="import-sold-csv-container">
                     <label for="csv-upload" class="import-sold-csv-label" name="upload">
-                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                    <p class="upload-text">Upload CSV</p>
-                    <button class="import-sold-csv"><input type="file" accept=".csv" name="csv-upload"></button>
-                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>                   
+                        <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                        <p class="upload-text">Upload CSV</p>
+                        <button class="import-sold-csv"><input type="file" accept=".csv" name="csv-upload"></button>
+                        <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
                     </label>
                 </div>
                 <div class="sales">
@@ -54,8 +57,12 @@
                 </div>
 
                 <div class="inventory-value">
-                    <div><p class="inventory-value-header">Inventory</p></div>
-                    <div><p class="inventory-value-value"></p></div>
+                    <div>
+                        <p class="inventory-value-header">Inventory</p>
+                    </div>
+                    <div>
+                        <p class="inventory-value-value"></p>
+                    </div>
                 </div>
             </nav>
         </header>
@@ -79,10 +86,11 @@
             </div>
             <div class="button-container">
                 <button class="confirm-btn">Complete invoice</button>
-                <button class="delete-cart"><img class="trashcan-icon" src="../static/images/trashcan-icon.webp"></button>
+                <button class="delete-cart"><img class="trashcan-icon"
+                        src="../static/images/trashcan-icon.webp"></button>
             </div>
         </div>
-            <div id='alert-div'></div>
+        <div id='alert-div'></div>
         <div>
             <div>
                 <p>Bulk:</p>
@@ -106,31 +114,32 @@
             </div>
             <div class="content-container">
                 <div class='sealed-container auction-tab'>
-                        <p>Sealed</p>
-                        <p></p>
-                        <p></p>
-                        <p></p>
-                        <button class='view-sealed'>View</button>     
-                        <p></p>
-                        <div class='sealed-tab cards-container' hidden>
-                            <div class='sealed-header'>
-                                <p>Name</p>
-                                <p>Price</p>
-                                <p>no VAT</p>
-                                <p>Market Value</p>
-                                <p>Margin</p>
-                                <p>Date</p>
-                                <p></p>
-                                <p></p>
-                            </div>    
-                            <div class='sealed-tab-content'>
-                                <!--Sealded items load here -->
-                            </div>
-                            <div class='buttons-container'>
+                    <p>Sealed</p>
+                    <p></p>
+                    <p></p>
+                    <p></p>
+                    <button class='view-sealed'>View</button>
+                    <p></p>
+                    <div class='sealed-tab cards-container' hidden>
+                        <div class='sealed-header'>
+                            <p>Quantity</p>
+                            <p>Name</p>
+                            <p>Price</p>
+                            <p>no VAT</p>
+                            <p>Market Value</p>
+                            <p>Margin</p>
+                            <p>Date</p>
+                            <p></p>
+                            <p></p>
+                        </div>
+                        <div class='sealed-tab-content'>
+                            <!--Sealded items load here -->
+                        </div>
+                        <div class='buttons-container'>
                             <button class='add-sealed'>Add Sealed</button>
                             <button class='save-sealed-btn' hidden>Save</button>
-                            </div>
                         </div>
+                    </div>
                 </div>
                 <div class="auction-container"></div>
             </div>
@@ -142,4 +151,5 @@
     <script type="module" src="../static/scripts/main.js"></script>
     <script src="../static/vendor/purify.min.js"></script>
 </body>
+
 </html>

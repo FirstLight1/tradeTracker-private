@@ -301,15 +301,15 @@ async function generateSoldReport(month, year, div) {
     const contentType = response.headers.get('content-type') || '';
 
     if (!response.ok || contentType.includes('application/json')) {
-        const err = await response.json(); 
+        const err = await response.json();
         renderAlert(`Error generating sold report: ${err}`, 'error');
         return;
     }
-    try{
+    try {
         downloadFile(response)
         div.remove();
-    }catch (e){
-        renderAlert('Error: ' + e, 'error'); 
+    } catch (e) {
+        renderAlert('Error: ' + e, 'error');
     }
 }
 
@@ -808,7 +808,7 @@ function initializeCart() {
     addExToCart();
 }
 
-async function collectModalData(recieverDiv, cartVal, cartContent, kind){
+async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
     // Collect all payment methods (every time Confirm is clicked)
     const paymentDivs = recieverDiv.querySelectorAll('.payment-div');
     const paymentMethods = [];
@@ -917,15 +917,15 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind){
             renderAlert('Error: ' + (err.message || 'Unknown error'), 'error');
             return false;
         }
-        try{
+        try {
             downloadFile(response)
             return true;
-        }catch (e){
-            renderAlert('Error: ' + e, 'error'); 
+        } catch (e) {
+            renderAlert('Error: ' + e, 'error');
         }
     }
 }
- 
+
 function shoppingCart() {
     const contentDiv = document.querySelector(".cart-content");
     const bulkCartDiv = document.querySelector(".bulk-cart-content");
@@ -2073,20 +2073,15 @@ async function loadAuctionContent(button) {
                         }
 
                         const margin = (Number(sealedItem.market_value) - Number(sealedItem.price)).toFixed(2);
-                        const timeStamp = sealedItem.date?.replace('Z', '');
-                        const date = new Date(timeStamp);
-                        let formatedDate = date.toLocaleDateString('sk-SK', {
-                            year: 'numeric',
-                            month: '2-digit',
-                            day: '2-digit'
-                        });
 
                         sealedDiv.innerHTML = `
+                            <p class="quantity">${DOMPurify.sanitize(sealedItem.quantity)}</p>
                             <p class="sealed-name">${DOMPurify.sanitize(sealedItem.name)}</p>
+                            <p></p>
                             <p class="sealed-price">${DOMPurify.sanitize(sealedItem.price)}€</p>
                             <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
-                            <p class="sealed-date">${DOMPurify.sanitize(formatedDate)}</p>
+                            <p></p>
                             <button class="add-to-cart-sealed" data-sid="${sealedItem.sid}">Add to cart</button>
                             <button class="delete-sealed-item" data-sid="${sealedItem.sid}">Delete</button>
                         `;
@@ -2269,6 +2264,7 @@ async function loadAuctionContent(button) {
             const currentDate = new Date().toISOString().split('T')[0];
 
             newSealedDiv.innerHTML = `
+                <input type="number" class="sealed-quantity-input" placeholder="Quantity" step="1" min="1">
                 <input type="text" class="sealed-name-input" placeholder="Sealed item name">
                 <input type="number" class="sealed-price-input" placeholder="Price" step="0.01" min="0">
                 <input type="number" class="sealed-market-value-input" placeholder="Market value" step="0.01" min="0">
@@ -2399,6 +2395,7 @@ async function loadAuctionContent(button) {
                 if (sealedDivs.length > 0) {
                     const sealedItems = [];
                     sealedDivs.forEach(sealedDiv => {
+                        const quantity = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-quantity-input').value.trim()) || null;
                         const name = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-name-input').value.trim()) || null;
                         const price = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-price-input').value.trim()) || null;
                         const marketValue = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-market-value-input').value.trim()) || null;
@@ -2406,6 +2403,7 @@ async function loadAuctionContent(button) {
 
                         if (name !== null && marketValue !== null) {
                             sealedItems.push({
+                                quantity: quantity,
                                 name: name,
                                 price: price,
                                 market_value: marketValue,
@@ -2439,7 +2437,7 @@ async function loadAuctionContent(button) {
             } catch (error) {
                 renderAlert('Error saving new cards: ' + error, 'error');
                 return;
-             }
+            }
             //this could be done better by dynamically adding the cards instead of reloading the whole auction
             window.location.reload();
         });
@@ -2483,6 +2481,7 @@ async function loadSealed(viewButton) {
                     const date = new Date(timeStamp);
                     let formatedDate = date.toLocaleDateString('sk-SK', { year: 'numeric', month: '2-digit', day: '2-digit' });
                     sealedDiv.innerHTML = `
+                        <p class='quantity'>${DOMPurify.sanitize(sealedData.quantity)}</p>
                         <p class='sealed-name'>${DOMPurify.sanitize(sealedData.name)}</p>
                         <p class='unit-price'>${DOMPurify.sanitize(sealedData.price)}</p>
                         <p class='VAT-sealed'>${(DOMPurify.sanitize(sealedData.price) / 1.23).toFixed(2)}</p>
