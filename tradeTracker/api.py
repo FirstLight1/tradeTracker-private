@@ -97,6 +97,7 @@ def cardMarketTable():
             return jsonify({'status': 'success'}), 201
 
         except Exception as e:
+            db.rollback()
             print("DB error:", e)
             logger.exception('DB error')
             return jsonify({'status': 'error', 'message': 'Error code: Ax15'}), 500

@@ -1,5 +1,6 @@
 import base64
 from decimal import Decimal
+import re
 from flask import request, Blueprint, jsonify, current_app, send_file, abort
 from tradeTracker.db import get_db
 from io import BytesIO
@@ -184,34 +185,39 @@ def add():
             'payments': cardsArr[0]['payments'] if 'payments' in cardsArr[0] else None
         }
         
-        # Validate and sanitize payments if provided
-        payment_method_json = None
-        if auction['payments']:
-            is_valid, sanitized_payments, error_msg = validate_and_sanitize_payments(auction['payments'])
-            if not is_valid:
-                return jsonify({'status': 'error', 'message': f'{error_msg}, Error code: Ax01'}), 400
-            payment_method_json = json.dumps(sanitized_payments)
-        
-        cursor = db.execute(
-            'INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?, ?, ?, ?)',
-            (auction['name'], auction['buy'], auction['date'], payment_method_json)
-        )
-        auction_id = cursor.lastrowid
-        for card in cardsArr[1:]:
-            db.execute(
-                'INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id) '
-                'VALUES (?, ?, ?, ?, ?, ?)',
-                (
-                    card.get('cardName'),
-                    card.get('cardNum'),
-                    card.get('condition'),
-                    card.get('buyPrice'),
-                    card.get('marketValue'),
-                    auction_id
-                )
+        try:
+            # Validate and sanitize payments if provided
+            payment_method_json = None
+            if auction['payments']:
+                is_valid, sanitized_payments, error_msg = validate_and_sanitize_payments(auction['payments'])
+                if not is_valid:
+                    return jsonify({'status': 'error', 'message': f'{error_msg}, Error code: Ax01'}), 400
+                payment_method_json = json.dumps(sanitized_payments)
+            
+            cursor = db.execute(
+                'INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?, ?, ?, ?)',
+                (auction['name'], auction['buy'], auction['date'], payment_method_json)
             )
-        db.commit()
-        return jsonify({'status': 'success', 'auction_id': auction_id}), 201
+            auction_id = cursor.lastrowid
+            for card in cardsArr[1:]:
+                db.execute(
+                    'INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id) '
+                    'VALUES (?, ?, ?, ?, ?, ?)',
+                    (
+                        card.get('cardName'),
+                        card.get('cardNum'),
+                        card.get('condition'),
+                        card.get('buyPrice'),
+                        card.get('marketValue'),
+                        auction_id
+                    )
+                )
+            db.commit()
+            return jsonify({'status': 'success', 'auction_id': auction_id}), 201
+        except Exception as e:
+            db.rollback()
+            logger.exception('DB error, auction creation failed | %s', e)
+            return jsonify({'status': 'error', 'message': 'Error code: Ax01'}), 400
     
 def _check_bulk_inventory(db, item_type, quantity_needed):
     """Check if sufficient inventory exists for the given item type."""
@@ -389,14 +395,18 @@ def loadSealed():
 def addSealed():
     data = request.get_json()
     db = get_db()
-    
-    for sealed in data:
-        marketValue = float(sealed.get("market_value").replace(',','.')) if sealed.get("market_value") is not None else 0
-        price = float(sealed.get("price").replace(',','.')) if sealed.get("price") is not None else marketValue * 0.80;
-        date = sealed.get('dateAdded') if sealed.get('dateAdded') is not None else datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
-        db.execute("INSERT INTO sealed(name, price, market_value, date) VALUES (?, ?, ?, ?)",(sealed.get("name"), price, marketValue, date))
-    db.commit()
-    return jsonify({'status':'success'}),200
+    try: 
+        for sealed in data:
+            marketValue = float(sealed.get("market_value").replace(',','.')) if sealed.get("market_value") is not None else 0
+            price = float(sealed.get("price").replace(',','.')) if sealed.get("price") is not None else marketValue * 0.80;
+            date = sealed.get('dateAdded') if sealed.get('dateAdded') is not None else datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
+            db.execute("INSERT INTO sealed(name, price, market_value, date) VALUES (?, ?, ?, ?)",(sealed.get("name"), price, marketValue, date))
+        db.commit()
+        return jsonify({'status':'success'}),200
+    except Exception as e:
+        db.rollback()
+        logger.exception('DB error, sealed creation failed | %s', e)
+        return jsonify({'status': 'error', 'message': 'Error code: Ax02'}), 400
 
 
 @bp.route('/loadCards/<int:auction_id>',methods=('GET',))
