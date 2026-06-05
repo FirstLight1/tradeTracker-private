@@ -22,3 +22,4 @@ tradeTracker/env.txt
 nul
 *.bat
 *.sqlite
+.claude-reviews.log
