@@ -912,9 +912,17 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
             });
 
         const contentType = response.headers.get('content-type') || '';
-        if (!response.ok || contentType.includes('application/json')) {
-            const err = await response.json();
-            renderAlert('Error: ' + (err.message || 'Unknown error'), 'error');
+        if (contentType.includes('application/json')) {
+            // sales_invoice returns JSON on success; invoice returns JSON only on error
+            const data = await response.json();
+            if (!response.ok || data.status === 'error') {
+                renderAlert('Error: ' + (data.message || 'Unknown error'), 'error');
+                return false;
+            }
+            return true;
+        }
+        if (!response.ok) {
+            renderAlert('Error: Unknown error', 'error');
             return false;
         }
         try {
@@ -922,6 +930,7 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
             return true;
         } catch (e) {
             renderAlert('Error: ' + e, 'error');
+            return false;
         }
     }
 }
@@ -1163,8 +1172,8 @@ function shoppingCart() {
         }
 
         const generateInvoiceBtn = document.querySelector('.generate-invoice');
-        generateInvoiceBtn.addEventListener('click', () => {
-            const success = collectModalData(recieverDiv, cartVal, cartContent, 'invoice');
+        generateInvoiceBtn.addEventListener('click', async () => {
+            const success = await collectModalData(recieverDiv, cartVal, cartContent, 'invoice');
             if (success) {
                 cards = [];
                 for (const key in cartContent) {
@@ -1180,8 +1189,8 @@ function shoppingCart() {
         });
 
         const salesInvoiceBtn = document.querySelector('.sales-invoice');
-        salesInvoiceBtn.addEventListener('click', () => {
-            const success = collectModalData(recieverDiv, cartVal, cartContent, 'sales_invoice');
+        salesInvoiceBtn.addEventListener('click', async () => {
+            const success = await collectModalData(recieverDiv, cartVal, cartContent, 'sales_invoice');
             if (success) {
                 cards = [];
                 for (const key in cartContent) {

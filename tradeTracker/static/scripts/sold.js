@@ -67,7 +67,6 @@ async function loadContent(button, soldDate) {
                 sealedDiv.innerHTML = `
                     <p class='card-info quantity'>${item.quantity}</p>
                     <p class='card-info card-name'>${DOMPurify.sanitize(item.name)}</p>
-                    <p class='card-info card-num'></p>
                     <p class='card-info condition'></p>
                     <p class='card-info card-price'></p>
                     <p class='card-info market-value'>${DOMPurify.sanitize(item.market_value)}</p>

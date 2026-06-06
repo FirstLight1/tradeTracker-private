@@ -1754,16 +1754,9 @@ def invoice(kind):
 
             try:
                 saleResult = SaleService(db, EKasaReceiptService()).process_sale(saleInput)
-                receipt = saleResult.receipt.raw
-                response = send_file(
-                        BytesIO(receipt['bytes']),
-                        download_name=receipt['filename'],
-                        as_attachment=True,
-                        mimetype='application/pdf'
-                        )
                 db.commit()
                 logger.info('Invoice created succesfully | %s ', saleResult.sale_id)
-                return response 
+                return jsonify({'status': 'success', 'sale_id': saleResult.sale_id}), 200
 
             except Exception as e:
                 db.rollback()
