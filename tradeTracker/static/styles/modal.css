@@ -111,6 +111,50 @@
     outline: none;
 }
 
+/* Upload CSV modal */
+.upload-modal {
+    gap: 24px;
+    max-width: 420px;
+}
+
+.upload-file-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 20px;
+    background: var(--primary-light);
+    color: var(--text-color);
+    border: 1px solid var(--accent-cyan);
+    border-radius: 25px;
+    cursor: pointer;
+    font-family: var(--primary-font), serif;
+    transition: all 0.3s ease;
+}
+
+.upload-file-label:hover {
+    box-shadow: 0 0 15px var(--glow-color);
+    transform: scale(1.02);
+}
+
+.upload-file-label input[type="file"] {
+    display: none;
+}
+
+.upload-option-disabled p {
+    opacity: 0.5;
+}
+
+.upload-option-disabled .upload-file-label {
+    opacity: 0.5;
+    cursor: not-allowed;
+    border-color: rgba(127, 255, 212, 0.2);
+}
+
+.upload-option-disabled .upload-file-label:hover {
+    box-shadow: none;
+    transform: none;
+}
+
 /* Button Styling */
 .modal-content .generate-invoice,
 .modal-content .sales-invoice {
