@@ -2,7 +2,8 @@ import base64
 from decimal import Decimal
 from flask import request, Blueprint, jsonify, current_app, send_file, abort
 from tradeTracker.db import get_db
-from io import BytesIO
+from io import BytesIO, TextIOWrapper
+import csv
 import datetime
 from Crypto.Cipher import AES
 import os
@@ -32,16 +33,6 @@ dictKeys = ['Product ID', 'Name', 'Condition', 'Price', 'Card Number']
 li = []
 dataList = []
 latest = None
-
-conditionDict = {
-    'MT' : "Mint",
-    'NM' : "Near Mint",
-    'EX' : "Excellent",
-    'GD' : "Good",
-    'LP' : "Light Played",
-    'PL' : "Played",
-    'PO' : "Poor"
-}
 
 def get_bulk_item_unit_price(item_type):
     return CONSTANTS.BULK_ITEM_UNIT_PRICES.get(item_type, 0)
@@ -1401,7 +1392,7 @@ def getImportantCollums(cards, columns):
         number = list(d.values())[columns['Collector Number']].upper()
         condition = list(d.values())[columns['Condition']]
         #print("Condition:", condition)
-        condition = conditionDict.get(condition)
+        condition = CONSTANTS.CONDITION_DICT.get(condition)
         #print("Mapped Condition:", condition)
         price = float(list(d.values())[columns['Expansion'] + 1])
         language = list(d.values())[columns['Language']]
@@ -1457,96 +1448,179 @@ def updateOneCard(db, name, num, condition, sellPrice):
 def allowedFile(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in "csv"
 
-@bp.route('/importSoldCSV', methods=('POST',))
-@verify_token
-def importSoldCSV():
-    if request.method == 'POST':
-        # Use the same folder as the database
-        if os.getenv("FLASK_ENV") == "prod":
-            data_dir = os.getenv("DATA_DIR", current_app.instance_path)
-            os.makedirs(data_dir, exist_ok=True)
-            check_file_path = os.path.join(data_dir, 'checkFile.csv')
-        else:
-            # Running in development
-            check_file_path = os.path.join(current_app.instance_path, 'checkFile.csv')
-            os.makedirs(os.path.dirname(check_file_path), exist_ok=True)
-        
-        if 'csv-upload' not in request.files:
-            return jsonify({'status': 'missing'}), 400
-        
-        file = request.files['csv-upload']
-        if file.filename == '':
-            return jsonify({'status': 'file'}), 400
-        if not allowedFile(file.filename):
-            return jsonify({'status': 'extension'}), 400
-        
-        lines = []
-        existingOrderID = set()
 
-        CHECK_PATH = check_file_path
+def _process_sold_csv(check_file_path, file, db):
+    lines = []
+    existingOrderID = set()
+
+    CHECK_PATH = check_file_path
+    # Read existing order IDs
+    if os.path.exists(CHECK_PATH):
+        with open(CHECK_PATH, 'r', encoding='utf-8') as checkFile:
+            existingLines = checkFile.read().splitlines()
+    else:
+        existingLines = []
+
+    # Process new file
+    for line in file.stream:
         try:
-            # Read existing order IDs
-            if os.path.exists(CHECK_PATH):
-                with open(CHECK_PATH, 'r', encoding='utf-8') as checkFile:
-                    existingLines = checkFile.read().splitlines()
-            else:
-                existingLines = []
-
-            # Process new file
-            for line in file.stream:
-                try:
-                    decoded = line.decode("utf-8").strip()
-                    if decoded == "":
-                        continue
-                    
-                    # Ensure we have enough columns
-                    columns = decoded.split(';')
-                    if len(columns) <= 12:
-                        continue
-                        
-                    orderId = columns[12].strip()
-                    if any(orderId in existingLine for existingLine in existingLines):
-                        continue
-                    lines.append(decoded)
-                    existingOrderID.add(orderId)
-                except UnicodeDecodeError:
-                    print(f"Warning: Skipping line due to encoding issues")
-                    continue
-
-            # Remove header if present
-            if "Order ID" in existingOrderID:
-                existingOrderID.remove("Order ID")
+            decoded = line.decode("utf-8").strip()
+            if decoded == "":
+                continue
             
-            if not lines:
-                return jsonify({'status': 'duplicate'}), 400
+            # Ensure we have enough columns
+            columns = decoded.split(';')
+            if len(columns) <= 12:
+                continue
+                
+            orderId = columns[12].strip()
+            if any(orderId in existingLine for existingLine in existingLines):
+                continue
+            lines.append(decoded)
+            existingOrderID.add(orderId)
+        except UnicodeDecodeError:
+            print(f"Warning: Skipping line due to encoding issues")
+            continue
 
-            # Process cards
-            cards = createDicts(lines)
-            try:
-                columns = {name: key for key, name in enumerate(cards[0].keys())}
-            except (IndexError, KeyError) as e:
-                print(f"Error processing CSV structure: {e}")
-                return jsonify({'status': 'invalid_format'}), 400
+    # Remove header if present
+    if "Order ID" in existingOrderID:
+        existingOrderID.remove("Order ID")
+    
+    if not lines:
+        return jsonify({'status': 'duplicate'}), 400
 
-            dataList = getImportantCollums(cards, columns)
+    # Process cards
+    cards = createDicts(lines)
+    try:
+        columns = {name: key for key, name in enumerate(cards[0].keys())}
+    except (IndexError, KeyError) as e:
+        print(f"Error processing CSV structure: {e}")
+        return jsonify({'status': 'invalid_format'}), 400
 
-            # Update database
-            db = get_db()
-            for item in dataList:
-                updateOneCard(db, item.get('Name'), item.get('Card Number'), item.get('Condition'), item.get('Price'))
+    dataList = getImportantCollums(cards, columns)
 
-            # Save updated check file
-            existingOrderID = sorted(existingOrderID, key=int)
-            with open(CHECK_PATH, 'w', encoding='utf-8') as checkFile:
-                for orderId in existingOrderID:
-                    checkFile.write(orderId + '\n')
+    for item in dataList:
+        updateOneCard(db, item.get('Name'), item.get('Card Number'), item.get('Condition'), item.get('Price'))
 
+    # Save updated check file
+    existingOrderID = sorted(existingOrderID, key=int)
+    with open(CHECK_PATH, 'w', encoding='utf-8') as checkFile:
+        for orderId in existingOrderID:
+            checkFile.write(orderId + '\n')
+
+def _process_inventory_csv(file):
+    stream = TextIOWrapper(file.stream, encoding='utf-8-sig', newline='')
+    reader = csv.DictReader(stream)
+
+    expected_header = set(CONSTANTS.COlLUMN_MAP)
+    actual_header = set(reader.fieldnames or [])
+    missing_header = expected_header - actual_header
+    if missing_header:
+        raise ValueError(f'Missing header(s): {missing_header}')
+    
+    dataList = []
+    for row in reader:
+        item = {
+            'card_name': row['name'],
+            'card_num': row['setCode'] + ' ' + row['cn'] if row['cn'] else '',
+            'condition': CONSTANTS.CONDITION_DICT.get(row['condition']),
+            'buy_price': row['price'],
+            'market_value': row['price'],
+            'quantity': row['quantity'],
+            'date': row['listedAt'],
+        }
+        dataList.append(item)
+    return dataList
+
+# TODO: merge with the add endpoint
+def _create_inventory(db, dataList=None):
+
+    if dataList is None:
+        raise ValueError('dataList is required')
+
+    dateCreted = dataList[0]['date'][:10]
+    buyPrice = sum(float(item['buy_price']) for item in dataList)
+    cursor = db.execute(
+        'INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?, ?, ?, ?)',
+        (None, buyPrice, dateCreted, '[]')
+    )
+    auctionId = cursor.lastrowid
+
+    for item in dataList:
+        isSealed = item.get('card_num') == ''
+
+        if isSealed:
+            buyPrice = round(float(item.get('market_value')) * 0.8, 2)
+            db.execute('INSERT INTO sealed (name, quantity, price, market_value, date, auction_id)'
+                'VALUES (?, ?, ?, ?, ?, ?)',
+                (
+                    item.get('card_name'),
+                    item.get('quantity'),
+                    buyPrice,
+                    item.get('market_value'),
+                    item.get('date'),
+                    auctionId
+                )
+            )
+        else:
+            quantity = int(item.get('quantity'))
+            if quantity is None:
+                quantity = 1
+            for i in range(quantity):
+                buyPrice = round(float(item.get('market_value')) * 0.8, 2)
+                db.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id)'
+                    'VALUES (?, ?, ?, ?, ?, ?)',
+                    (
+                        item.get('card_name'),
+                        item.get('card_num'),
+                        item.get('condition'),
+                        buyPrice,
+                        item.get('market_value'),
+                        auctionId
+                    )
+                )
+    db.commit()
+
+
+@bp.route('/importCSV', methods=('POST',))
+@verify_token
+def importCSV(): 
+    if os.getenv("FLASK_ENV") == "prod":
+        data_dir = os.getenv("DATA_DIR", current_app.instance_path)
+        os.makedirs(data_dir, exist_ok=True)
+        check_file_path = os.path.join(data_dir, 'checkFile.csv')
+    else:
+        # Running in development
+        check_file_path = os.path.join(current_app.instance_path, 'checkFile.csv')
+        os.makedirs(os.path.dirname(check_file_path), exist_ok=True)
+    
+    if 'csv-upload' not in request.files:
+        return jsonify({'status': 'missing'}), 400
+     
+    uploadType = request.form.get('type', 'inventory')
+    file = request.files['csv-upload']
+    if file.filename == '':
+        return jsonify({'status': 'file'}), 400
+    if not allowedFile(file.filename):
+        return jsonify({'status': 'extension'}), 400
+   
+    db = get_db()
+
+    if uploadType == 'inventory':
+        try:
+            data = _process_inventory_csv(file)
+            _create_inventory(db, data)
         except Exception as e:
             logger.exception('Failed to proces CSV file | reason: %s', e)
             print(f"Error processing CSV file: {e}")
             return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax19'}), 500
-
-
+    elif uploadType == 'sold':
+        try:
+            _process_sold_csv(check_file_path, file, db)
+        except Exception as e:
+            logger.exception('Failed to proces CSV file | reason: %s', e)
+            print(f"Error processing CSV file: {e}")
+            return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax19'}), 500
     return jsonify({'status': 'success'}), 201
 
 @bp.route('/searchCard', methods=('POST',))

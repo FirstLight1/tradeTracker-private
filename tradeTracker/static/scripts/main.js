@@ -301,26 +301,28 @@ async function generateSoldReport(month, year, div) {
     const contentType = response.headers.get('content-type') || '';
 
     if (!response.ok || contentType.includes('application/json')) {
-        const err = await response.json(); 
+        const err = await response.json();
         renderAlert(`Error generating sold report: ${err}`, 'error');
         return;
     }
-    try{
+    try {
         downloadFile(response)
         div.remove();
-    }catch (e){
-        renderAlert('Error: ' + e, 'error'); 
+    } catch (e) {
+        renderAlert('Error: ' + e, 'error');
     }
 }
 
-function importCSV() {
-    const input = document.querySelector('.import-sold-csv');
+function bindImportCSV(selector, type) {
+    const input = document.querySelector(selector);
+    if (!input) return;
     input.addEventListener('change', async (event) => {
         const file = event.target.files;
         if (file && file.length === 1) {
             const formData = new FormData();
             formData.append("csv-upload", file[0]);
-            const response = await csrfFetch('/importSoldCSV', {
+            formData.append("type", type);
+            const response = await csrfFetch('/importCSV', {
                 method: 'POST',
                 body: formData
             });
@@ -808,7 +810,7 @@ function initializeCart() {
     addExToCart();
 }
 
-async function collectModalData(recieverDiv, cartVal, cartContent, kind){
+async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
     // Collect all payment methods (every time Confirm is clicked)
     const paymentDivs = recieverDiv.querySelectorAll('.payment-div');
     const paymentMethods = [];
@@ -917,15 +919,15 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind){
             renderAlert('Error: ' + (err.message || 'Unknown error'), 'error');
             return false;
         }
-        try{
+        try {
             downloadFile(response)
             return true;
-        }catch (e){
-            renderAlert('Error: ' + e, 'error'); 
+        } catch (e) {
+            renderAlert('Error: ' + e, 'error');
         }
     }
 }
- 
+
 function shoppingCart() {
     const contentDiv = document.querySelector(".cart-content");
     const bulkCartDiv = document.querySelector(".bulk-cart-content");
@@ -2439,7 +2441,7 @@ async function loadAuctionContent(button) {
             } catch (error) {
                 renderAlert('Error saving new cards: ' + error, 'error');
                 return;
-             }
+            }
             //this could be done better by dynamically adding the cards instead of reloading the whole auction
             window.location.reload();
         });
@@ -3016,7 +3018,8 @@ async function loadAuctions() {
 searchBar();
 loadAuctions();
 initializeSealed();
-importCSV();
+bindImportCSV('.import-sold-csv', 'sold');
+bindImportCSV('.import-inventory-csv', 'inventory');
 soldReportBtn();
 initializeCart();
 initializeBulkHolo();
