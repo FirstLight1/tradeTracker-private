@@ -313,8 +313,52 @@ async function generateSoldReport(month, year, div) {
     }
 }
 
-function bindImportCSV(selector, type) {
-    const input = document.querySelector(selector);
+function uploadCSVModal() {
+    const uploadBtn = document.querySelector('.upload-csv-btn');
+    if (!uploadBtn) return;
+    uploadBtn.addEventListener('click', () => {
+        const div = document.createElement('div');
+        div.classList.add('reciever-div');
+        div.innerHTML = `
+            <div class="modal-content upload-modal">
+                <span class="close-modal">&times;</span>
+                <div class="upload-option upload-option-disabled">
+                    <p>CM sold CSV</p>
+                    <label class="upload-file-label">
+                        <span>Choose file</span>
+                        <input type="file" accept=".csv" class="import-cm-sold-csv" disabled>
+                    </label>
+                </div>
+                <div class="upload-option upload-option-disabled">
+                    <p>Sold CSV</p>
+                    <label class="upload-file-label">
+                        <span>Choose files</span>
+                        <input type="file" accept=".csv" class="import-sold-csv" multiple disabled>
+                    </label>
+                </div>
+                <div class="upload-option">
+                    <p>Inventory CSV</p>
+                    <label class="upload-file-label">
+                        <span>Choose file</span>
+                        <input type="file" accept=".csv" class="import-inventory-csv">
+                    </label>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(div);
+
+        bindImportCSV('.import-inventory-csv', 'inventory', div);
+
+        const close = () => div.remove();
+        div.querySelector('.close-modal').addEventListener('click', close);
+        div.addEventListener('click', (event) => {
+            if (event.target === div) close();
+        });
+    });
+}
+
+function bindImportCSV(selector, type, root = document) {
+    const input = root.querySelector(selector);
     if (!input) return;
     input.addEventListener('change', async (event) => {
         const file = event.target.files;
@@ -3018,8 +3062,7 @@ async function loadAuctions() {
 searchBar();
 loadAuctions();
 initializeSealed();
-bindImportCSV('.import-sold-csv', 'sold');
-bindImportCSV('.import-inventory-csv', 'inventory');
+uploadCSVModal();
 soldReportBtn();
 initializeCart();
 initializeBulkHolo();
