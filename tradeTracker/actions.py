@@ -1524,7 +1524,7 @@ def _process_inventory_csv(file):
             'card_name': row['name'],
             'card_num': row['setCode'] + ' ' + row['cn'] if row['cn'] else '',
             'condition': CONSTANTS.CONDITION_DICT.get(row['condition']),
-            'buy_price': row['price'],
+            'buy_price': round(float(row['price']) * 0.8, 2),
             'market_value': row['price'],
             'quantity': row['quantity'],
             'date': row['listedAt'],
@@ -1550,13 +1550,12 @@ def _create_inventory(db, dataList=None):
         isSealed = item.get('card_num') == ''
 
         if isSealed:
-            buyPrice = round(float(item.get('market_value')) * 0.8, 2)
             db.execute('INSERT INTO sealed (name, quantity, price, market_value, date, auction_id)'
                 'VALUES (?, ?, ?, ?, ?, ?)',
                 (
                     item.get('card_name'),
                     item.get('quantity'),
-                    buyPrice,
+                    item.get('buy_price'),
                     item.get('market_value'),
                     item.get('date'),
                     auctionId
