@@ -1597,25 +1597,28 @@ def importCSV():
         return jsonify({'status': 'missing'}), 400
      
     uploadType = request.form.get('type', 'inventory')
-    file = request.files['csv-upload']
-    if file.filename == '':
-        return jsonify({'status': 'file'}), 400
-    if not allowedFile(file.filename):
-        return jsonify({'status': 'extension'}), 400
+    files = request.files.getlist('csv-upload')
+    for file in files:
+        if file.filename == '':
+            return jsonify({'status': 'file'}), 400
+        if not allowedFile(file.filename):
+            return jsonify({'status': 'extension'}), 400
    
     db = get_db()
 
     if uploadType == 'inventory':
         try:
-            data = _process_inventory_csv(file)
-            _create_inventory(db, data)
+            for file in files:
+                data = _process_inventory_csv(file)
+                _create_inventory(db, data)
         except Exception as e:
             logger.exception('Failed to proces CSV file | reason: %s', e)
             print(f"Error processing CSV file: {e}")
             return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax19'}), 500
     elif uploadType == 'sold':
         try:
-            _process_sold_csv(check_file_path, file, db)
+            for file in files:
+                _process_sold_csv(check_file_path, file, db)
         except Exception as e:
             logger.exception('Failed to proces CSV file | reason: %s', e)
             print(f"Error processing CSV file: {e}")

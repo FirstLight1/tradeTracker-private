@@ -340,7 +340,7 @@ function uploadCSVModal() {
                     <p>Inventory CSV</p>
                     <label class="upload-file-label">
                         <span>Choose file</span>
-                        <input type="file" accept=".csv" class="import-inventory-csv">
+                        <input type="file" accept=".csv" class="import-inventory-csv" multiple>
                     </label>
                 </div>
             </div>
@@ -361,10 +361,14 @@ function bindImportCSV(selector, type, root = document) {
     const input = root.querySelector(selector);
     if (!input) return;
     input.addEventListener('change', async (event) => {
-        const file = event.target.files;
-        if (file && file.length === 1) {
+        const files = event.target.files;
+        console.log(files);
+        if (files) {
             const formData = new FormData();
-            formData.append("csv-upload", file[0]);
+            for (const file of files) {
+                formData.append("csv-upload", file);
+            }
+            //files.forEach(file => formData.append("csv-upload", file));
             formData.append("type", type);
             const response = await csrfFetch('/importCSV', {
                 method: 'POST',
