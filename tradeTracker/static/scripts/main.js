@@ -362,38 +362,70 @@ function bindImportCSV(selector, type, root = document) {
     if (!input) return;
     input.addEventListener('change', async (event) => {
         const files = event.target.files;
-        console.log(files);
-        if (files) {
+        if (files && files.length) {
             const formData = new FormData();
             for (const file of files) {
                 formData.append("csv-upload", file);
             }
-            //files.forEach(file => formData.append("csv-upload", file));
             formData.append("type", type);
-            const response = await csrfFetch('/importCSV', {
-                method: 'POST',
-                body: formData
-            });
-            const data = await response.json();
-            switch (data.status) {
-                case "success":
-                    window.location.reload()
-                    break;
-                case "missing":
-                    renderAlert('No file uploaded', 'error')
-                    break;
-                case "file":
-                    renderAlert('No file selected', 'error')
-                    break;
-                case "extension":
-                    renderAlert('Please upload valid CSV file', 'error')
-                    break;
-                case "duplicate":
-                    renderAlert('File already uploaded', 'error')
-                    break;
+            const spinner = showProcessingSpinner(root);
+            try {
+                const response = await csrfFetch('/importCSV', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                switch (data.status) {
+                    case "success":
+                        window.location.reload()
+                        break;
+                    case "missing":
+                        renderAlert('No file uploaded', 'error')
+                        break;
+                    case "file":
+                        renderAlert('No file selected', 'error')
+                        break;
+                    case "extension":
+                        renderAlert('Please upload valid CSV file', 'error')
+                        break;
+                    case "duplicate":
+                        renderAlert('File already uploaded', 'error')
+                        break;
+                    case "error":
+                        renderAlert('Error processing CSV: ' + (data.message || ''), 'error')
+                        break;
+                }
+            } catch (e) {
+                renderAlert('Error processing CSV: ' + e + ', Error code: Mx18', 'error')
+            } finally {
+                hideProcessingSpinner(spinner);
             }
         }
     })
+}
+
+// Shows a processing spinner over the modal, but only once processing takes
+// longer than `delay` ms so quick uploads don't cause a flash.
+function showProcessingSpinner(root, delay = 400) {
+    const container = (root && root.querySelector && root.querySelector('.modal-content')) || document.body;
+    const handle = { overlay: null, timer: null };
+    handle.timer = setTimeout(() => {
+        const overlay = document.createElement('div');
+        overlay.className = 'processing-spinner-overlay';
+        overlay.innerHTML = `
+            <div class="processing-spinner"></div>
+            <p class="processing-spinner-text">Processing CSV…</p>
+        `;
+        container.appendChild(overlay);
+        handle.overlay = overlay;
+    }, delay);
+    return handle;
+}
+
+function hideProcessingSpinner(handle) {
+    if (!handle) return;
+    clearTimeout(handle.timer);
+    if (handle.overlay) handle.overlay.remove();
 }
 
 function cartValue(cartContent) {
