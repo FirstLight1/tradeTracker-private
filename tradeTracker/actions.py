@@ -699,7 +699,7 @@ def generate_credit_note(saleId):
 
     # Load cards
     cards_rows = db.execute(
-        'SELECT c.card_name, c.card_num, si.sell_price as marketValue,  '
+        'SELECT c.card_name, c.card_num, si.sell_price as marketValue '
         'FROM cards c '
         'JOIN sale_items si ON c.id = si.card_id '
         'WHERE si.sale_id = ?',
@@ -1793,7 +1793,6 @@ def invoice(kind):
             shipping=cartContent.get('shipping'),
             payments=payment_data or [],
         )
-
         db = get_db()
         
         if kind == 'invoice': 

@@ -67,8 +67,8 @@ async function loadContent(button, soldDate) {
                 sealedDiv.innerHTML = `
                     <p class='card-info card-name'>${DOMPurify.sanitize(item.name)}</p>
                     <p class='card-info card-num'></p>
-                    <p class='card-info condition'></p>
-                    <p class='card-info card-price'></p>
+                    <p class='card-info condition'>q: ${item.quantity}</p>
+                    <p class='card-info card-price'>${DOMPurify.sanitize(item.price)}</p>
                     <p class='card-info market-value'>${DOMPurify.sanitize(item.market_value)}</p>
                     <p class='card-info sell-price'>${DOMPurify.sanitize(item.market_value)}</p>
                     <p>${item.market_value !== null && item.price !== null ? (item.market_value - item.price).toFixed(2) + '€' : 'Unknown'}</p>
@@ -160,10 +160,10 @@ async function loadHistory() {
                 returnButton.disabled = true;
                 returnButton.textContent = 'Processing...';
                 try {
-                    
+
                     console.log('here0');
                     const cnResponse = await csrfFetch(`/generateCreditNote/${saleId}`,
-                        {method: 'POST'});
+                        { method: 'POST' });
 
                     const contentType = cnResponse.headers.get('content-type') || '';
                     if (!cnResponse.ok || contentType.includes('application/json')) {
@@ -173,13 +173,14 @@ async function loadHistory() {
                         returnButton.textContent = 'Return';
                         return;
                     }
-                        try{
-                            downloadFile(cnResponse)
-                        } catch (e){
-                            renderAlert('Error: ' + e, 'error');
-                        }
-                    const returnResponse = await csrfFetch(`/orderReturn/${saleId}`,{
-                        method: 'POST'});
+                    try {
+                        downloadFile(cnResponse)
+                    } catch (e) {
+                        renderAlert('Error: ' + e, 'error');
+                    }
+                    const returnResponse = await csrfFetch(`/orderReturn/${saleId}`, {
+                        method: 'POST'
+                    });
                     const returnData = await returnResponse.json();
                     if (returnData.status !== 'success') {
                         renderAlert('Error processing return: ' + returnData.message, 'error');
@@ -190,8 +191,8 @@ async function loadHistory() {
 
 
                     const saleDiv = returnButton.closest(`.sold-tab`);
-                    saleDiv.remove(); 
-                    
+                    saleDiv.remove();
+
                 } catch (e) {
                     renderAlert('Error processing return: ' + e, 'error');
                     returnButton.disabled = false;
