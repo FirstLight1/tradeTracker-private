@@ -155,6 +155,43 @@
     transform: none;
 }
 
+/* Processing Spinner */
+.processing-spinner-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 15px;
+    background-color: rgba(13, 17, 23, 0.8);
+    backdrop-filter: blur(2px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 10;
+}
+
+.processing-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid rgba(127, 255, 212, 0.2);
+    border-top-color: var(--accent-cyan);
+    border-radius: 50%;
+    box-shadow: 0 0 15px var(--glow-color);
+    animation: processing-spin 0.8s linear infinite;
+}
+
+.processing-spinner-text {
+    color: var(--text-color);
+    font-family: var(--primary-font), serif;
+    letter-spacing: 0.5px;
+}
+
+@keyframes processing-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 /* Button Styling */
 .modal-content .generate-invoice,
 .modal-content .sales-invoice {

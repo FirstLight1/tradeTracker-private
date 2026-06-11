@@ -708,7 +708,7 @@ def generate_credit_note(saleId):
 
     # Load cards
     cards_rows = db.execute(
-        'SELECT c.card_name, c.card_num, si.sell_price as marketValue,  '
+        'SELECT c.card_name, c.card_num, si.sell_price as marketValue '
         'FROM cards c '
         'JOIN sale_items si ON c.id = si.card_id '
         'WHERE si.sale_id = ?',
@@ -1533,7 +1533,7 @@ def _process_inventory_csv(file):
             'card_name': row['name'],
             'card_num': row['setCode'] + ' ' + row['cn'] if row['cn'] else '',
             'condition': CONSTANTS.CONDITION_DICT.get(row['condition']),
-            'buy_price': row['price'],
+            'buy_price': round(float(row['price']) * 0.8, 2),
             'market_value': row['price'],
             'quantity': row['quantity'],
             'date': row['listedAt'],
@@ -1559,13 +1559,12 @@ def _create_inventory(db, dataList=None):
         isSealed = item.get('card_num') == ''
 
         if isSealed:
-            buyPrice = round(float(item.get('market_value')) * 0.8, 2)
             db.execute('INSERT INTO sealed (name, quantity, price, market_value, date, auction_id)'
                 'VALUES (?, ?, ?, ?, ?, ?)',
                 (
                     item.get('card_name'),
                     item.get('quantity'),
-                    buyPrice,
+                    item.get('buy_price'),
                     item.get('market_value'),
                     item.get('date'),
                     auctionId
@@ -1607,25 +1606,28 @@ def importCSV():
         return jsonify({'status': 'missing'}), 400
      
     uploadType = request.form.get('type', 'inventory')
-    file = request.files['csv-upload']
-    if file.filename == '':
-        return jsonify({'status': 'file'}), 400
-    if not allowedFile(file.filename):
-        return jsonify({'status': 'extension'}), 400
+    files = request.files.getlist('csv-upload')
+    for file in files:
+        if file.filename == '':
+            return jsonify({'status': 'file'}), 400
+        if not allowedFile(file.filename):
+            return jsonify({'status': 'extension'}), 400
    
     db = get_db()
 
     if uploadType == 'inventory':
         try:
-            data = _process_inventory_csv(file)
-            _create_inventory(db, data)
+            for file in files:
+                data = _process_inventory_csv(file)
+                _create_inventory(db, data)
         except Exception as e:
             logger.exception('Failed to proces CSV file | reason: %s', e)
             print(f"Error processing CSV file: {e}")
             return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax19'}), 500
     elif uploadType == 'sold':
         try:
-            _process_sold_csv(check_file_path, file, db)
+            for file in files:
+                _process_sold_csv(check_file_path, file, db)
         except Exception as e:
             logger.exception('Failed to proces CSV file | reason: %s', e)
             print(f"Error processing CSV file: {e}")
@@ -1800,7 +1802,6 @@ def invoice(kind):
             shipping=cartContent.get('shipping'),
             payments=payment_data or [],
         )
-
         db = get_db()
         
         if kind == 'invoice': 
