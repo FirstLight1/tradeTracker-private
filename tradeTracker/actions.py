@@ -1599,7 +1599,63 @@ def process_sold_csv(files,db):
     orders = pd.read_csv(StringIO(orders))
     merged = articlesExpanded.merge(orders, on='idOrder', how='left', suffixes=('_art', '_ord'), validate='many_to_one')
 
-     
+    merged['cardmarketId'] = merged['cardmarketId'].astype('Int64').astype('string')
+
+    ids = merged['cardmarketId'].dropna().tolist()
+    placehoders = ','.join(['?'] * len(ids))
+
+    cur = db.execute("SELECT id, name, NULL as card_num, quantity, market_value, 'sealed' as item_type, cardMarketID as cardmarketId "
+               'FROM sealed '
+              f'WHERE sale_id IS NULL AND cardMarketID IN ({placehoders}) '
+               'UNION ALL '
+               "SELECT c.id as id, card_name as name, card_num, NULL as quantity, market_value, 'card' as item_type, cardMarketID as cardmarketId "
+               'FROM cards c '
+               'LEFT JOIN sale_items si ON si.card_id = c.id '
+              f'WHERE si.card_id IS NULL AND cardMarketID IN ({placehoders}) '
+               'ORDER BY id ASC ', ids + ids)
+    allItems = pd.DataFrame(cur.fetchall(), columns=[c[0] for c in cur.description])
+
+    merged['_match_seq'] = merged.groupby('cardmarketId').cumcount()
+    allItems['_match_seq'] = allItems.groupby('cardmarketId').cumcount()
+
+    wantedItems = merged.merge(allItems, on=['cardmarketId', '_match_seq'], how='left', suffixes=('_art', '_ord'), validate='one_to_one')
+    wantedItems = wantedItems.drop(columns='_match_seq')
+    wantedItems['matched'] = wantedItems['item_type'].notna()
+
+    orderComplete = wantedItems.groupby('idOrder')['matched'].all()
+    completeItems = wantedItems[wantedItems['idOrder'].isin(orderComplete[orderComplete].index)].groupby('idOrder')
+    rejectedItems = wantedItems[wantedItems['idOrder'].isin(orderComplete[~orderComplete].index)].groupby('idOrder')
+
+    ordersArr = []
+    for idOrder, group in completeItems:
+        sealed = []
+        cards = []
+        for row in group.iterrows():
+            if row['item_type'] == 'sealed':
+                item = {
+                    'quantity': row['quantity'],
+                    'price': row['price'],
+                    'market_value': row['market_value'],
+                    'auction_id': row['auction_id'],
+                    'id': row['id']
+                }
+                sealed.append(item)
+            elif row['item_type'] == 'card':
+                item = {
+                    'card_name': row['card_name'],
+                    'card_num': row['card_num'],
+                    'condition': row['condition'],
+                    'market_value': row['market_value'],
+                    'id': row['id']
+                }
+                cards.append(item)
+
+
+
+    #sealedItems = completeItems[completeItems['item_type'] == 'sealed'].groupby('idOrder')
+    #cardItems = completeItems[completeItems['item_type'] == 'card'].groupby('idOrder')
+
+        
 
     
 
