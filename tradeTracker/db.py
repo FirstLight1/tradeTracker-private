@@ -161,6 +161,7 @@ CREATE TABLE cards (
     condition TEXT,
     card_price REAL,
     market_value REAL,
+    cardMarketID TEXT,
     FOREIGN KEY (auction_id) REFERENCES auctions (id) ON DELETE CASCADE
 );
 
@@ -240,6 +241,7 @@ CREATE TABLE sealed(
     date TEXT,
     sale_id INTEGER,
     auction_id INTEGER,
+    cardMarketID TEXT,
     FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE CASCADE,
     FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE
     );
