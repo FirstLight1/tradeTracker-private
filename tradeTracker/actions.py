@@ -2,7 +2,8 @@ import base64
 from decimal import Decimal
 from flask import request, Blueprint, jsonify, current_app, send_file, abort
 from tradeTracker.db import get_db
-from io import BytesIO, TextIOWrapper
+from io import BytesIO, TextIOWrapper, StringIO
+import re
 import csv
 import datetime
 from Crypto.Cipher import AES
@@ -1449,7 +1450,7 @@ def allowedFile(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in "csv"
 
 
-def _process_sold_csv(check_file_path, file, db):
+def _process_soldCM_csv(check_file_path, file, db):
     lines = []
     existingOrderID = set()
 
@@ -1580,6 +1581,27 @@ def _create_inventory(db, dataList=None):
                 )
     db.commit()
 
+def _fixArticlesUpload(file):
+    raw = re.sub(r'"\{"locationName".*?locationQuantity":\d+\}"', '""', file)
+    return pd.read_csv(StringIO(raw))
+
+def process_sold_csv(files,db):
+    firstIsOrders = 'order' in files[0].filename.lower()
+    ordersUpload = files[0] if firstIsOrders else files[1]
+    articlesUpload = files[1] if firstIsOrders else files[0]
+
+    orders = ordersUpload.stream.read().decode('utf-8')
+    articles = articlesUpload.stream.read().decode('utf-8')
+    
+    articles = _fixArticlesUpload(articles)
+    articlesExpanded = articles.loc[articles.index.repeat(articles['items'])].reset_index(drop=True)
+    articlesExpanded['items'] = 1
+    orders = pd.read_csv(StringIO(orders))
+    merged = articlesExpanded.merge(orders, on='idOrder', how='left', suffixes=('_art', '_ord'), validate='many_to_one')
+
+     
+
+    
 
 @bp.route('/importCSV', methods=('POST',))
 @verify_token
@@ -1615,10 +1637,19 @@ def importCSV():
             logger.exception('Failed to proces CSV file | reason: %s', e)
             print(f"Error processing CSV file: {e}")
             return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax19'}), 500
-    elif uploadType == 'sold':
+    elif uploadType == 'sold-CM':
         try:
             for file in files:
-                _process_sold_csv(check_file_path, file, db)
+                _process_soldCM_csv(check_file_path, file, db)
+        except Exception as e:
+            logger.exception('Failed to proces CSV file | reason: %s', e)
+            print(f"Error processing CSV file: {e}")
+            return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax19'}), 500
+    elif uploadType == 'sold':
+        if len(files) != 2:
+            return jsonify({'status': 'error', 'message': 'Invalid file count'}), 400
+        try:
+            process_sold_csv(files,db)
         except Exception as e:
             logger.exception('Failed to proces CSV file | reason: %s', e)
             print(f"Error processing CSV file: {e}")

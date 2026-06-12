@@ -329,11 +329,11 @@ function uploadCSVModal() {
                         <input type="file" accept=".csv" class="import-cm-sold-csv" disabled>
                     </label>
                 </div>
-                <div class="upload-option upload-option-disabled">
+                <div class="upload-option ">
                     <p>Sold CSV</p>
                     <label class="upload-file-label">
                         <span>Choose files</span>
-                        <input type="file" accept=".csv" class="import-sold-csv" multiple disabled>
+                        <input type="file" accept=".csv" class="import-sold-csv" multiple>
                     </label>
                 </div>
                 <div class="upload-option">
@@ -348,6 +348,7 @@ function uploadCSVModal() {
         document.body.appendChild(div);
 
         bindImportCSV('.import-inventory-csv', 'inventory', div);
+        bindImportCSV('.import-sold-csv', 'sold', div);
 
         const close = () => div.remove();
         div.querySelector('.close-modal').addEventListener('click', close);
