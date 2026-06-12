@@ -26,11 +26,9 @@ Matching key depends on the table:
   - sealed: name only (case/whitespace-insensitive). Sealed products have no
             card number or condition.
 
-A key can match several DB rows (duplicate copies / re-imports). The CSV's
-`quantity` column says how many to tag; we take that many of the most recently
-added matching rows that don't already have a cardMarketID (highest id first),
-stopping when we run out of rows or of quantity. Use --overwrite to also retag
-rows that already have an ID.
+Every DB row whose key matches a CSV row gets that row's cardMarketID. A key can
+match several DB rows (duplicate copies / re-imports); all of them are tagged.
+Rows that already have a cardMarketID are left alone unless --overwrite is given.
 """
 
 import argparse
@@ -50,7 +48,6 @@ COL_SET = "setCode"
 COL_CONDITION = "condition"
 COL_CARDMARKET_ID = "cardmarketId"
 COL_SEALED_NAME = "name"
-COL_QUANTITY = "quantity"
 
 
 def norm_text(value):
@@ -74,12 +71,12 @@ def whole_number(set, num):
 # --- Per-table behaviour. Picked by --table. ----------------------------------
 # Each spec knows which CSV columns it needs, how to read the matching rows out
 # of the DB, and how to derive the same match key from a DB row vs. a CSV row.
-# Both tables can have several rows sharing a match key; the CSV quantity says
-# how many of the most-recently-added ones to tag.
+# Both tables can have several rows sharing a match key; every one of them is
+# tagged with the CSV row's cardMarketID.
 TABLE_SPECS = {
     "cards": {
         # One DB row per physical copy -- match on name + number + condition.
-        "required_cols": (COL_NAME, COL_NUM, COL_SET, COL_CONDITION, COL_CARDMARKET_ID, COL_QUANTITY),
+        "required_cols": (COL_NAME, COL_NUM, COL_SET, COL_CONDITION, COL_CARDMARKET_ID),
         "db_select": "SELECT id, card_name, card_num, condition FROM cards",
         "db_key": lambda row: card_key(row[1], row[2], row[3]),
         # DB card_num is stored as "<expansion> <number>" (see actions.py),
@@ -90,7 +87,7 @@ TABLE_SPECS = {
     },
     "sealed": {
         # Sealed products have no number/condition -- match on name alone.
-        "required_cols": (COL_SEALED_NAME, COL_CARDMARKET_ID, COL_QUANTITY),
+        "required_cols": (COL_SEALED_NAME, COL_CARDMARKET_ID),
         "db_select": "SELECT id, name FROM sealed",
         "db_key": lambda row: (norm_text(row[1]),),
         "csv_key": lambda row: (norm_text(row[COL_SEALED_NAME]),),
@@ -140,9 +137,8 @@ def main():
             )
         }
 
-        updates = []          # (cardMarketID, row_id)
+        updates = {}          # row_id -> cardMarketID (dict de-dups shared rows)
         not_found = []        # csv row number
-        quantity_mismatch = []  # (row number, csv_qty, db_row_count): wanted > rows
         skipped_existing = 0
         missing_id = 0
 
@@ -168,49 +164,27 @@ def main():
                     not_found.append(lineno)
                     continue
 
-                # Newest first -- id is autoincrement, so a higher id means a
-                # more recently added row. We tag the most recent matches that
-                # still need an ID (unless --overwrite, which ignores that).
-                ordered = sorted(ids, reverse=True)
-                if args.overwrite:
-                    candidates = ordered
-                else:
-                    candidates = [cid for cid in ordered if cid not in already_set]
-
-                # CSV quantity = how many copies to tag. Take that many of the
-                # most recent matches, decreasing until we run out of rows or of
-                # quantity. If the CSV wants more than the DB actually has, tag
-                # everything available and flag the shortfall.
-                try:
-                    want = int((row.get(COL_QUANTITY) or "").strip())
-                except ValueError:
-                    want = 1
-                if want < 1:
-                    want = 1
-                if want > len(ids):
-                    quantity_mismatch.append((lineno, want, len(ids)))
-
-                target_ids = candidates[:want]
-                if not target_ids:
+                # Tag every matching row. Rows that already have an ID are left
+                # alone unless --overwrite is set.
+                tagged_any = False
+                for cid in ids:
+                    if not args.overwrite and cid in already_set:
+                        continue
+                    updates[cid] = cm_id
+                    tagged_any = True
+                if not tagged_any:
                     # Every match already has an ID (and no --overwrite).
                     skipped_existing += 1
-                    continue
-                for cid in target_ids:
-                    updates.append((cm_id, cid))
 
         print("--- Backfill summary ---")
         print(f"  matched & to update : {len(updates)}")
-        print(f"  skipped (has ID)    : {skipped_existing}  (use --overwrite to replace)")
+        print(f"  CSV rows all set    : {skipped_existing}  (use --overwrite to replace)")
         print(f"  CSV rows w/o an ID  : {missing_id}")
         print(f"  not found in DB     : {len(not_found)}")
-        print(f"  qty > rows in DB    : {len(quantity_mismatch)}")
 
         if not_found:
             preview = ", ".join(str(n) for n in not_found[:20])
             print(f"    not-found CSV lines: {preview}{' ...' if len(not_found) > 20 else ''}")
-        if quantity_mismatch:
-            for lineno, want, db_count in quantity_mismatch[:20]:
-                print(f"    line {lineno}: CSV wants {want} but DB has {db_count} matching row(s)")
 
         if not args.commit:
             print("\nDRY RUN -- nothing written. Re-run with --commit to apply.")
@@ -218,7 +192,8 @@ def main():
 
         with conn:  # single transaction; rolls back on any error
             conn.executemany(
-                f"UPDATE {args.table} SET cardMarketID = ? WHERE id = ?", updates
+                f"UPDATE {args.table} SET cardMarketID = ? WHERE id = ?",
+                [(cm_id, cid) for cid, cm_id in updates.items()],
             )
         print(f"\nCOMMITTED: {len(updates)} rows updated.")
     finally:
