@@ -161,6 +161,7 @@ CREATE TABLE cards (
     condition TEXT,
     card_price REAL,
     market_value REAL,
+    sold_date TEXT,
     cardMarketID TEXT,
     FOREIGN KEY (auction_id) REFERENCES auctions (id) ON DELETE CASCADE
 );

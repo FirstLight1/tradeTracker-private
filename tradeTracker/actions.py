@@ -1604,11 +1604,11 @@ def process_sold_csv(files,db):
     ids = merged['cardmarketId'].dropna().tolist()
     placehoders = ','.join(['?'] * len(ids))
 
-    cur = db.execute("SELECT id, name, NULL as card_num, quantity, market_value, 'sealed' as item_type, cardMarketID as cardmarketId "
+    cur = db.execute("SELECT id, name as itemName, NULL as card_num, quantity, market_value, auction_id, 'sealed' as item_type, cardMarketID as cardmarketId "
                'FROM sealed '
               f'WHERE sale_id IS NULL AND cardMarketID IN ({placehoders}) '
                'UNION ALL '
-               "SELECT c.id as id, card_name as name, card_num, NULL as quantity, market_value, 'card' as item_type, cardMarketID as cardmarketId "
+               "SELECT c.id as id, card_name as itemName, card_num, NULL as quantity, market_value, auction_id, 'card' as item_type, cardMarketID as cardmarketId "
                'FROM cards c '
                'LEFT JOIN sale_items si ON si.card_id = c.id '
               f'WHERE si.card_id IS NULL AND cardMarketID IN ({placehoders}) '
@@ -1618,7 +1618,7 @@ def process_sold_csv(files,db):
     merged['_match_seq'] = merged.groupby('cardmarketId').cumcount()
     allItems['_match_seq'] = allItems.groupby('cardmarketId').cumcount()
 
-    wantedItems = merged.merge(allItems, on=['cardmarketId', '_match_seq'], how='left', suffixes=('_art', '_ord'), validate='one_to_one')
+    wantedItems = merged.merge(allItems, on=['cardmarketId', '_match_seq'], how='left', suffixes=('_mer', '_db'), validate='one_to_one')
     wantedItems = wantedItems.drop(columns='_match_seq')
     wantedItems['matched'] = wantedItems['item_type'].notna()
 
@@ -1627,37 +1627,94 @@ def process_sold_csv(files,db):
     rejectedItems = wantedItems[wantedItems['idOrder'].isin(orderComplete[~orderComplete].index)].groupby('idOrder')
 
     ordersArr = []
-    for idOrder, group in completeItems:
+    for orderId , group in completeItems:
         sealed = []
         cards = []
-        for row in group.iterrows():
+        for _, row in group.iterrows():
+            # articles 'price' arrives like "1.48 €" -> parse to a float once
+            sale_price = float(str(row['price']).replace('€', '').replace(',', '.').strip())
             if row['item_type'] == 'sealed':
-                item = {
-                    'quantity': row['quantity'],
-                    'price': row['price'],
-                    'market_value': row['market_value'],
-                    'auction_id': row['auction_id'],
-                    'id': row['id']
-                }
-                sealed.append(item)
+                sealed.append({
+                    'sealedName': row['itemName'],
+                    'quantity': 1,                    # rows are expanded to 1 item each
+                    'marketValue': str(sale_price),   # generateInvoice expects a string here
+                    'auctionId': row['auction_id'],
+                })
             elif row['item_type'] == 'card':
-                item = {
-                    'card_name': row['card_name'],
-                    'card_num': row['card_num'],
-                    'condition': row['condition'],
-                    'market_value': row['market_value'],
-                    'id': row['id']
+                cards.append({
+                    'cardId': row['id'],
+                    'cardName': row['itemName'],
+                    'cardNum': '' if pd.isna(row['card_num']) else str(row['card_num']),
+                    'marketValue': sale_price,
+                })
+
+        # All rows in the group share the same order-level fields
+        head = group.iloc[0]
+        # shippingAddressExtra is an address supplement line (c/o, 2nd line),
+        # not part of the recipient's name -- fold it into the address instead.
+        address = str(head['shippingAddressStreet'])
+        extra = head['shippingAddressExtra']
+        if pd.notna(extra) and str(extra).strip():
+            address = f"{address}, {str(extra).strip()}"
+        paybackDate = (
+            datetime.datetime.strptime(head['dateBought'], '%Y-%m-%dT%H:%M:%S.%fZ').date()
+            + datetime.timedelta(days=14)
+        ).isoformat()
+
+        # Values come from a DataFrame (numpy scalars); coerce to native types so
+        # the receiver dict is JSON-serializable when SaleService encrypts it.
+        reviecerInfo = {
+            "nameAndSurname": str(head['shippingAddressName']),
+            "address": address,
+            "city": str(head['shippingAddressCity']),
+            "state": str(head['shippingAddressCountry']),
+            "zipCode": str(head['shippingAddressZip']),
+            "paybackDate": paybackDate,
+            "total": float(head['articleValue']),
+            }
+
+        shipping = {
+                "shippingWay": "Doprava / Poštovné – samostatná služba",
+                "shippingPrice": round(float(head['totalValue']) - float(head['articleValue']), 2)
                 }
-                cards.append(item)
 
+        saleInuput = SaleInput(
+                reciever=reviecerInfo,
+                cards=cards,
+                sealed=sealed,
+                bulk=None,
+                holo=None,
+                ex=None,
+                shipping=shipping,
+                payments=[],
+                idOrder=orderId
+                )
 
+        ordersArr.append(saleInuput)
 
-    #sealedItems = completeItems[completeItems['item_type'] == 'sealed'].groupby('idOrder')
-    #cardItems = completeItems[completeItems['item_type'] == 'card'].groupby('idOrder')
+    rejectedArr = []
+    for orderId , group in rejectedItems:
+        rejectedArr.append({
+                "idOrder": orderId,
+                "name": group.iloc[0]['shippingAddressName'],
+                })
 
         
-
+    return ordersArr, rejectedArr
     
+_zip_store = {}
+
+@bp.route('/download/<token>', methods=('GET',))
+def download(token):
+    data = _zip_store.pop(token, None)  
+    if data is None:
+        abort(404)
+    return send_file(
+        io.BytesIO(data),
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name="processed.zip",  
+    )
 
 @bp.route('/importCSV', methods=('POST',))
 @verify_token
@@ -1704,12 +1761,49 @@ def importCSV():
     elif uploadType == 'sold':
         if len(files) != 2:
             return jsonify({'status': 'error', 'message': 'Invalid file count'}), 400
+
+        # Parsing/matching is read-only; a failure here leaves the DB untouched.
         try:
-            process_sold_csv(files,db)
+            completed, rejected = process_sold_csv(files, db)
         except Exception as e:
             logger.exception('Failed to proces CSV file | reason: %s', e)
             print(f"Error processing CSV file: {e}")
             return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax19'}), 500
+
+        # Each order is an independent sale: commit per order so one bad order
+        # cannot roll back the rest. Failures are collected and reported.
+        invoices = []
+        failed = []
+        for item in completed:
+            try:
+                saleResult = SaleService(db, InvoiceReceiptService()).process_sale(item)
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.exception('Sold order %s failed | %s', item.idOrder, e)
+                failed.append({
+                    'idOrder': item.idOrder,
+                    'name': item.reciever.get('nameAndSurname'),
+                    'reason': str(e),
+                })
+                continue
+            reciept = saleResult.receipt.raw
+            invoices.append((reciept['filename'], reciept['bytes']))
+
+        zip_buffer = BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for filename, bytes in invoices:
+                zip_file.writestr(filename, bytes)
+
+        token = uuid.uuid4().hex
+        _zip_store[token] = zip_buffer.getvalue()
+
+        return jsonify({
+            'status': 'success',
+            "download_url": f"/download/{token}" if len(invoices) > 0 else None,
+            "rejected": rejected,
+            "failed": failed,
+        }), 200
     return jsonify({'status': 'success'}), 201
 
 @bp.route('/searchCard', methods=('POST',))
