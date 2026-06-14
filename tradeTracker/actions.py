@@ -1704,6 +1704,7 @@ def process_sold_csv(files,db):
     
 _zip_store = {}
 
+@verify_token
 @bp.route('/download/<token>', methods=('GET',))
 def download(token):
     data = _zip_store.pop(token, None)  
