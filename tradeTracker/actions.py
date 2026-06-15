@@ -4,6 +4,7 @@ from flask import request, Blueprint, jsonify, current_app, send_file, abort
 from tradeTracker.db import get_db
 from io import BytesIO, TextIOWrapper, StringIO
 import re
+import uuid
 import csv
 import datetime
 from Crypto.Cipher import AES
@@ -1529,6 +1530,7 @@ def _process_inventory_csv(file):
             'market_value': row['price'],
             'quantity': row['quantity'],
             'date': row['listedAt'],
+            'cardmarketId': row['cardmarketId'],
         }
         dataList.append(item)
     return dataList
@@ -1541,44 +1543,59 @@ def _create_inventory(db, dataList=None):
 
     dateCreted = dataList[0]['date'][:10]
     buyPrice = sum(float(item['buy_price']) for item in dataList)
-    cursor = db.execute(
-        'INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?, ?, ?, ?)',
-        (None, buyPrice, dateCreted, '[]')
-    )
+    try:
+        cursor = db.execute(
+            'INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?, ?, ?, ?)',
+            (None, buyPrice, dateCreted, '[]')
+        )
+        auctionId = cursor.lastrowid
+    except Exception as e:
+        logger.exception(f"Error creating auction: {e}")
+        raise Exception("Error creating auction")
     auctionId = cursor.lastrowid
 
     for item in dataList:
         isSealed = item.get('card_num') == ''
 
         if isSealed:
-            db.execute('INSERT INTO sealed (name, quantity, price, market_value, date, auction_id)'
-                'VALUES (?, ?, ?, ?, ?, ?)',
-                (
-                    item.get('card_name'),
-                    item.get('quantity'),
-                    item.get('buy_price'),
-                    item.get('market_value'),
-                    item.get('date'),
-                    auctionId
+            try:
+                db.execute('INSERT INTO sealed (name, quantity, price, market_value, date, auction_id, cardmarketId)'
+                    'VALUES (?, ?, ?, ?, ?, ?)',
+                    (
+                        item.get('card_name'),
+                        item.get('quantity'),
+                        item.get('buy_price'),
+                        item.get('market_value'),
+                        item.get('date'),
+                        auctionId,
+                        item.get('cardmarketId')
+                    )
                 )
-            )
+            except Exception as e:
+                logger.exception(f"Error adding sealed item {item.get('card_name')}: {e}")
+                raise Exception("Error adding sealed item")
         else:
             quantity = int(item.get('quantity'))
             if quantity is None:
                 quantity = 1
             for i in range(quantity):
-                buyPrice = round(float(item.get('market_value')) * 0.8, 2)
-                db.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id)'
-                    'VALUES (?, ?, ?, ?, ?, ?)',
-                    (
-                        item.get('card_name'),
-                        item.get('card_num'),
-                        item.get('condition'),
-                        buyPrice,
-                        item.get('market_value'),
-                        auctionId
+                try:
+                    buyPrice = round(float(item.get('market_value')) * 0.8, 2)
+                    db.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
+                        'VALUES (?, ?, ?, ?, ?, ?)',
+                        (
+                            item.get('card_name'),
+                            item.get('card_num'),
+                            item.get('condition'),
+                            buyPrice,
+                            item.get('market_value'),
+                            auctionId,
+                            item.get('cardmarketId')
+                        )
                     )
-                )
+                except Exception as e:
+                    logger.exception(f"Error adding card item {item.get('card_name')}: {e}")
+                    raise Exception("Error adding card item")
     db.commit()
 
 def _fixArticlesUpload(file):
@@ -1631,13 +1648,12 @@ def process_sold_csv(files,db):
         sealed = []
         cards = []
         for _, row in group.iterrows():
-            # articles 'price' arrives like "1.48 €" -> parse to a float once
             sale_price = float(str(row['price']).replace('€', '').replace(',', '.').strip())
             if row['item_type'] == 'sealed':
                 sealed.append({
                     'sealedName': row['itemName'],
-                    'quantity': 1,                    # rows are expanded to 1 item each
-                    'marketValue': str(sale_price),   # generateInvoice expects a string here
+                    'quantity': 1,     
+                    'marketValue': str(sale_price),
                     'auctionId': row['auction_id'],
                 })
             elif row['item_type'] == 'card':
@@ -1648,10 +1664,7 @@ def process_sold_csv(files,db):
                     'marketValue': sale_price,
                 })
 
-        # All rows in the group share the same order-level fields
         head = group.iloc[0]
-        # shippingAddressExtra is an address supplement line (c/o, 2nd line),
-        # not part of the recipient's name -- fold it into the address instead.
         address = str(head['shippingAddressStreet'])
         extra = head['shippingAddressExtra']
         if pd.notna(extra) and str(extra).strip():
@@ -1661,8 +1674,6 @@ def process_sold_csv(files,db):
             + datetime.timedelta(days=14)
         ).isoformat()
 
-        # Values come from a DataFrame (numpy scalars); coerce to native types so
-        # the receiver dict is JSON-serializable when SaleService encrypts it.
         reviecerInfo = {
             "nameAndSurname": str(head['shippingAddressName']),
             "address": address,
@@ -1704,14 +1715,14 @@ def process_sold_csv(files,db):
     
 _zip_store = {}
 
-@verify_token
 @bp.route('/download/<token>', methods=('GET',))
+@verify_token
 def download(token):
     data = _zip_store.pop(token, None)  
     if data is None:
         abort(404)
     return send_file(
-        io.BytesIO(data),
+        BytesIO(data),
         mimetype="application/zip",
         as_attachment=True,
         download_name="processed.zip",  
@@ -1746,6 +1757,8 @@ def importCSV():
         try:
             for file in files:
                 data = _process_inventory_csv(file)
+                if not data:
+                    raise Exception("Failed to process CSV file")
                 _create_inventory(db, data)
         except Exception as e:
             logger.exception('Failed to proces CSV file | reason: %s', e)
@@ -1763,7 +1776,6 @@ def importCSV():
         if len(files) != 2:
             return jsonify({'status': 'error', 'message': 'Invalid file count'}), 400
 
-        # Parsing/matching is read-only; a failure here leaves the DB untouched.
         try:
             completed, rejected = process_sold_csv(files, db)
         except Exception as e:
@@ -1771,8 +1783,6 @@ def importCSV():
             print(f"Error processing CSV file: {e}")
             return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax19'}), 500
 
-        # Each order is an independent sale: commit per order so one bad order
-        # cannot roll back the rest. Failures are collected and reported.
         invoices = []
         failed = []
         for item in completed:
