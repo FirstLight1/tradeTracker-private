@@ -5,6 +5,7 @@ from tradeTracker.db import get_db
 from io import BytesIO, TextIOWrapper, StringIO
 import re
 import uuid
+import time
 import csv
 import datetime
 from Crypto.Cipher import AES
@@ -12,6 +13,7 @@ import os
 import fpdf
 import json
 import zipfile
+from collections import defaultdict
 import pandas as pd
 import logging
 from flask_limiter import Limiter
@@ -1602,7 +1604,7 @@ def _fixArticlesUpload(file):
     raw = re.sub(r'"\{"locationName".*?locationQuantity":\d+\}"', '""', file)
     return pd.read_csv(StringIO(raw))
 
-def createPostEph():
+#def createPostEph():
     
 
 def process_sold_csv(files,db):
@@ -1716,20 +1718,55 @@ def process_sold_csv(files,db):
         
     return ordersArr, rejectedArr
     
-# TODO: imporve
-_zip_store = {}
+# Processed-invoice zips are handed off to the client via a one-shot /download/<token>
+# link. They are written to disk (not an in-memory dict) so the download survives across
+# Gunicorn workers, and a TTL sweep stops never-fetched zips from accumulating.
+_DOWNLOAD_TTL_SECONDS = 1800           # 30 min; downloads are fetched immediately in practice
+_TOKEN_RE = re.compile(r"\A[0-9a-f]{32}\Z")   # uuid4().hex shape; blocks path traversal
+
+
+def _downloads_dir():
+    if os.getenv("FLASK_ENV") == "prod":
+        base = os.getenv("DATA_DIR", current_app.instance_path)
+    else:
+        base = current_app.instance_path
+    d = os.path.join(base, "downloads")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _purge_stale_downloads(d):
+    cutoff = time.time() - _DOWNLOAD_TTL_SECONDS
+    for name in os.listdir(d):
+        path = os.path.join(d, name)
+        try:
+            if os.path.getmtime(path) < cutoff:
+                os.remove(path)
+        except OSError:
+            pass   # best-effort sweep; another worker may have removed it already
+
 
 @bp.route('/download/<token>', methods=('GET',))
 @verify_token
 def download(token):
-    data = _zip_store.pop(token, None)  
-    if data is None:
+    if not _TOKEN_RE.match(token):
         abort(404)
+    d = _downloads_dir()
+    _purge_stale_downloads(d)
+    path = os.path.join(d, f"{token}.zip")
+    if not os.path.exists(path):
+        abort(404)
+    with open(path, "rb") as fh:
+        data = fh.read()
+    try:
+        os.remove(path)   # one-shot download, mirrors the old dict .pop()
+    except OSError:
+        pass
     return send_file(
         BytesIO(data),
         mimetype="application/zip",
         as_attachment=True,
-        download_name="processed.zip",  
+        download_name="processed.zip",
     )
 
 @bp.route('/importCSV', methods=('POST',))
@@ -1828,7 +1865,13 @@ def importCSV():
                 zip_file.writestr(label.filename, label.bytes)
 
         token = uuid.uuid4().hex
-        _zip_store[token] = zip_buffer.getvalue()
+        d = _downloads_dir()
+        _purge_stale_downloads(d)
+        final = os.path.join(d, f"{token}.zip")
+        tmp = final + ".tmp"
+        with open(tmp, "wb") as fh:
+            fh.write(zip_buffer.getvalue())
+        os.replace(tmp, final)   # atomic publish; reader never sees a half-written file
 
         return jsonify({
             'status': 'success',

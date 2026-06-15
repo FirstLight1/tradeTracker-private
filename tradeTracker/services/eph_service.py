@@ -46,6 +46,7 @@ class EPHService:
     def groupByShippingMethod(self, shippingMethods)-> dict:
         pass
 
+#TODO: add service categories
     def createSheet(self):
         payload = {
             "sheet": {
