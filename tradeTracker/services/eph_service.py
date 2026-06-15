@@ -1,5 +1,6 @@
 import requests
 import os
+import tradeTracker.services.models as models
 import json
 import io
 import time
@@ -45,7 +46,7 @@ class EPHService:
     def groupByShippingMethod(self, shippingMethods)-> dict:
         pass
 
-    def createSheet(self)
+    def createSheet(self):
         payload = {
             "sheet": {
                 "parcel_category": parcel_category,
@@ -93,7 +94,8 @@ class EPHService:
         r.raise_for_status()
         return r.json()["parcel"]
 
-    def download_label(self, parcel_id, sheet_id):
+    #TODO: add filename
+    def download_label(self, parcel_id, sheet_id, filename):
         r = requests.get(
             f"{self.baseurl}/sheets/{sheet_id}/parcels/{parcel_id}/label",
             headers=self._headers(),
@@ -104,7 +106,7 @@ class EPHService:
         pdf = requests.get(label_url, headers=self._headers())
         pdf.raise_for_status()
         
-        return pdf.content
+        return models.LabelResult(filename=filename, bytes=pdf.content)
 
     def register_sheet(self, sheet_id):
         r = requests.post(

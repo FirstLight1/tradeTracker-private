@@ -1789,10 +1789,23 @@ def importCSV():
 
         invoices = []
         failed = []
+        order = defaultdict(dict)
+        labels = []
         for item in completed:
             try:
                 saleResult = SaleService(db, InvoiceReceiptService()).process_sale(item)
                 db.commit()
+         
+                reciept = saleResult.receipt.raw
+                if item.shippingMethod not in order:
+                    #EPHSERVIE creates sheet
+                    #order[item.shippingMethod]['sheetId'] =  
+                    order[item.shippingMethod]['values'] = [item]
+                else:
+                    order[item.shippingMethod]['values'].append(item)
+                
+                #EPHSERVICE download labels(reciept['filename'])
+                # labels.append(label)
             except Exception as e:
                 db.rollback()
                 logger.exception('Sold order %s failed | %s', item.idOrder, e)
@@ -1802,13 +1815,17 @@ def importCSV():
                     'reason': str(e),
                 })
                 continue
-            reciept = saleResult.receipt.raw
             invoices.append((reciept['filename'], reciept['bytes']))
+        # download labels
+        # EPHSERVICE register sheets
 
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
             for filename, bytes in invoices:
                 zip_file.writestr(filename, bytes)
+                #write labels to zip
+            for label in labels:
+                zip_file.writestr(label.filename, label.bytes)
 
         token = uuid.uuid4().hex
         _zip_store[token] = zip_buffer.getvalue()

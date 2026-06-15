@@ -29,3 +29,9 @@ class ReceiptResult:
 class SaleResult:
     sale_id: int
     receipt: ReceiptResult
+
+@dataclass
+class LabelResult:
+    filename: str
+    bytes: bytes
+
