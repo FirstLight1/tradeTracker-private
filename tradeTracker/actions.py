@@ -1602,6 +1602,9 @@ def _fixArticlesUpload(file):
     raw = re.sub(r'"\{"locationName".*?locationQuantity":\d+\}"', '""', file)
     return pd.read_csv(StringIO(raw))
 
+def createPostEph():
+    
+
 def process_sold_csv(files,db):
     firstIsOrders = 'order' in files[0].filename.lower()
     ordersUpload = files[0] if firstIsOrders else files[1]
@@ -1713,6 +1716,7 @@ def process_sold_csv(files,db):
         
     return ordersArr, rejectedArr
     
+# TODO: imporve
 _zip_store = {}
 
 @bp.route('/download/<token>', methods=('GET',))
