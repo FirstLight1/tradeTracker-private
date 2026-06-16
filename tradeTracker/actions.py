@@ -1692,7 +1692,8 @@ def process_sold_csv(files,db):
 
         shipping = {
                 "shippingWay": "Doprava / Poštovné – samostatná služba",
-                "shippingPrice": round(float(head['totalValue']) - float(head['articleValue']), 2)
+                "shippingPrice": round(float(head['totalValue']) - float(head['articleValue']), 2),
+                "shippinghMethod": str(head['shippingMethod']),
                 }
 
         saleInuput = SaleInput(
@@ -1842,19 +1843,19 @@ def importCSV():
                 db.commit()
          
                 reciept = saleResult.receipt.raw
-                item.shippingMethod = item.shippingMethod.lower()
-                method, insurance = _parse_shipping_method(item.shippingMethod)
+                item.shipping.shippingMethod = item.shipping.shippingMethod.lower()
+                method, insurance = _parse_shipping_method(item.shipping.shippingMethod)
                 # POSTA API
                 if method in CONSTANTS.PARCEL_CATEGORIES:
                     parcel_category = CONSTANTS.PARCEL_CATEGORIES[method]
-                    if item.shippingMethod not in order:
+                    if parcel_category not in order:
                         #EPHSERVIE creates sheet
                         sheet_id = eph.createSheet(parcel_category,  "post")
                         order[parcel_category]['sheetId'] = sheet_id
                         order[parcel_category]['values'] = [item]
                     else:
                         order[parcel_category]['values'].append(item)
-                    label = eph.addParcel(item, order[parcel_category]['sheetId'], insurance) 
+                    label = eph.addParcel(item.reciver, order[parcel_category]['sheetId'], insurance) 
                 #PACKETA
                 else:
                     pass

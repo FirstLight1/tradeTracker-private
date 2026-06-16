@@ -49,13 +49,16 @@ class EPHService:
     #TODO: check with EPH if this is the correct way to do it
     #TODO: add service categories
     def addParcel(self, order, sheet_id, insurance_value = None):
+        if order["shippingAddressCountry"] == "D":
+            order["shippingAddressCountry"] = "DE"
+
         parcel = {
             "recipient": {
-                "name": order["recipient_name"],
-                "street": order["street"],
+                "name": order["nameAndSurname"],
+                "street": order["address"],
                 "city": order["city"],
-                "zip": order["zip"],
-                "country": order["country"].lower(),
+                "zip": order["zipCode"],
+                "country": order["state"].lower(),
             }
         }
 
