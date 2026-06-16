@@ -34,3 +34,11 @@ CONDITION_DICT = {
     'PO' : "POOR"
 }
 
+PARCEL_CATEGORIES = {
+        "registered letter": "r",
+        "letter": "olz",
+        "insured letter": "pl",
+        "parcel":"b"
+}
+
+

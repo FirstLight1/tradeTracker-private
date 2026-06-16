@@ -23,6 +23,7 @@ from tradeTracker.services.models import SaleInput
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaReceiptService
 from tradeTracker.services.cfAuth import verify_token, require_api_token
+from tradeTracker.services.eph_service import EPHService
 
 if os.environ.get("FLASK_ENV") != "production":
     from dotenv import load_dotenv
@@ -1769,6 +1770,12 @@ def download(token):
         download_name="processed.zip",
     )
 
+def _parse_shipping_method(method):
+    method: str = method.split('(')[0].strip()
+    match = re.search(r'(\d+)', method)
+    if match:
+        return method, match.group(1)
+
 @bp.route('/importCSV', methods=('POST',))
 @verify_token
 def importCSV(): 
@@ -1828,21 +1835,33 @@ def importCSV():
         failed = []
         order = defaultdict(dict)
         labels = []
+        eph = EPHService()
         for item in completed:
             try:
                 saleResult = SaleService(db, InvoiceReceiptService()).process_sale(item)
                 db.commit()
          
                 reciept = saleResult.receipt.raw
-                if item.shippingMethod not in order:
-                    #EPHSERVIE creates sheet
-                    #order[item.shippingMethod]['sheetId'] =  
-                    order[item.shippingMethod]['values'] = [item]
+                item.shippingMethod = item.shippingMethod.lower()
+                method, insurance = _parse_shipping_method(item.shippingMethod)
+                # POSTA API
+                if method in CONSTANTS.PARCEL_CATEGORIES:
+                    parcel_category = CONSTANTS.PARCEL_CATEGORIES[method]
+                    if item.shippingMethod not in order:
+                        #EPHSERVIE creates sheet
+                        sheet_id = eph.createSheet(parcel_category,  "post")
+                        order[parcel_category]['sheetId'] = sheet_id
+                        order[parcel_category]['values'] = [item]
+                    else:
+                        order[parcel_category]['values'].append(item)
+                    label = eph.addParcel(item, order[parcel_category]['sheetId'], insurance) 
+                #PACKETA
                 else:
-                    order[item.shippingMethod]['values'].append(item)
-                
+                    pass
+
+
                 #EPHSERVICE download labels(reciept['filename'])
-                # labels.append(label)
+                labels.append(label)
             except Exception as e:
                 db.rollback()
                 logger.exception('Sold order %s failed | %s', item.idOrder, e)

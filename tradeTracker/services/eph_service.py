@@ -12,20 +12,6 @@ class EPHService:
         self.user_id = os.environ.get("EPH_USER_ID")
         self.baseurl = "https://mojezasielky.posta.sk/integration/rest/v1"
 
-    
-    def getLabel(self, order):
-            groups = self.groupByShippingMethod(order["shipping_methods"])
-            labels= []
-            for category, group in groups.items():
-                sheet_id = self.createSheet()
-                for order in group: 
-                    parcel_id = self.addParcel(order, sheet_id)
-                    label = self.download_label(parcel_id, sheet_id)
-                    labels.append(label)
-            if len(labels) > 0:
-                self.register_sheet(sheet_id)
-                return labels
-            
     def _headers(self):
         return {
                 "X-API-Key": f"apikey: {self.user_id}: {self.api_key}",
@@ -43,11 +29,9 @@ class EPHService:
             "email": os.environ["SENDER_EMAIL"],
         }
 
-    def groupByShippingMethod(self, shippingMethods)-> dict:
-        pass
 
 #TODO: add service categories
-    def createSheet(self):
+    def createSheet(self, parcel_category, reception_method, payment_type = "h" ) -> str:
         payload = {
             "sheet": {
                 "parcel_category": parcel_category,
@@ -64,7 +48,7 @@ class EPHService:
 
     #TODO: check with EPH if this is the correct way to do it
     #TODO: add service categories
-    def addParcel(self, order, sheet_id):
+    def addParcel(self, order, sheet_id, insurance_value = None):
         parcel = {
             "recipient": {
                 "name": order["recipient_name"],
@@ -75,13 +59,7 @@ class EPHService:
             }
         }
 
-        if order.get("phone"):
-            parcel["recipient"]["phone"] = order["phone"]
-        if order.get("email"):
-            parcel["recipient"]["email"] = order["email"]
-        if order.get("note"):
-            parcel["note"] = order["note"]
-        if order.get("insurance_value"):
+        if insurance_value:
             parcel["insurance"] = {
                 "value": int(order["insurance_value"]),
                 "currency": "eur",
