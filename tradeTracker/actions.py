@@ -1622,6 +1622,7 @@ def process_sold_csv(files,db):
     orders = pd.read_csv(StringIO(orders))
     merged = articlesExpanded.merge(orders, on='idOrder', how='left', suffixes=('_art', '_ord'), validate='many_to_one')
 
+    merged = merged[merged['status_ord'].isin(['sent', 'received', 'evaluated'])]
     merged['cardmarketId'] = merged['cardmarketId'].astype('Int64').astype('string')
 
     ids = merged['cardmarketId'].dropna().tolist()
