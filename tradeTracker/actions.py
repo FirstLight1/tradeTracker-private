@@ -1618,9 +1618,9 @@ def _fixArticlesUpload(file):
     
 
 def process_sold_csv(files,db):
-    firstIsOrders = 'order' in files[0].filename.lower()
-    ordersUpload = files[0] if firstIsOrders else files[1]
-    articlesUpload = files[1] if firstIsOrders else files[0]
+    firstIsArticles = 'articles' in files[0].filename.lower()
+    ordersUpload = files[1] if firstIsArticles else files[0]
+    articlesUpload = files[0] if firstIsArticles else files[1]
 
     orders = ordersUpload.stream.read().decode('utf-8')
     articles = articlesUpload.stream.read().decode('utf-8')
@@ -1631,6 +1631,7 @@ def process_sold_csv(files,db):
     orders = pd.read_csv(StringIO(orders))
     merged = articlesExpanded.merge(orders, on='idOrder', how='left', suffixes=('_art', '_ord'), validate='many_to_one')
 
+    merged = merged[merged['status_ord'].isin(['sent', 'received', 'evaluated'])]
     merged['cardmarketId'] = merged['cardmarketId'].astype('Int64').astype('string')
 
     ids = merged['cardmarketId'].dropna().tolist()
