@@ -329,11 +329,11 @@ function uploadCSVModal() {
                         <input type="file" accept=".csv" class="import-cm-sold-csv" disabled>
                     </label>
                 </div>
-                <div class="upload-option upload-option-disabled">
+                <div class="upload-option ">
                     <p>Sold CSV</p>
                     <label class="upload-file-label">
                         <span>Choose files</span>
-                        <input type="file" accept=".csv" class="import-sold-csv" multiple disabled>
+                        <input type="file" accept=".csv" class="import-sold-csv" multiple>
                     </label>
                 </div>
                 <div class="upload-option">
@@ -348,6 +348,7 @@ function uploadCSVModal() {
         document.body.appendChild(div);
 
         bindImportCSV('.import-inventory-csv', 'inventory', div);
+        bindImportCSV('.import-sold-csv', 'sold', div);
 
         const close = () => div.remove();
         div.querySelector('.close-modal').addEventListener('click', close);
@@ -376,9 +377,41 @@ function bindImportCSV(selector, type, root = document) {
                 });
                 const data = await response.json();
                 switch (data.status) {
-                    case "success":
-                        window.location.reload()
+                    case "success": {
+                        if (data.download_url) {
+                            const resp = await fetch(data.download_url);
+                            if (!resp.ok) throw new Error("download failed");
+                            const blob = await resp.blob();          // bytes are here now
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = "processed.zip";
+                            a.click();
+                            URL.revokeObjectURL(url);
+                        }
+                        // The 'sold' import reports orders it could not process:
+                        // `failed` (errored during invoicing) and `rejected` (items
+                        // not found in inventory). Surface them instead of silently
+                        // reloading, so the client knows which orders need attention.
+                        const failed = Array.isArray(data.failed) ? data.failed : [];
+                        const rejected = Array.isArray(data.rejected) ? data.rejected : [];
+                        if (failed.length || rejected.length) {
+                            const lines = [];
+                            if (failed.length) {
+                                lines.push(`${failed.length} order(s) failed to process:`);
+                                failed.forEach(f => lines.push(`• #${f.idOrder} ${f.name || ''} — ${f.reason || 'unknown error'}`));
+                            }
+                            if (rejected.length) {
+                                lines.push(`${rejected.length} order(s) skipped (items not in inventory):`);
+                                rejected.forEach(r => lines.push(`• #${r.idOrder} ${r.name || ''}`));
+                            }
+                            // Keep the report on screen; the user can refresh manually.
+                            renderAlert(lines.join('\n'), 'error');
+                        } else {
+                            window.location.reload();
+                        }
                         break;
+                    }
                     case "missing":
                         renderAlert('No file uploaded', 'error')
                         break;

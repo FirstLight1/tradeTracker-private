@@ -56,6 +56,9 @@ def migrate_database(db_path):
         # Migration 11: Add quantity to sealed table
         addQuantityToSealedTable(db_path)
 
+        # Migration 12: Add cardMarketID to cards table
+        addCardMarketIDToCardsTable(db_path)
+
         print("Database migration check complete.")
     except sqlite3.Error as e:
         print(f"Database migration failed: {e}")
@@ -648,3 +651,36 @@ def addQuantityToSealedTable(db_path):
             print("'sealed' table not found, skipping 'quantity' column migration.")
         else:
             raise e
+
+def addCardMarketIDToCardsTable(db_path):
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(cards)")
+        columns = [info[1] for info in cursor.fetchall()]
+        if 'cardMarketID' not in columns:
+            print("Applying migration: Adding 'cardMarketID' to 'cards' table...")
+            cursor.execute("ALTER TABLE cards ADD COLUMN cardMarketID TEXT NULL")
+            print("'cardMarketID' column added successfully.")
+        else:
+            print("'cardMarketID' column already exists in 'cards' table.")
+
+        cursor.execute("PRAGMA table_info(sealed)")
+        columns = [info[1] for info in cursor.fetchall()]
+        if 'cardMarketID' not in columns:
+            print("Applying migration: Adding 'cardMarketID' to 'cards' table...")
+            cursor.execute("ALTER TABLE sealed ADD COLUMN cardMarketID TEXT NULL")
+            print("'cardMarketID' column added successfully.")
+        else:
+            print("'cardMarketID' column already exists in 'sealed' table.")
+
+
+    except sqlite3.Error as e:
+        if "no such table: cards" in str(e):
+            print("'sealed' table not found, skipping 'cardMarketID' column migration.")
+        else:
+            raise e
+
+
+

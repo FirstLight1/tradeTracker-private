@@ -16,6 +16,7 @@ class SaleInput:
     ex: dict[str, Any] | None
     shipping: dict[str, Any] | None
     payments: list[Payment]
+    idOrder: str | None = None
 
 @dataclass
 class ReceiptResult:
@@ -28,3 +29,9 @@ class ReceiptResult:
 class SaleResult:
     sale_id: int
     receipt: ReceiptResult
+
+@dataclass
+class LabelResult:
+    filename: str
+    bytes: bytes
+

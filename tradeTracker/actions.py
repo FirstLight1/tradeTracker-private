@@ -2,7 +2,10 @@ import base64
 from decimal import Decimal
 from flask import request, Blueprint, jsonify, current_app, send_file, abort
 from tradeTracker.db import get_db
-from io import BytesIO, TextIOWrapper
+from io import BytesIO, TextIOWrapper, StringIO
+import re
+import uuid
+import time
 import csv
 import datetime
 from Crypto.Cipher import AES
@@ -10,6 +13,7 @@ import os
 import fpdf
 import json
 import zipfile
+from collections import defaultdict
 import pandas as pd
 import logging
 from flask_limiter import Limiter
@@ -19,6 +23,7 @@ from tradeTracker.services.models import SaleInput
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaReceiptService
 from tradeTracker.services.cfAuth import verify_token, require_api_token
+from tradeTracker.services.eph_service import EPHService
 
 if os.environ.get("FLASK_ENV") != "production":
     from dotenv import load_dotenv
@@ -1458,7 +1463,7 @@ def allowedFile(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in "csv"
 
 
-def _process_sold_csv(check_file_path, file, db):
+def _process_soldCM_csv(check_file_path, file, db):
     lines = []
     existingOrderID = set()
 
@@ -1537,6 +1542,7 @@ def _process_inventory_csv(file):
             'market_value': row['price'],
             'quantity': row['quantity'],
             'date': row['listedAt'],
+            'cardmarketId': row['cardmarketId'],
         }
         dataList.append(item)
     return dataList
@@ -1549,46 +1555,236 @@ def _create_inventory(db, dataList=None):
 
     dateCreted = dataList[0]['date'][:10]
     buyPrice = sum(float(item['buy_price']) for item in dataList)
-    cursor = db.execute(
-        'INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?, ?, ?, ?)',
-        (None, buyPrice, dateCreted, '[]')
-    )
+    try:
+        cursor = db.execute(
+            'INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?, ?, ?, ?)',
+            (None, buyPrice, dateCreted, '[]')
+        )
+        auctionId = cursor.lastrowid
+    except Exception as e:
+        logger.exception(f"Error creating auction: {e}")
+        raise Exception("Error creating auction")
     auctionId = cursor.lastrowid
 
     for item in dataList:
         isSealed = item.get('card_num') == ''
 
         if isSealed:
-            db.execute('INSERT INTO sealed (name, quantity, price, market_value, date, auction_id)'
-                'VALUES (?, ?, ?, ?, ?, ?)',
-                (
-                    item.get('card_name'),
-                    item.get('quantity'),
-                    item.get('buy_price'),
-                    item.get('market_value'),
-                    item.get('date'),
-                    auctionId
+            try:
+                db.execute('INSERT INTO sealed (name, quantity, price, market_value, date, auction_id, cardmarketId)'
+                    'VALUES (?, ?, ?, ?, ?, ?)',
+                    (
+                        item.get('card_name'),
+                        item.get('quantity'),
+                        item.get('buy_price'),
+                        item.get('market_value'),
+                        item.get('date'),
+                        auctionId,
+                        item.get('cardmarketId')
+                    )
                 )
-            )
+            except Exception as e:
+                logger.exception(f"Error adding sealed item {item.get('card_name')}: {e}")
+                raise Exception("Error adding sealed item")
         else:
             quantity = int(item.get('quantity'))
             if quantity is None:
                 quantity = 1
             for i in range(quantity):
-                buyPrice = round(float(item.get('market_value')) * 0.8, 2)
-                db.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id)'
-                    'VALUES (?, ?, ?, ?, ?, ?)',
-                    (
-                        item.get('card_name'),
-                        item.get('card_num'),
-                        item.get('condition'),
-                        buyPrice,
-                        item.get('market_value'),
-                        auctionId
+                try:
+                    buyPrice = round(float(item.get('market_value')) * 0.8, 2)
+                    db.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
+                        'VALUES (?, ?, ?, ?, ?, ?)',
+                        (
+                            item.get('card_name'),
+                            item.get('card_num'),
+                            item.get('condition'),
+                            buyPrice,
+                            item.get('market_value'),
+                            auctionId,
+                            item.get('cardmarketId')
+                        )
                     )
-                )
+                except Exception as e:
+                    logger.exception(f"Error adding card item {item.get('card_name')}: {e}")
+                    raise Exception("Error adding card item")
     db.commit()
 
+def _fixArticlesUpload(file):
+    raw = re.sub(r'"\{"locationName".*?locationQuantity":\d+\}"', '""', file)
+    return pd.read_csv(StringIO(raw))
+
+#def createPostEph():
+    
+
+def process_sold_csv(files,db):
+    firstIsOrders = 'order' in files[0].filename.lower()
+    ordersUpload = files[0] if firstIsOrders else files[1]
+    articlesUpload = files[1] if firstIsOrders else files[0]
+
+    orders = ordersUpload.stream.read().decode('utf-8')
+    articles = articlesUpload.stream.read().decode('utf-8')
+    
+    articles = _fixArticlesUpload(articles)
+    articlesExpanded = articles.loc[articles.index.repeat(articles['items'])].reset_index(drop=True)
+    articlesExpanded['items'] = 1
+    orders = pd.read_csv(StringIO(orders))
+    merged = articlesExpanded.merge(orders, on='idOrder', how='left', suffixes=('_art', '_ord'), validate='many_to_one')
+
+    merged['cardmarketId'] = merged['cardmarketId'].astype('Int64').astype('string')
+
+    ids = merged['cardmarketId'].dropna().tolist()
+    placehoders = ','.join(['?'] * len(ids))
+
+    cur = db.execute("SELECT id, name as itemName, NULL as card_num, quantity, market_value, auction_id, 'sealed' as item_type, cardMarketID as cardmarketId "
+               'FROM sealed '
+              f'WHERE sale_id IS NULL AND cardMarketID IN ({placehoders}) '
+               'UNION ALL '
+               "SELECT c.id as id, card_name as itemName, card_num, NULL as quantity, market_value, auction_id, 'card' as item_type, cardMarketID as cardmarketId "
+               'FROM cards c '
+               'LEFT JOIN sale_items si ON si.card_id = c.id '
+              f'WHERE si.card_id IS NULL AND cardMarketID IN ({placehoders}) '
+               'ORDER BY id ASC ', ids + ids)
+    allItems = pd.DataFrame(cur.fetchall(), columns=[c[0] for c in cur.description])
+
+    merged['_match_seq'] = merged.groupby('cardmarketId').cumcount()
+    allItems['_match_seq'] = allItems.groupby('cardmarketId').cumcount()
+
+    wantedItems = merged.merge(allItems, on=['cardmarketId', '_match_seq'], how='left', suffixes=('_mer', '_db'), validate='one_to_one')
+    wantedItems = wantedItems.drop(columns='_match_seq')
+    wantedItems['matched'] = wantedItems['item_type'].notna()
+
+    orderComplete = wantedItems.groupby('idOrder')['matched'].all()
+    completeItems = wantedItems[wantedItems['idOrder'].isin(orderComplete[orderComplete].index)].groupby('idOrder')
+    rejectedItems = wantedItems[wantedItems['idOrder'].isin(orderComplete[~orderComplete].index)].groupby('idOrder')
+
+    ordersArr = []
+    for orderId , group in completeItems:
+        sealed = []
+        cards = []
+        for _, row in group.iterrows():
+            sale_price = float(str(row['price']).replace('€', '').replace(',', '.').strip())
+            if row['item_type'] == 'sealed':
+                sealed.append({
+                    'sealedName': row['itemName'],
+                    'quantity': 1,     
+                    'marketValue': str(sale_price),
+                    'auctionId': row['auction_id'],
+                })
+            elif row['item_type'] == 'card':
+                cards.append({
+                    'cardId': row['id'],
+                    'cardName': row['itemName'],
+                    'cardNum': '' if pd.isna(row['card_num']) else str(row['card_num']),
+                    'marketValue': sale_price,
+                })
+
+        head = group.iloc[0]
+        address = str(head['shippingAddressStreet'])
+        extra = head['shippingAddressExtra']
+        if pd.notna(extra) and str(extra).strip():
+            address = f"{address}, {str(extra).strip()}"
+        paybackDate = (
+            datetime.datetime.strptime(head['dateBought'], '%Y-%m-%dT%H:%M:%S.%fZ').date()
+            + datetime.timedelta(days=14)
+        ).isoformat()
+
+        reviecerInfo = {
+            "nameAndSurname": str(head['shippingAddressName']),
+            "address": address,
+            "city": str(head['shippingAddressCity']),
+            "state": str(head['shippingAddressCountry']),
+            "zipCode": str(head['shippingAddressZip']),
+            "paybackDate": paybackDate,
+            "total": float(head['articleValue']),
+            }
+
+        shipping = {
+                "shippingWay": "Doprava / Poštovné – samostatná služba",
+                "shippingPrice": round(float(head['totalValue']) - float(head['articleValue']), 2),
+                "shippinghMethod": str(head['shippingMethod']),
+                }
+
+        saleInuput = SaleInput(
+                reciever=reviecerInfo,
+                cards=cards,
+                sealed=sealed,
+                bulk=None,
+                holo=None,
+                ex=None,
+                shipping=shipping,
+                payments=[],
+                idOrder=orderId
+                )
+
+        ordersArr.append(saleInuput)
+
+    rejectedArr = []
+    for orderId , group in rejectedItems:
+        rejectedArr.append({
+                "idOrder": orderId,
+                "name": group.iloc[0]['shippingAddressName'],
+                })
+
+        
+    return ordersArr, rejectedArr
+    
+# Processed-invoice zips are handed off to the client via a one-shot /download/<token>
+# link. They are written to disk (not an in-memory dict) so the download survives across
+# Gunicorn workers, and a TTL sweep stops never-fetched zips from accumulating.
+_DOWNLOAD_TTL_SECONDS = 1800           # 30 min; downloads are fetched immediately in practice
+_TOKEN_RE = re.compile(r"\A[0-9a-f]{32}\Z")   # uuid4().hex shape; blocks path traversal
+
+
+def _downloads_dir():
+    if os.getenv("FLASK_ENV") == "prod":
+        base = os.getenv("DATA_DIR", current_app.instance_path)
+    else:
+        base = current_app.instance_path
+    d = os.path.join(base, "downloads")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _purge_stale_downloads(d):
+    cutoff = time.time() - _DOWNLOAD_TTL_SECONDS
+    for name in os.listdir(d):
+        path = os.path.join(d, name)
+        try:
+            if os.path.getmtime(path) < cutoff:
+                os.remove(path)
+        except OSError:
+            pass   # best-effort sweep; another worker may have removed it already
+
+
+@bp.route('/download/<token>', methods=('GET',))
+@verify_token
+def download(token):
+    if not _TOKEN_RE.match(token):
+        abort(404)
+    d = _downloads_dir()
+    _purge_stale_downloads(d)
+    path = os.path.join(d, f"{token}.zip")
+    if not os.path.exists(path):
+        abort(404)
+    with open(path, "rb") as fh:
+        data = fh.read()
+    try:
+        os.remove(path)   # one-shot download, mirrors the old dict .pop()
+    except OSError:
+        pass
+    return send_file(
+        BytesIO(data),
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name="processed.zip",
+    )
+
+def _parse_shipping_method(method):
+    method: str = method.split('(')[0].strip()
+    match = re.search(r'(\d+)', method)
+    if match:
+        return method, match.group(1)
 
 @bp.route('/importCSV', methods=('POST',))
 @verify_token
@@ -1619,19 +1815,101 @@ def importCSV():
         try:
             for file in files:
                 data = _process_inventory_csv(file)
+                if not data:
+                    raise Exception("Failed to process CSV file")
                 _create_inventory(db, data)
         except Exception as e:
             logger.exception('Failed to proces CSV file | reason: %s', e)
             print(f"Error processing CSV file: {e}")
             return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax19'}), 500
-    elif uploadType == 'sold':
+    elif uploadType == 'sold-CM':
         try:
             for file in files:
-                _process_sold_csv(check_file_path, file, db)
+                _process_soldCM_csv(check_file_path, file, db)
         except Exception as e:
             logger.exception('Failed to proces CSV file | reason: %s', e)
             print(f"Error processing CSV file: {e}")
             return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax19'}), 500
+    elif uploadType == 'sold':
+        if len(files) != 2:
+            return jsonify({'status': 'error', 'message': 'Invalid file count'}), 400
+
+        try:
+            completed, rejected = process_sold_csv(files, db)
+        except Exception as e:
+            logger.exception('Failed to proces CSV file | reason: %s', e)
+            print(f"Error processing CSV file: {e}")
+            return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax19'}), 500
+
+        invoices = []
+        failed = []
+        order = defaultdict(dict)
+        #labels = []
+        #eph = EPHService()
+        for item in completed:
+            try:
+                saleResult = SaleService(db, InvoiceReceiptService()).process_sale(item)
+                db.commit()
+         
+                reciept = saleResult.receipt.raw
+                """
+                item.shipping.shippingMethod = item.shipping.shippingMethod.lower()
+                method, insurance = _parse_shipping_method(item.shipping.shippingMethod)
+                # POSTA API
+                if method in CONSTANTS.PARCEL_CATEGORIES:
+                    parcel_category = CONSTANTS.PARCEL_CATEGORIES[method]
+                    if parcel_category not in order:
+                        #EPHSERVIE creates sheet
+                        sheet_id = eph.createSheet(parcel_category,  "post")
+                        order[parcel_category]['sheetId'] = sheet_id
+                        order[parcel_category]['values'] = [item]
+                    else:
+                        order[parcel_category]['values'].append(item)
+                    label = eph.addParcel(item.reciver, order[parcel_category]['sheetId'], insurance) 
+                #PACKETA
+                else:
+                    pass
+
+
+                #EPHSERVICE download labels(reciept['filename'])
+                labels.append(label)
+                    """
+            except Exception as e:
+                db.rollback()
+                logger.exception('Sold order %s failed | %s', item.idOrder, e)
+                failed.append({
+                    'idOrder': item.idOrder,
+                    'name': item.reciever.get('nameAndSurname'),
+                    'reason': str(e),
+                })
+                continue
+            invoices.append((reciept['filename'], reciept['bytes']))
+        # download labels
+        # EPHSERVICE register sheets
+
+        zip_buffer = BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for filename, bytes in invoices:
+                zip_file.writestr(filename, bytes)
+                #write labels to zip
+            #for label in labels:
+            #    zip_file.writestr(label.filename, label.bytes)
+
+        token = uuid.uuid4().hex
+        d = _downloads_dir()
+        _purge_stale_downloads(d)
+        final = os.path.join(d, f"{token}.zip")
+        tmp = final + ".tmp"
+        with open(tmp, "wb") as fh:
+            fh.write(zip_buffer.getvalue())
+        os.replace(tmp, final)   # atomic publish; reader never sees a half-written file
+
+        return jsonify({
+            'status': 'success',
+            "download_url": f"/download/{token}" if len(invoices) > 0 else None,
+            "rejected": rejected,
+            "failed": failed,
+        }), 200
     return jsonify({'status': 'success'}), 201
 
 @bp.route('/searchCard', methods=('POST',))

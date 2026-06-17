@@ -2,6 +2,7 @@
 from decimal import Decimal
 from itertools import count
 import os
+import re
 from datetime import date, datetime
 
 os.environ["INVOICE_LANG"] = "sk"
@@ -98,7 +99,10 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
         invoice.paytype = payment_strings
     else:
         # Fallback to old single payment method for backwards compatibility
-        invoice.paytype = reciever.get("paymentMethod", "Hotovosť")
+        method = reciever.get("paymentMethod", "Bankovy prevod")
+        total = str(reciever.get("total"))
+        payment_strings = f"{method} :{total}€"
+        invoice.paytype = payment_strings
     
     invoice.taxable_date = datetime.now() # Dátum splatnosti
     invoice.use_tax=True
@@ -157,18 +161,20 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
     # 5. Generate PDF
     pdf = SimpleInvoice(invoice)
     
+    # Build a filesystem-safe client component (names may contain '/', etc.)
+    safe_name = re.sub(r'[^\w.-]+', '_', reciever.get('nameAndSurname', 'client') or 'client').strip('_') or 'client'
+    output_filename = f"{invoice_num}_Invoice_{invoice_date.strftime('%Y%m%d')}_{safe_name}.pdf"
+
     # Determine the save path based on environment
     if os.getenv("FLASK_ENV") == "prod":
         data_dir = os.getenv("DATA_DIR", current_app.instance_path)
         app_data_dir = os.path.join(data_dir, 'Invoices')
         os.makedirs(app_data_dir, exist_ok=True)
-        output_filename = f"{invoice_num}_Invoice_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
         output_path = os.path.join(app_data_dir, output_filename)
     else:
         # Running in development
         invoices_dir = os.path.join(current_app.instance_path, 'invoices')
         os.makedirs(invoices_dir, exist_ok=True)
-        output_filename = f"{invoice_num}_Invoice_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
         output_path = os.path.join(invoices_dir, output_filename)
     
     pdf.gen(output_path, generate_qr_code=True)
@@ -244,7 +250,7 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
         payment_strings = ", ".join(f"{item['type']} :-{item['amount']}€ " for item in unique_payment)
         invoice.paytype = payment_strings
     else:
-        invoice.paytype = reciever.get("paymentMethod", "Hotovosť")
+        invoice.paytype = reciever.get("paymentMethod", "Bankovy prevod")
 
     invoice.taxable_date = datetime.now()
     invoice.use_tax = True
