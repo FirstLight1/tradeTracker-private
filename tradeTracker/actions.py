@@ -1609,9 +1609,9 @@ def _fixArticlesUpload(file):
     
 
 def process_sold_csv(files,db):
-    firstIsOrders = 'order' in files[0].filename.lower()
-    ordersUpload = files[0] if firstIsOrders else files[1]
-    articlesUpload = files[1] if firstIsOrders else files[0]
+    firstIsArticles = 'articles' in files[0].filename.lower()
+    ordersUpload = files[1] if firstIsArticles else files[0]
+    articlesUpload = files[0] if firstIsArticles else files[1]
 
     orders = ordersUpload.stream.read().decode('utf-8')
     articles = articlesUpload.stream.read().decode('utf-8')
