@@ -19,16 +19,21 @@ Usage (PowerShell, on the prod box, venv active):
     # Sealed products are matched by name only -- pass --table sealed:
     python backfill_cardmarket_id.py --table sealed --csv sealed.csv --db ... --commit
 
+    # Or do both tables in one go (cards then sealed) from a single CSV:
+    python backfill_cardmarket_id.py --table both --csv cards.csv --db ... --commit
+
 Matching key depends on the table:
-  - cards : card_name + card_num + condition (case/whitespace-insensitive).
-            Condition values are normalized through CONSTANTS.CONDITION_DICT so a
-            Cardmarket "NM" matches a stored "NEAR MINT".
+  - cards : card_name + card_num (case/whitespace-insensitive). The Cardmarket
+            product export is a catalogue with no per-copy condition, and
+            cardMarketID is a per-product id shared across every condition, so
+            condition is intentionally NOT part of the key.
   - sealed: name only (case/whitespace-insensitive). Sealed products have no
             card number or condition.
 
 Every DB row whose key matches a CSV row gets that row's cardMarketID. A key can
-match several DB rows (duplicate copies / re-imports); all of them are tagged.
-Rows that already have a cardMarketID are left alone unless --overwrite is given.
+match several DB rows (different conditions / duplicate copies / re-imports);
+all of them are tagged. Rows that already have a cardMarketID are left alone
+unless --overwrite is given.
 """
 
 import argparse
@@ -37,15 +42,10 @@ import os
 import sqlite3
 import sys
 
-# Reuse the project's condition mapping so CSV codes match stored values.
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tradeTracker"))
-import CONSTANTS  # noqa: E402
-
-# --- CSV column names. Adjust these to match your file's header row. ---
+# --- CSV column names. Match the Cardmarket product export header row. ---
 COL_NAME = "name"
-COL_NUM = "cn"
-COL_SET = "setCode"
-COL_CONDITION = "condition"
+COL_NUM = "collectorNumber"
+COL_SET = "expansionCode"
 COL_CARDMARKET_ID = "cardmarketId"
 COL_SEALED_NAME = "name"
 
@@ -55,18 +55,14 @@ def norm_text(value):
     return (value or "").strip().upper()
 
 
-def norm_condition(value):
-    """Map a Cardmarket code (NM, MT, ...) to its stored form, else just normalize."""
-    raw = (value or "").strip()
-    mapped = CONSTANTS.CONDITION_DICT.get(raw.upper())
-    return norm_text(mapped if mapped is not None else raw)
-
-
-def card_key(name, num, condition):
-    return (norm_text(name), norm_text(num), norm_condition(condition))
+def card_key(name, num):
+    return (norm_text(name), norm_text(num))
 
 def whole_number(set, num):
-    return set + " " + num
+    # Mirror how card_num is stored on import (actions.py): "<setCode> <number>",
+    # but just the set when there is no collector number.
+    set, num = (set or "").strip(), (num or "").strip()
+    return f"{set} {num}".strip() if num else set
 
 # --- Per-table behaviour. Picked by --table. ----------------------------------
 # Each spec knows which CSV columns it needs, how to read the matching rows out
@@ -75,14 +71,15 @@ def whole_number(set, num):
 # tagged with the CSV row's cardMarketID.
 TABLE_SPECS = {
     "cards": {
-        # One DB row per physical copy -- match on name + number + condition.
-        "required_cols": (COL_NAME, COL_NUM, COL_SET, COL_CONDITION, COL_CARDMARKET_ID),
-        "db_select": "SELECT id, card_name, card_num, condition FROM cards",
-        "db_key": lambda row: card_key(row[1], row[2], row[3]),
-        # DB card_num is stored as "<expansion> <number>" (see actions.py),
-        # so rebuild the same combined form from the CSV's setCode + number.
+        # One DB row per physical copy -- the catalogue export has no condition,
+        # so match on name + number and tag every condition of the card.
+        "required_cols": (COL_NAME, COL_NUM, COL_SET, COL_CARDMARKET_ID),
+        "db_select": "SELECT id, card_name, card_num FROM cards",
+        "db_key": lambda row: card_key(row[1], row[2]),
+        # DB card_num is stored as "<setCode> <number>" (see actions.py),
+        # so rebuild the same combined form from the CSV's expansionCode + number.
         "csv_key": lambda row: card_key(
-            row[COL_NAME], whole_number(row[COL_SET], row[COL_NUM]), row[COL_CONDITION]
+            row[COL_NAME], whole_number(row[COL_SET], row[COL_NUM])
         ),
     },
     "sealed": {
@@ -106,10 +103,85 @@ def build_index(conn, spec):
     return index
 
 
+def backfill_table(conn, table, csv_path, commit, overwrite):
+    """Backfill one table. Prints a summary; writes only when commit is True."""
+    spec = TABLE_SPECS[table]
+
+    index = build_index(conn, spec)
+
+    # Which rows already have an ID, so we can skip unless --overwrite.
+    already_set = {
+        row[0] for row in conn.execute(
+            f"SELECT id FROM {table} "
+            "WHERE cardMarketID IS NOT NULL AND cardMarketID != ''"
+        )
+    }
+
+    updates = {}          # row_id -> cardMarketID (dict de-dups shared rows)
+    not_found = []        # csv row number
+    skipped_existing = 0
+    missing_id = 0
+
+    with open(csv_path, newline="", encoding="utf-8-sig") as fh:
+        reader = csv.DictReader(fh)
+        for missing in spec["required_cols"]:
+            if missing not in reader.fieldnames:
+                sys.exit(
+                    f"CSV is missing column '{missing}'. "
+                    f"Found columns: {reader.fieldnames}. "
+                    f"Edit the COL_* constants at the top of this script to match."
+                )
+
+        for lineno, row in enumerate(reader, start=2):  # line 1 is the header
+            cm_id = (row.get(COL_CARDMARKET_ID) or "").strip()
+            if not cm_id:
+                missing_id += 1
+                continue
+
+            key = spec["csv_key"](row)
+            ids = index.get(key)
+            if not ids:
+                not_found.append(lineno)
+                continue
+
+            # Tag every matching row. Rows that already have an ID are left
+            # alone unless --overwrite is set.
+            tagged_any = False
+            for cid in ids:
+                if not overwrite and cid in already_set:
+                    continue
+                updates[cid] = cm_id
+                tagged_any = True
+            if not tagged_any:
+                # Every match already has an ID (and no --overwrite).
+                skipped_existing += 1
+
+    print(f"--- Backfill summary [{table}] ---")
+    print(f"  matched & to update : {len(updates)}")
+    print(f"  CSV rows all set    : {skipped_existing}  (use --overwrite to replace)")
+    print(f"  CSV rows w/o an ID  : {missing_id}")
+    print(f"  not found in DB     : {len(not_found)}")
+
+    if not_found:
+        preview = ", ".join(str(n) for n in not_found[:20])
+        print(f"    not-found CSV lines: {preview}{' ...' if len(not_found) > 20 else ''}")
+
+    if not commit:
+        print(f"  DRY RUN [{table}] -- nothing written. Re-run with --commit to apply.")
+        return
+
+    with conn:  # single transaction; rolls back on any error
+        conn.executemany(
+            f"UPDATE {table} SET cardMarketID = ? WHERE id = ?",
+            [(cm_id, cid) for cid, cm_id in updates.items()],
+        )
+    print(f"  COMMITTED [{table}]: {len(updates)} rows updated.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Backfill cardMarketID from a CSV.")
-    parser.add_argument("--table", choices=sorted(TABLE_SPECS), default="cards",
-                        help="Which table to backfill (default: cards).")
+    parser.add_argument("--table", choices=[*sorted(TABLE_SPECS), "both"], default="cards",
+                        help="Which table to backfill: cards, sealed, or both (default: cards).")
     parser.add_argument("--csv", required=True, help="Path to the source CSV.")
     parser.add_argument("--db", required=True, help="Path to the SQLite DB file.")
     parser.add_argument("--commit", action="store_true",
@@ -118,84 +190,20 @@ def main():
                         help="Also overwrite rows that already have a cardMarketID.")
     args = parser.parse_args()
 
-    spec = TABLE_SPECS[args.table]
-
     if not os.path.exists(args.db):
         sys.exit(f"DB not found: {args.db}")
     if not os.path.exists(args.csv):
         sys.exit(f"CSV not found: {args.csv}")
 
+    # "both" runs cards then sealed; each table is its own transaction.
+    tables = sorted(TABLE_SPECS) if args.table == "both" else [args.table]
+
     conn = sqlite3.connect(args.db)
     try:
-        index = build_index(conn, spec)
-
-        # Which rows already have an ID, so we can skip unless --overwrite.
-        already_set = {
-            row[0] for row in conn.execute(
-                f"SELECT id FROM {args.table} "
-                "WHERE cardMarketID IS NOT NULL AND cardMarketID != ''"
-            )
-        }
-
-        updates = {}          # row_id -> cardMarketID (dict de-dups shared rows)
-        not_found = []        # csv row number
-        skipped_existing = 0
-        missing_id = 0
-
-        with open(args.csv, newline="", encoding="utf-8-sig") as fh:
-            reader = csv.DictReader(fh)
-            for missing in spec["required_cols"]:
-                if missing not in reader.fieldnames:
-                    sys.exit(
-                        f"CSV is missing column '{missing}'. "
-                        f"Found columns: {reader.fieldnames}. "
-                        f"Edit the COL_* constants at the top of this script to match."
-                    )
-
-            for lineno, row in enumerate(reader, start=2):  # line 1 is the header
-                cm_id = (row.get(COL_CARDMARKET_ID) or "").strip()
-                if not cm_id:
-                    missing_id += 1
-                    continue
-
-                key = spec["csv_key"](row)
-                ids = index.get(key)
-                if not ids:
-                    not_found.append(lineno)
-                    continue
-
-                # Tag every matching row. Rows that already have an ID are left
-                # alone unless --overwrite is set.
-                tagged_any = False
-                for cid in ids:
-                    if not args.overwrite and cid in already_set:
-                        continue
-                    updates[cid] = cm_id
-                    tagged_any = True
-                if not tagged_any:
-                    # Every match already has an ID (and no --overwrite).
-                    skipped_existing += 1
-
-        print("--- Backfill summary ---")
-        print(f"  matched & to update : {len(updates)}")
-        print(f"  CSV rows all set    : {skipped_existing}  (use --overwrite to replace)")
-        print(f"  CSV rows w/o an ID  : {missing_id}")
-        print(f"  not found in DB     : {len(not_found)}")
-
-        if not_found:
-            preview = ", ".join(str(n) for n in not_found[:20])
-            print(f"    not-found CSV lines: {preview}{' ...' if len(not_found) > 20 else ''}")
-
-        if not args.commit:
-            print("\nDRY RUN -- nothing written. Re-run with --commit to apply.")
-            return
-
-        with conn:  # single transaction; rolls back on any error
-            conn.executemany(
-                f"UPDATE {args.table} SET cardMarketID = ? WHERE id = ?",
-                [(cm_id, cid) for cid, cm_id in updates.items()],
-            )
-        print(f"\nCOMMITTED: {len(updates)} rows updated.")
+        for i, table in enumerate(tables):
+            if i:
+                print()
+            backfill_table(conn, table, args.csv, args.commit, args.overwrite)
     finally:
         conn.close()
 
