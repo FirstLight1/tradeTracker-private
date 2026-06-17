@@ -1835,14 +1835,15 @@ def importCSV():
         invoices = []
         failed = []
         order = defaultdict(dict)
-        labels = []
-        eph = EPHService()
+        #labels = []
+        #eph = EPHService()
         for item in completed:
             try:
                 saleResult = SaleService(db, InvoiceReceiptService()).process_sale(item)
                 db.commit()
          
                 reciept = saleResult.receipt.raw
+                """
                 item.shipping.shippingMethod = item.shipping.shippingMethod.lower()
                 method, insurance = _parse_shipping_method(item.shipping.shippingMethod)
                 # POSTA API
@@ -1863,6 +1864,7 @@ def importCSV():
 
                 #EPHSERVICE download labels(reciept['filename'])
                 labels.append(label)
+                    """
             except Exception as e:
                 db.rollback()
                 logger.exception('Sold order %s failed | %s', item.idOrder, e)
@@ -1881,8 +1883,8 @@ def importCSV():
             for filename, bytes in invoices:
                 zip_file.writestr(filename, bytes)
                 #write labels to zip
-            for label in labels:
-                zip_file.writestr(label.filename, label.bytes)
+            #for label in labels:
+            #    zip_file.writestr(label.filename, label.bytes)
 
         token = uuid.uuid4().hex
         d = _downloads_dir()
