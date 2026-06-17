@@ -1632,6 +1632,7 @@ def process_sold_csv(files,db):
     merged = articlesExpanded.merge(orders, on='idOrder', how='left', suffixes=('_art', '_ord'), validate='many_to_one')
 
     merged = merged[merged['status_ord'].isin(['sent', 'received', 'evaluated'])]
+    merged = merged[merged['issues'].isna()]
     merged['cardmarketId'] = merged['cardmarketId'].astype('Int64').astype('string')
 
     ids = merged['cardmarketId'].dropna().tolist()
@@ -1686,8 +1687,7 @@ def process_sold_csv(files,db):
         if pd.notna(extra) and str(extra).strip():
             address = f"{address}, {str(extra).strip()}"
         paybackDate = (
-            datetime.datetime.strptime(head['dateBought'], '%Y-%m-%dT%H:%M:%S.%fZ').date()
-            + datetime.timedelta(days=14)
+          datetime.datetime.now()  + datetime.timedelta(days=14)
         ).isoformat()
 
         reviecerInfo = {
