@@ -1688,7 +1688,7 @@ def process_sold_csv(files,db):
             address = f"{address}, {str(extra).strip()}"
         paybackDate = (
           datetime.datetime.now()  + datetime.timedelta(days=14)
-        ).isoformat()
+        ).date().isoformat()   # date-only: generateInvoice parses with "%Y-%m-%d"
 
         reviecerInfo = {
             "nameAndSurname": str(head['shippingAddressName']),
