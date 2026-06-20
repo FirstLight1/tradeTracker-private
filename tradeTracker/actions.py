@@ -1541,7 +1541,7 @@ def _process_inventory_csv(file):
             'buy_price': round(float(row['price']) * 0.8, 2),
             'market_value': row['price'],
             'quantity': row['quantity'],
-            'date': row['listedAt'],
+            'date': datetime.datetime.now().isoformat() + "Z",
             'cardmarketId': row['cardmarketId'],
         }
         dataList.append(item)
@@ -1553,7 +1553,7 @@ def _create_inventory(db, dataList=None):
     if dataList is None:
         raise ValueError('dataList is required')
 
-    dateCreted = dataList[0]['date'][:10]
+    dateCreted = dataList[0]['date']
     buyPrice = sum(float(item['buy_price']) for item in dataList)
     try:
         cursor = db.execute(
@@ -1572,7 +1572,7 @@ def _create_inventory(db, dataList=None):
         if isSealed:
             try:
                 db.execute('INSERT INTO sealed (name, quantity, price, market_value, date, auction_id, cardmarketId)'
-                    'VALUES (?, ?, ?, ?, ?, ?)',
+                    'VALUES (?, ?, ?, ?, ?, ?, ?)',
                     (
                         item.get('card_name'),
                         item.get('quantity'),
@@ -1594,7 +1594,7 @@ def _create_inventory(db, dataList=None):
                 try:
                     buyPrice = round(float(item.get('market_value')) * 0.8, 2)
                     db.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
-                        'VALUES (?, ?, ?, ?, ?, ?)',
+                        'VALUES (?, ?, ?, ?, ?, ?, ?)',
                         (
                             item.get('card_name'),
                             item.get('card_num'),
