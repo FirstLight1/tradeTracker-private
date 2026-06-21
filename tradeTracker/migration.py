@@ -59,6 +59,9 @@ def migrate_database(db_path):
         # Migration 12: Add cardMarketID to cards table
         addCardMarketIDToCardsTable(db_path)
 
+        # Migration 13: Add idOrder to sales table
+        addIdOrderToSalesTable(db_path)
+
         print("Database migration check complete.")
     except sqlite3.Error as e:
         print(f"Database migration failed: {e}")
@@ -491,6 +494,28 @@ def addShippingInfoColumn(db_path):
         # This can happen if the table doesn't exist yet, which is fine.
         if "no such table: sales" in str(e):
             print("'sales' table not found, skipping 'shipping_info' column migration.")
+        else:
+            raise e
+
+
+def addIdOrderToSalesTable(db_path):
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Check if the column already exists
+        cursor.execute("PRAGMA table_info(sales)")
+        columns = [info[1] for info in cursor.fetchall()]
+        if 'idOrder' not in columns:
+            print("Applying migration: Adding 'idOrder' to 'sales' table...")
+            cursor.execute("ALTER TABLE sales ADD COLUMN idOrder TEXT")
+            print("'idOrder' column added successfully.")
+        else:
+            print("'idOrder' column already exists in 'sales' table.")
+    except sqlite3.Error as e:
+        # This can happen if the table doesn't exist yet, which is fine.
+        if "no such table: sales" in str(e):
+            print("'sales' table not found, skipping 'idOrder' column migration.")
         else:
             raise e
 

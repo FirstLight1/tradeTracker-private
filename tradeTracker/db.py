@@ -176,7 +176,8 @@ CREATE TABLE sales (
     sale_date TEXT NOT NULL,
     total_amount REAL,
     notes TEXT,
-    shipping_info TEXT
+    shipping_info TEXT,
+    idOrder TEXT
 );
 
 CREATE INDEX idx_sales_invoice ON sales(invoice_number);
@@ -190,7 +191,7 @@ CREATE TABLE sale_items (
     sold_cm INTEGER DEFAULT 0,
     sold INTEGER DEFAULT 0,
     profit REAL,
-    FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE CASCADE,
+    FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE SET NULL,
     FOREIGN KEY (card_id) REFERENCES cards (id) ON DELETE CASCADE
 );
 
@@ -214,7 +215,7 @@ CREATE TABLE bulk_items(
     quantity INTEGER NOT NULL,
     unit_price REAL NOT NULL,
     total_price REAL NOT NULL,
-    FOREIGN KEY (auction_id) REFERENCES auctions (id) ON DELETE CASCADE,
+    FOREIGN KEY (auction_id) REFERENCES auctions (id) ON DELETE set NULL,
     UNIQUE(auction_id, item_type)
 );
 
@@ -228,7 +229,7 @@ CREATE TABLE bulk_sales(
     quantity INTEGER NOT NULL,
     unit_price REAL NOT NULL,
     total_price REAL NOT NULL,
-    FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE CASCADE
+    FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE SET NULL
     );
 
 CREATE INDEX idx_bulk_sales_sale_id ON bulk_sales(sale_id);
@@ -243,7 +244,7 @@ CREATE TABLE sealed(
     sale_id INTEGER,
     auction_id INTEGER,
     cardMarketID TEXT,
-    FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE CASCADE,
+    FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE SET NULL,
     FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE
     );
 
@@ -263,7 +264,7 @@ CREATE TABLE barter(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     auction_id INTEGER,
     sale_id INTEGER,
-    FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE,
+    FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE SET NULL,
     FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
     );
 '''

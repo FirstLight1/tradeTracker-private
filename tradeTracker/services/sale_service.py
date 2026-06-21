@@ -85,9 +85,11 @@ class SaleService:
         )
         invoice_num = receipt.number
 
+        idOrder = None if sale_input.idOrder is None else str(sale_input.idOrder)
+
         cursor = self.db.execute(
-            "INSERT INTO sales (invoice_number, sale_date, total_amount, notes, shipping_info) VALUES (?, ?, ?, ?,?)",
-            (invoice_num, sale_date, total_amount, result, shippingPrice),
+            "INSERT INTO sales (invoice_number, sale_date, total_amount, notes, shipping_info, idOrder) VALUES (?, ?, ?, ?, ?, ?)",
+            (invoice_num, sale_date, total_amount, result, shippingPrice, idOrder),
         )
 
         sale_id = cursor.lastrowid

@@ -1607,6 +1607,15 @@ def _fixArticlesUpload(file):
 
 #def createPostEph():
     
+def checkIdOrder(db, orders):
+    """Drop orders that were already imported (idOrder already present in sales)."""
+    ids = orders['idOrder'].dropna().astype(str).tolist()
+    placeholders = ','.join('?' for _ in ids)
+    rows = db.execute(
+        f"SELECT idOrder FROM sales WHERE idOrder IN ({placeholders})", ids
+    ).fetchall()
+    existing = {row[0] for row in rows}
+    return orders[~orders['idOrder'].astype(str).isin(existing)]
 
 def process_sold_csv(files,db):
     firstIsArticles = 'articles' in files[0].filename.lower()
@@ -1620,6 +1629,7 @@ def process_sold_csv(files,db):
     articlesExpanded = articles.loc[articles.index.repeat(articles['items'])].reset_index(drop=True)
     articlesExpanded['items'] = 1
     orders = pd.read_csv(StringIO(orders))
+    orders = checkIdOrder(db, orders)
     merged = articlesExpanded.merge(orders, on='idOrder', how='left', suffixes=('_art', '_ord'), validate='many_to_one')
 
     merged = merged[merged['status_ord'].isin(['sent', 'received', 'evaluated'])]
