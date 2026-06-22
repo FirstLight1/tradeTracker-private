@@ -65,7 +65,8 @@ def create_app(test_config=None):
 
     app.config.from_mapping(
         DATABASE=db_path,
-        SECRET_KEY=os.environ.get('SECRET_KEY') or abort_secret_key() 
+        SECRET_KEY=os.environ.get('SECRET_KEY') or abort_secret_key(),
+        WTF_CSRF_TIME_LIMIT=86400,
     )
 
     #I dont even need this I think
