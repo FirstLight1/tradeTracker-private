@@ -1277,7 +1277,7 @@ def updatePaymentMethod(auction_id):
 def recalculateCardPrices(auction_id, new_auction_price):
     # TODO: Switch to decimal
     db = get_db()
-    new_auction_price = float(new_auction_price)
+    new_auction_price = float(_parse_number(new_auction_price))
 
     for item_type, unit_price in CONSTANTS.BULK_ITEM_UNIT_PRICES.items():
         quantity = db.execute(
