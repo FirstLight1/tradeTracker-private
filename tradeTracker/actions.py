@@ -1605,7 +1605,22 @@ def _fixArticlesUpload(file):
     raw = re.sub(r'"\{"locationName".*?locationQuantity":\d+\}"', '""', file)
     return pd.read_csv(StringIO(raw))
 
-#def createPostEph():
+def _parse_number(s):
+    if s.count(".") <= 1:
+        return str(s)
+    else:
+        parts = s.split(".")
+        return str("".join(parts[:-1]) + "." + parts[-1])
+
+def _process_inventory_csv(file):
+    stream = TextIOWrapper(file.stream, encoding='utf-8-sig', newline='')
+    reader = csv.DictReader(stream)
+
+    expected_header = set(CONSTANTS.COlLUMN_MAP)
+    actual_header = set(reader.fieldnames or [])
+    missing_header = expected_header - actual_header
+    if missing_header:
+        raise ValueError(f'Missing header(s): {missing_header}')
     
 def checkIdOrder(db, orders):
     """Drop orders that were already imported (idOrder already present in sales)."""
@@ -1670,7 +1685,7 @@ def process_sold_csv(files,db):
                 sealed.append({
                     'sealedName': row['itemName'],
                     'quantity': 1,     
-                    'marketValue': str(sale_price),
+                    'marketValue': _parse_number(sale_price),
                     'auctionId': row['auction_id'],
                 })
             elif row['item_type'] == 'card':
@@ -1678,7 +1693,7 @@ def process_sold_csv(files,db):
                     'cardId': row['id'],
                     'cardName': row['itemName'],
                     'cardNum': '' if pd.isna(row['card_num']) else str(row['card_num']),
-                    'marketValue': sale_price,
+                    'marketValue': _parse_number(sale_price),
                 })
 
         head = group.iloc[0]
@@ -1698,12 +1713,12 @@ def process_sold_csv(files,db):
             "state": str(head['shippingAddressCountry']),
             "zipCode": str(head['shippingAddressZip']),
             "paybackDate": paybackDate,
-            "total": float(head['articleValue']),
+            "total": float(_parse_number(head['articleValue'])),
             }
 
         shipping = {
                 "shippingWay": "Doprava / Poštovné – samostatná služba",
-                "shippingPrice": round(float(head['totalValue']) - float(head['articleValue']), 2),
+                "shippingPrice": round(float(_parse_number(head['totalValue'])) - float(_parse_number(head['articleValue'])), 2),
                 "shippinghMethod": str(head['shippingMethod']),
                 }
 
@@ -1731,11 +1746,8 @@ def process_sold_csv(files,db):
         
     return ordersArr, rejectedArr
     
-# Processed-invoice zips are handed off to the client via a one-shot /download/<token>
-# link. They are written to disk (not an in-memory dict) so the download survives across
-# Gunicorn workers, and a TTL sweep stops never-fetched zips from accumulating.
-_DOWNLOAD_TTL_SECONDS = 1800           # 30 min; downloads are fetched immediately in practice
-_TOKEN_RE = re.compile(r"\A[0-9a-f]{32}\Z")   # uuid4().hex shape; blocks path traversal
+_DOWNLOAD_TTL_SECONDS = 1800         
+_TOKEN_RE = re.compile(r"\A[0-9a-f]{32}\Z")
 
 
 def _downloads_dir():
@@ -1772,7 +1784,7 @@ def download(token):
     with open(path, "rb") as fh:
         data = fh.read()
     try:
-        os.remove(path)   # one-shot download, mirrors the old dict .pop()
+        os.remove(path)   
     except OSError:
         pass
     return send_file(
@@ -1904,7 +1916,7 @@ def importCSV():
         tmp = final + ".tmp"
         with open(tmp, "wb") as fh:
             fh.write(zip_buffer.getvalue())
-        os.replace(tmp, final)   # atomic publish; reader never sees a half-written file
+        os.replace(tmp, final)   
 
         return jsonify({
             'status': 'success',
