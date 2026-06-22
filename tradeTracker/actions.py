@@ -1714,6 +1714,8 @@ def process_sold_csv(files,db):
             "zipCode": str(head['shippingAddressZip']),
             "paybackDate": paybackDate,
             "total": float(_parse_number(head['articleValue'])),
+            "email": head['temporaryEmail'],
+            "phone": head['phone']
             }
 
         shipping = {
@@ -1722,7 +1724,7 @@ def process_sold_csv(files,db):
                 "shippinghMethod": str(head['shippingMethod']),
                 }
 
-        saleInuput = SaleInput(
+        saleInput = SaleInput(
                 reciever=reviecerInfo,
                 cards=cards,
                 sealed=sealed,
@@ -1734,7 +1736,7 @@ def process_sold_csv(files,db):
                 idOrder=orderId
                 )
 
-        ordersArr.append(saleInuput)
+        ordersArr.append(saleInput)
 
     rejectedArr = []
     for orderId , group in rejectedItems:
@@ -1882,6 +1884,8 @@ def importCSV():
                     label = eph.addParcel(item.reciver, order[parcel_category]['sheetId'], insurance) 
                 #PACKETA
                 else:
+                    packeta = PacketaService()
+                    packeta.create_packet(item)
                     pass
 
 
