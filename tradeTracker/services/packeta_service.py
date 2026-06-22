@@ -24,7 +24,6 @@ class PacketaService:
 
 
         if homeDelivery:
-
            homeDeliveryAttributes = {
                 'phone': order.reciever.phone,
                 'addressId': TBD,
@@ -35,4 +34,12 @@ class PacketaService:
                 'zip': order.reciever.zipCode,
                 #size 
                    }
-                
+           attributes.update(homeDeliveryAttributes)
+
+        try:
+            PacketIdDetail = client.service.createPacket(self.api_key, attributes)
+        except Exception as e:
+            raise e
+        return PacketIdDetail
+
+    
