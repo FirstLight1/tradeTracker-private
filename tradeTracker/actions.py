@@ -67,7 +67,7 @@ def validate_and_sanitize_payments(payments):
             if isinstance(payment.get('amount'), str):
                 amount = payment.get('amount').replace(',','.')
             else:
-                amount = payment.get('amount')
+amount = payment.get('amount')
         except Exception as e:
             logger.warning("Failed to normalize amount '%s': %s", payment.get('amount'), e)
             amount = payment.get('amount')
@@ -1715,7 +1715,11 @@ def process_sold_csv(files,db):
             "paybackDate": paybackDate,
             "total": float(_parse_number(head['articleValue'])),
             "email": head['temporaryEmail'],
-            "phone": head['phone']
+            "phone": head['phone'],
+            "articleInfo" : {
+                "articleCategory": head['articleCategory'],
+                "articles": head['articles']
+                }
             }
 
         shipping = {
@@ -1860,8 +1864,18 @@ def importCSV():
         invoices = []
         failed = []
         order = defaultdict(dict)
-        #labels = []
-        #eph = EPHService()
+        eph = EPHService()
+        EPHlabels = []
+        packeta = PacketaService()
+        #TODO: create data class for home delivery
+        packetsData = {
+                    "pickupPointPackets": [],
+                    "homeDeliveryPackets": {
+                        "packetId": [],
+                        "courierNumber": []
+                    }
+                }
+        PacketaLabels = []
         for item in completed:
             try:
                 saleResult = SaleService(db, InvoiceReceiptService()).process_sale(item)
@@ -1884,8 +1898,12 @@ def importCSV():
                     label = eph.addParcel(item.reciver, order[parcel_category]['sheetId'], insurance) 
                 #PACKETA
                 else:
-                    packeta = PacketaService()
-                    packeta.create_packet(item)
+                    if homeDelivery:
+                        packetsData["homeDeliveryPackets"]["packetId"].append(packeta.create_packet(item, homeDelivery = True))
+                        packetsData["homeDeliveryPackets"]["courierNumber"].append(packeta.packet_courier_number(packetsData["homeDeliveryPackets"]["packetId"][-1]))
+
+                    else:
+                        packeta.create_packet(item)
                     pass
 
 
