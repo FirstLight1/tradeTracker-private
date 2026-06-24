@@ -41,4 +41,11 @@ PARCEL_CATEGORIES = {
         "parcel":"b"
 }
 
+HEAVY_ARTICLE_CATEGORIES= {
+    'Booster',
+    'Display',
+    'Box Set',
+    'Elite Trainer Boxes',
+}
+
 

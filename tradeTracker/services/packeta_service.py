@@ -2,6 +2,7 @@ from zeep import Client
 import os
 import re
 from postal.parser import parse_address
+from tradeTracker.CONSTANTS import HEAVY_ARTICLE_CATEGORIES
 
 # Default home-delivery carrier mapping by (country_code, method_token).
 # method_token is the lowercase carrier hint from the shipping method name
@@ -67,18 +68,18 @@ class PacketaService:
         name, *surname = rec["nameAndSurname"].split(' ')
         surname = ' '.join(surname)
 
-        #TODO: create dict with categories
+        #TODO: create dict with categories halfway there
         weight = 0.99
         article_info = rec.get("articleInfo") or {}
         category = str(article_info.get("articleCategory") or "")
-        if "Booster" in category:
+        if category in HEAVY_ARTICLE_CATEGORIES:
             weight = 1.99
-        elif "Booster" in category and int(article_info.get("articles") or 0) >= 5:
+        elif category in HEAVY_ARTICLE_CATEGORIES  and int(article_info.get("articles") or 0) >= 5:
             weight = 2.99
 
         #TODO: required attributes should raise exceptions
-        email = _str_or_fallback(rec.get('email'), os.environ.get('PACKETA_FALLBACK_EMAIL'))
-        phone = _str_or_fallback(rec.get('phone'), os.environ.get('PACKETA_FALLBACK_PHONE'))
+        email = _str_or_fallback(rec.get('email'))
+        phone = _str_or_fallback(rec.get('phone'))
         total = rec.get('total', 0) or 0
         try:
             total = float(total)
@@ -88,6 +89,7 @@ class PacketaService:
                 'number': str(order.idOrder),
                 'name': name,
                 'surname': surname,
+            # TODO: find correct addressId
                 'addressId': int(os.environ.get('PACKETA_PICKUP_POINT_ID', '194')),
                 'email': email,
                 'phone': phone,

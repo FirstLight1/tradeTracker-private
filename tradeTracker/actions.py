@@ -1523,7 +1523,7 @@ def _process_inventory_csv(file):
     missing_header = expected_header - actual_header
     if missing_header:
         raise ValueError(f'Missing header(s): {missing_header}')
-    
+
     dataList = []
     for row in reader:
         item = {
@@ -1559,12 +1559,12 @@ def _create_inventory(db, dataList=None):
     auctionId = cursor.lastrowid
 
     for item in dataList:
-        isSealed = item.get('card_num') == ''
+        isSealed = item.get('card_num') == ""
 
         if isSealed:
             try:
                 db.execute('INSERT INTO sealed (name, quantity, price, market_value, date, auction_id, cardmarketId)'
-                    'VALUES (?, ?, ?, ?, ?, ?)',
+                    'VALUES (?, ?, ?, ?, ?, ?, ?)',
                     (
                         item.get('card_name'),
                         item.get('quantity'),
@@ -1586,7 +1586,7 @@ def _create_inventory(db, dataList=None):
                 try:
                     buyPrice = round(float(item.get('market_value')) * 0.8, 2)
                     db.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
-                        'VALUES (?, ?, ?, ?, ?, ?)',
+                        'VALUES (?, ?, ?, ?, ?, ?, ?)',
                         (
                             item.get('card_name'),
                             item.get('card_num'),
@@ -1614,16 +1614,6 @@ def _parse_number(s):
         parts = s.split(".")
         return str("".join(parts[:-1]) + "." + parts[-1])
 
-def _process_inventory_csv(file):
-    stream = TextIOWrapper(file.stream, encoding='utf-8-sig', newline='')
-    reader = csv.DictReader(stream)
-
-    expected_header = set(CONSTANTS.COlLUMN_MAP)
-    actual_header = set(reader.fieldnames or [])
-    missing_header = expected_header - actual_header
-    if missing_header:
-        raise ValueError(f'Missing header(s): {missing_header}')
-    
 def checkIdOrder(db, orders):
     """Drop orders that were already imported (idOrder already present in sales)."""
     ids = orders['idOrder'].dropna().astype(str).tolist()
