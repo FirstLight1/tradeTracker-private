@@ -77,7 +77,6 @@ class PacketaService:
         elif category in HEAVY_ARTICLE_CATEGORIES  and int(article_info.get("articles") or 0) >= 5:
             weight = 2.99
 
-        #TODO: required attributes should raise exceptions
         email = _str_or_fallback(rec.get('email'))
         phone = _str_or_fallback(rec.get('phone'))
         total = rec.get('total', 0) or 0

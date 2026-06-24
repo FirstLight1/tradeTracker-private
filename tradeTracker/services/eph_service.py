@@ -30,7 +30,6 @@ class EPHService:
         }
 
 
-#TODO: add service categories
     def createSheet(self, parcel_category, reception_method, payment_type = "h" ) -> str:
         payload = {
             "sheet": {
@@ -46,7 +45,6 @@ class EPHService:
         r.raise_for_status()
         return r.json()["sheet"]["id"]
 
-    #TODO: check with EPH if this is the correct way to do it
     #TODO: add service categories
     def addParcel(self, order, sheet_id, insurance_value = None):
         country = order.get("state", "") or ""
