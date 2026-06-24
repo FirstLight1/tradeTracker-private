@@ -23,6 +23,7 @@ import sys
 import json
 import tempfile
 import unittest
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -151,7 +152,21 @@ class SoldCSVImportTestCase(unittest.TestCase):
             base_url='https://localhost',
         )
 
-    def test_sold_import_end_to_end(self):
+    @patch('tradeTracker.actions.PacketaService')
+    @patch('tradeTracker.actions.EPHService')
+    def test_sold_import_end_to_end(self, mock_eph_service, mock_packeta_service):
+        # Stub the carrier services so the test does not hit live APIs.
+        mock_eph = MagicMock()
+        mock_eph.createSheet.return_value = 'sheet-1'
+        mock_eph.addParcel.return_value = {'id': 'parcel-1'}
+
+        def _fake_download_label(parcel_id, sheet_id, filename):
+            return MagicMock(filename=f'label_{filename}', bytes=b'%PDF-fake')
+
+        mock_eph.download_label.side_effect = _fake_download_label
+        mock_eph_service.return_value = mock_eph
+        mock_packeta_service.return_value = MagicMock()
+
         resp = self._post()
         body = resp.get_json()
         print("\nRESPONSE", resp.status_code, json.dumps(body, indent=2, default=str))

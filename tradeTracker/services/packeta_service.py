@@ -1,81 +1,151 @@
 from zeep import Client
 import os
+import re
 from postal.parser import parse_address
+
+# Default home-delivery carrier mapping by (country_code, method_token).
+# method_token is the lowercase carrier hint from the shipping method name
+# (e.g. "hermes" from "Home delivery - Hermes").
+DEFAULT_HOME_DELIVERY_CARRIERS = {
+    ("de", "hermes"): 6373,          # DE Hermes HD
+    ("at", "dpd"): 6830,             # AT DPD HD
+    ("fr", "colis privé"): 16080,    # FR Colis Privé Direct HD
+    ("fr", "post"): 4309,            # FR Colissimo HD
+    ("it", "post"): 29192,           # IT Italian Post HD
+    ("be", "post"): 7909,            # BE Belgian Post HD
+    ("pl", "post"): 272,             # PL Polish Post 48 HD
+    ("lt", "post"): 18808,           # LT Lithuanian Post HD
+    ("es", "post"): 4638,            # ES Correos HD
+    ("dk", "post"): 4993,            # DK Post Nord HD
+}
+
+
+def _str_or_fallback(val, fallback):
+    if val is None:
+        return fallback
+    try:
+        import math
+        if isinstance(val, float) and math.isnan(val):
+            return fallback
+    except Exception:
+        pass
+    val = str(val).strip()
+    return val if val else fallback
+
 
 class PacketaService:
     def __init__(self):
         self.client = Client('https://www.zasilkovna.cz/api/soap.wsdl')
         self.api_key = os.environ.get('PACKETA_API_KEY')
-        self.FORMAT = "105x35mm on A4"
+        self.FORMAT = "A6 on A6"
         self.OFFSET = 0
 
+    def _home_delivery_carrier_id(self, order):
+        rec = order.reciever
+        country = str(rec.get("state") or "").strip().lower()
+        if country == "d":
+            country = "de"
+
+        method = str(order.shipping.get("shippingMethod") or "").lower()
+        method_token = ""
+        if "hermes" in method:
+            method_token = "hermes"
+        elif "colis privé" in method or "colis prive" in method:
+            method_token = "colis privé"
+        elif "dpd" in method:
+            method_token = "dpd"
+        elif "post" in method:
+            method_token = "post"
+
+        carrier_id = DEFAULT_HOME_DELIVERY_CARRIERS.get((country, method_token))
+        if carrier_id is None:
+            carrier_id = int(os.environ.get('PACKETA_HOME_DELIVERY_CARRIER_ID', '0'))
+        return carrier_id
+
     def create_packet(self, order, homeDelivery = False):
-        client = self.client
-        name, *surname = order.reciever.nameAndSurname.split(' ')
+        rec = order.reciever
+        name, *surname = rec["nameAndSurname"].split(' ')
         surname = ' '.join(surname)
 
         #TODO: create dict with categories
         weight = 0.99
-        if ordes.reveiver.articleInfo.articleCategory.contains("Booster"):
+        article_info = rec.get("articleInfo") or {}
+        category = str(article_info.get("articleCategory") or "")
+        if "Booster" in category:
             weight = 1.99
-        elif ordes.reveiver.articleInfo.articleCategory.contains("Booster") and orders.reciever.articleInfo.articles >= 5:
+        elif "Booster" in category and int(article_info.get("articles") or 0) >= 5:
             weight = 2.99
 
         #TODO: required attributes should raise exceptions
+        email = _str_or_fallback(rec.get('email'), os.environ.get('PACKETA_FALLBACK_EMAIL'))
+        phone = _str_or_fallback(rec.get('phone'), os.environ.get('PACKETA_FALLBACK_PHONE'))
+        total = rec.get('total', 0) or 0
+        try:
+            total = float(total)
+        except Exception:
+            total = 0.0
         attributes = {
-                'number': order.orderId,
+                'number': str(order.idOrder),
                 'name': name,
                 'surname': surname,
-                'addressId': "NEED implementation",
-                'email': getattr(order.reciever, 'email', None),
-                'value': getattr(order.reciever, 'total', 0),
+                'addressId': int(os.environ.get('PACKETA_PICKUP_POINT_ID', '194')),
+                'email': email,
+                'phone': phone,
+                'value': total,
                 'weight': weight,
                 }
 
 
         if homeDelivery:
-            address = dict(parse_address(order.reciever.address))
+            raw_address = _str_or_fallback(rec.get("address"), "")
+            address = dict(parse_address(raw_address))
+            street = _str_or_fallback(address.get('road'), raw_address)
+            house_number = _str_or_fallback(address.get('house_number'), "")
+            if not house_number:
+                m = re.search(r'(\d+[\s\w/]*)$', raw_address)
+                if m:
+                    house_number = m.group(1).strip()
+            article_count = int((rec.get("articleInfo") or {}).get("articles") or 1)
+            # Use realistic minimum parcel dimensions; scale slightly with article count.
+            length = max(25, 20 + article_count)
+            width = 20
+            height = max(10, 5 + article_count)
             homeDeliveryAttributes = {
-                    'phone': order.reciever.phone,
-                    'addressId': TBD,
-                    'street': address.get('road'),
-                    'houseNumber': address.get('house_number'),
-                    'city': order.reciever.city,
-                    'zip': order.reciever.zipCode,
-                    # TODO real length and width
+                    'phone': attributes.get('phone'),
+                    'addressId': self._home_delivery_carrier_id(order),
+                    'street': street,
+                    'houseNumber': house_number,
+                    'city': _str_or_fallback(rec.get("city"), ""),
+                    'zip': _str_or_fallback(rec.get("zipCode"), ""),
                     'size': {
-                        'length': order.size.length,
-                        'width': order.size.width,
+                        'length': length,
+                        'width': width,
+                        'height': height,
                         }
                     }
             attributes.update(homeDeliveryAttributes)
 
-        try:
-            packetIdDetail = client.service.createPacket(self.api_key, attributes)
-            packetId = packetIdDetail.packetId
-        except Exception as e:
-            raise e
+        packetIdDetail = self.client.service.createPacket(self.api_key, attributes)
+        packetId = packetIdDetail.id
         return packetId
 
 
     def packets_labels_pdf(self, packetIds: list):
-        labes = client.service.packetsLabelsPdf(self.api_key, packetIds, self.OFFSET, self.FORMAT)
+        PacketIds = self.client.get_type('ns0:PacketIds')
+        labes = self.client.service.packetsLabelsPdf(self.api_key, PacketIds(id=packetIds), self.OFFSET, self.FORMAT)
         return labes
 
-    #This returns Best Delivery Solution, should look more into the carriers
     def packet_courier_number(self, packetId):
-        res = client.service.packetCourierNumberV2(self.api_key, packetId)
-        return res
+        res = self.client.service.packetCourierNumberV2(self.api_key, packetId)
+        return res.courierNumber
 
 
     def packet_courier_labels_pdf(self, packetIds: list):
-        packets = []
-        for id in packetIds:
-            packet = {
-                    "packetId": id,
-                    "courierNumber": self.packet_courier_number(id)
-                    }
-            packets.append(packet)
-
-        labels = client.service.packetsCourierLabelsPdf(self.api_key, packets, self.OFFSET,self.FORMAT)
+        PacketIdsWithCourierNumbers = self.client.get_type('ns0:PacketIdsWithCourierNumbers')
+        PacketIdWithCourierNumber = self.client.get_type('ns0:PacketIdWithCourierNumber')
+        packets = PacketIdsWithCourierNumbers(packetIdWithCourierNumber=[
+            PacketIdWithCourierNumber(packetId=p.packetId, courierNumber=p.courierNumber)
+            for p in packetIds
+        ])
+        labels = self.client.service.packetsCourierLabelsPdf(self.api_key, packets, self.OFFSET, self.FORMAT)
         return labels 

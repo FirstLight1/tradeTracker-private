@@ -19,11 +19,12 @@ import logging
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from . import generateInvoice, CONSTANTS, csrf
-from tradeTracker.services.models import SaleInput
+from tradeTracker.services.models import EPHSheetInfo, SaleInput, ReceiptResult, SaleResult, LabelResult, PacketaHomeDeliveryResult
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaReceiptService
 from tradeTracker.services.cfAuth import verify_token, require_api_token
 from tradeTracker.services.eph_service import EPHService
+from tradeTracker.services.packeta_service import PacketaService
 
 if os.environ.get("FLASK_ENV") != "production":
     from dotenv import load_dotenv
@@ -67,7 +68,7 @@ def validate_and_sanitize_payments(payments):
             if isinstance(payment.get('amount'), str):
                 amount = payment.get('amount').replace(',','.')
             else:
-amount = payment.get('amount')
+                amount = payment.get('amount')
         except Exception as e:
             logger.warning("Failed to normalize amount '%s': %s", payment.get('amount'), e)
             amount = payment.get('amount')
@@ -1606,8 +1607,9 @@ def _fixArticlesUpload(file):
     return pd.read_csv(StringIO(raw))
 
 def _parse_number(s):
+    s = str(s)
     if s.count(".") <= 1:
-        return str(s)
+        return s
     else:
         parts = s.split(".")
         return str("".join(parts[:-1]) + "." + parts[-1])
@@ -1686,11 +1688,11 @@ def process_sold_csv(files,db):
                     'sealedName': row['itemName'],
                     'quantity': 1,     
                     'marketValue': _parse_number(sale_price),
-                    'auctionId': row['auction_id'],
+                    'auctionId': int(row['auction_id']),
                 })
             elif row['item_type'] == 'card':
                 cards.append({
-                    'cardId': row['id'],
+                    'cardId': int(row['id']),
                     'cardName': row['itemName'],
                     'cardNum': '' if pd.isna(row['card_num']) else str(row['card_num']),
                     'marketValue': _parse_number(sale_price),
@@ -1717,15 +1719,15 @@ def process_sold_csv(files,db):
             "email": head['temporaryEmail'],
             "phone": head['phone'],
             "articleInfo" : {
-                "articleCategory": head['articleCategory'],
-                "articles": head['articles']
+                "articleCategory": head['articleCategories'],
+                "articles": int(head['articles'])
                 }
             }
 
         shipping = {
                 "shippingWay": "Doprava / Poštovné – samostatná služba",
                 "shippingPrice": round(float(_parse_number(head['totalValue'])) - float(_parse_number(head['articleValue'])), 2),
-                "shippinghMethod": str(head['shippingMethod']),
+                "shippingMethod": str(head['shippingMethod']),
                 }
 
         saleInput = SaleInput(
@@ -1801,10 +1803,9 @@ def download(token):
     )
 
 def _parse_shipping_method(method):
-    method: str = method.split('(')[0].strip()
+    base = method.split('(')[0].strip()
     match = re.search(r'(\d+)', method)
-    if match:
-        return method, match.group(1)
+    return base, match.group(1) if match else None
 
 @bp.route('/importCSV', methods=('POST',))
 @verify_token
@@ -1863,53 +1864,55 @@ def importCSV():
 
         invoices = []
         failed = []
-        order = defaultdict(dict)
+        order = defaultdict(str)
         eph = EPHService()
+        EPHSheets = []
         EPHlabels = []
         packeta = PacketaService()
-        #TODO: create data class for home delivery
         packetsData = {
                     "pickupPointPackets": [],
-                    "homeDeliveryPackets": {
-                        "packetId": [],
-                        "courierNumber": []
-                    }
+                    "homeDeliveryPackets": [],
                 }
-        PacketaLabels = []
+        packetaLabels = []
+
         for item in completed:
             try:
                 saleResult = SaleService(db, InvoiceReceiptService()).process_sale(item)
                 db.commit()
          
                 reciept = saleResult.receipt.raw
-                """
-                item.shipping.shippingMethod = item.shipping.shippingMethod.lower()
-                method, insurance = _parse_shipping_method(item.shipping.shippingMethod)
+
+                shipping_method = item.shipping["shippingMethod"].lower()
+                method, insurance = _parse_shipping_method(shipping_method)
                 # POSTA API
                 if method in CONSTANTS.PARCEL_CATEGORIES:
                     parcel_category = CONSTANTS.PARCEL_CATEGORIES[method]
+
                     if parcel_category not in order:
                         #EPHSERVIE creates sheet
                         sheet_id = eph.createSheet(parcel_category,  "post")
-                        order[parcel_category]['sheetId'] = sheet_id
-                        order[parcel_category]['values'] = [item]
-                    else:
-                        order[parcel_category]['values'].append(item)
-                    label = eph.addParcel(item.reciver, order[parcel_category]['sheetId'], insurance) 
+                        order[parcel_category] =  sheet_id
+
+                    label = eph.addParcel(item.reciever, order[parcel_category], insurance)
+                    label_filename = f"label_{reciept['filename']}"
+                    EPHSheets.append(EPHSheetInfo(sheetId=order[parcel_category], state=None, parcelId=label["id"], filename=label_filename, label=None))
+
+
                 #PACKETA
                 else:
+                    homeDelivery = "home delivery" in shipping_method
                     if homeDelivery:
-                        packetsData["homeDeliveryPackets"]["packetId"].append(packeta.create_packet(item, homeDelivery = True))
-                        packetsData["homeDeliveryPackets"]["courierNumber"].append(packeta.packet_courier_number(packetsData["homeDeliveryPackets"]["packetId"][-1]))
+                        packetId = packeta.create_packet(item, homeDelivery=True)
+                        courierNumber = packeta.packet_courier_number(packetId)
+                        home_res = PacketaHomeDeliveryResult(packetId, courierNumber)
+                        packetsData["homeDeliveryPackets"].append(home_res)
 
                     else:
-                        packeta.create_packet(item)
-                    pass
+                        packetId = packeta.create_packet(item)
+                        packetsData["pickupPointPackets"].append(packetId)
 
 
-                #EPHSERVICE download labels(reciept['filename'])
-                labels.append(label)
-                    """
+
             except Exception as e:
                 db.rollback()
                 logger.exception('Sold order %s failed | %s', item.idOrder, e)
@@ -1920,16 +1923,45 @@ def importCSV():
                 })
                 continue
             invoices.append((reciept['filename'], reciept['bytes']))
-        # download labels
+
+
+        #EPHSERVICE download labels(reciept['filename'])
+        for sheet in EPHSheets:
+            try:
+                EPHlabels.append(eph.download_label(sheet.parcelId, sheet.sheetId, sheet.filename))
+            except Exception as e:
+                logger.warning('Failed to download EPH label for sheet %s parcel %s: %s', sheet.sheetId, sheet.parcelId, e)
+
         # EPHSERVICE register sheets
+        for sheet_id in order.values():
+            try:
+                eph.register_sheet(sheet_id)
+            except Exception as e:
+                logger.warning('Failed to register EPH sheet %s: %s', sheet_id, e)
+
+        #PACKETA LABELS
+        if packetsData["pickupPointPackets"]:
+            try:
+                labels = packeta.packets_labels_pdf(packetsData["pickupPointPackets"])
+                packetaLabels.append(LabelResult(filename="packeta_pickup_labels.pdf", bytes=labels))
+            except Exception as e:
+                logger.warning('Failed to generate Packeta pickup labels: %s', e)
+        if packetsData["homeDeliveryPackets"]:
+            try:
+                labels = packeta.packet_courier_labels_pdf(packetsData["homeDeliveryPackets"])
+                packetaLabels.append(LabelResult(filename="packeta_home_labels.pdf", bytes=labels))
+            except Exception as e:
+                logger.warning('Failed to generate Packeta home-delivery labels: %s', e)
 
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
             for filename, bytes in invoices:
                 zip_file.writestr(filename, bytes)
                 #write labels to zip
-            #for label in labels:
-            #    zip_file.writestr(label.filename, label.bytes)
+            for label in EPHlabels:
+                zip_file.writestr(label.filename, label.bytes)
+            for label in packetaLabels:
+                zip_file.writestr(label.filename, label.bytes)
 
         token = uuid.uuid4().hex
         d = _downloads_dir()
