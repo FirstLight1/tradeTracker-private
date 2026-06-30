@@ -11,7 +11,8 @@ import unittest
 import json
 from tradeTracker import create_app
 from tradeTracker.db import get_db, init_db
-from tradeTracker.actions import validate_and_sanitize_payments, ALLOWED_PAYMENT_TYPES
+from tradeTracker.actions import validate_and_sanitize_payments
+from tradeTracker.CONSTANTS import ALLOWED_PAYMENT_TYPES
 
 
 class TestPaymentValidation(unittest.TestCase):
