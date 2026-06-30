@@ -63,13 +63,13 @@ def verify_token(f):
     return wrapper
 
 
-API_TOKEN = os.environ["CHROME_EXTENSION_API_TOKEN"]
+API_TOKEN = os.getenv("CHROME_EXTENSION_API_TOKEN")
 
 def require_api_token(f):
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-        if not token or not hmac.compare_digest(token, API_TOKEN):
+        if not API_TOKEN or not token or not hmac.compare_digest(token, API_TOKEN):
             abort(401)
         return f(*args, **kwargs)
     return wrapper
