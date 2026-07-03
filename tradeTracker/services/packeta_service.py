@@ -8,16 +8,34 @@ from tradeTracker.CONSTANTS import HEAVY_ARTICLE_CATEGORIES
 # method_token is the lowercase carrier hint from the shipping method name
 # (e.g. "hermes" from "Home delivery - Hermes").
 DEFAULT_HOME_DELIVERY_CARRIERS = {
-    ("de", "hermes"): 6373,          # DE Hermes HD
-    ("at", "dpd"): 6830,             # AT DPD HD
-    ("fr", "colis privé"): 16080,    # FR Colis Privé Direct HD
-    ("fr", "post"): 4309,            # FR Colissimo HD
-    ("it", "post"): 29192,           # IT Italian Post HD
-    ("be", "post"): 7909,            # BE Belgian Post HD
-    ("pl", "post"): 272,             # PL Polish Post 48 HD
-    ("lt", "post"): 18808,           # LT Lithuanian Post HD
-    ("es", "post"): 4638,            # ES Correos HD
-    ("dk", "post"): 4993,            # DK Post Nord HD
+    ("pl", "dpd"): 1406,           # PL DPD HD (3000 PLN bracket +0.20; cap ~3000 PLN = ~706 EUR)
+    ("cz", "packeta"): 106,        # CZ Packeta Home HD (free to 20 000 CZK; +17% fuel +toll)
+    ("sk", "packeta"): 131,        # SK Packeta Home HD (free to 2 000 EUR; +17% fuel +toll)
+    ("hu", "express one"): 3828,   # HU Express One HD (free to 100k HUF; 220k +2.60; HARD CAP 220k HUF)
+    ("ro", "cargus"): 590,         # RO Cargus HD (1.1% of value >35 RON; cap 3500 RON)
+    ("bg", "sameday"): 26066,      # BG Sameday HD (0.7% of value >25 EUR)
+    ("hr", "overseas"): 10618,     # HR Overseas HD (free to 700)
+    ("si", "express one"): 25004,  # SI Express One HD (free to 700)
+    ("at", "dpd"): 6830,           # AT DPD HD (free to 500; 700 +9.50)
+    ("gr", "acs"): 17465,          # GR ACS HD (free to 200) — low-value methods
+    ("gr", "elta courier"): 27954,    # GR Elta Courier HD (700 +8.30) — high-value method
+    ("de", "hermes"): 6373,        # DE Hermes HD (200 +2.00; 700 +6.50)
+    ("lt", "venipak"): 25982,      # LT Venipak HD (free to 320) — low-value method
+    ("lv", "venipak"): 25981,      # LV Venipak HD (free to 320) — low-value method
+    ("lt", "post"): 18808,         # LT Lithuanian Post HD (free to 500; 700 +5.10) — high-value
+    ("lv", "post"): 18807,         # LV Lithuanian Post HD (free to 500; 700 +5.10) — high-value
+    ("ee", "post"): 18805,         # EE Lithuanian Post HD (free to 500; 700 +5.10)
+    ("it", "bartolini"): 9103,     # IT Bartolini HD (200 +0.90; 700 only +3.20)
+    ("es", "mrw"): 4653,           # ES MRW HD (free to 100; 200 +2.70; 700 +9.40)
+    ("nl", "post"): 4329,          # NL Dutch Post HD (free to 100; 200 +2.60; 700 +9.10)
+    ("be", "belgian post"): 7909,  # BE Belgian Post HD (free to 500) — low tier (cheaper than Dutch+fee at 200)
+    ("be", "dutch post"): 4832,    # BE Dutch Post HD (700 +9.50) — high tier (cheaper base at 700)
+    ("fr", "colissimo"): 4309,     # FR Colissimo HD (free to 150; 300 +2.60; 700 +6.10)
+    ("pt", "mrw"): 4655,           # PT MRW HD (free to 100; 200 +2.70; 700 +9.40)
+    ("dk", "post nord"): 4993,     # DK Post Nord HD (3700 DKK +0.70; 5200 DKK +9.40 = cap ~697)
+    ("lu", "post"): 8125,          # LU Luxembourg Post HD (free to 100; 200 +2.60; 700 +9.00)
+    ("fi", "matkahuolto"): 26985,  # FI Matkahuolto HD (free to 320; 700 +9.40)
+    ("se", "post nord"): 4827,     # SE Post Nord HD (5000 SEK +0.70; 7500 SEK +8.90 = cap ~676)
 }
 
 
@@ -47,16 +65,11 @@ class PacketaService:
         if country == "d":
             country = "de"
 
-        method = str(order.shipping.get("shippingMethod") or "").lower()
-        method_token = ""
-        if "hermes" in method:
-            method_token = "hermes"
-        elif "colis privé" in method or "colis prive" in method:
-            method_token = "colis privé"
-        elif "dpd" in method:
-            method_token = "dpd"
-        elif "post" in method:
-            method_token = "post"
+        method = str(order.shipping.get("shippingMethod") or "").lower().strip()
+        method = re.sub(r'^home\s*delivery[\s\-:]*', '', method)
+        method = method.split('(')[0]
+        method = re.sub(r'\s+[a-z]{2}$', '', method)
+        method_token = method.strip()
 
         carrier_id = DEFAULT_HOME_DELIVERY_CARRIERS.get((country, method_token))
         if carrier_id is None:
@@ -71,14 +84,14 @@ class PacketaService:
         #TODO: create dict with categories halfway there
         weight = 0.99
         article_info = rec.get("articleInfo") or {}
-        category = str(article_info.get("articleCategory") or "")
-        if category in HEAVY_ARTICLE_CATEGORIES:
+        categories = [c.strip().lower() for c in str(article_info.get("articleCategory") or "").split(',')]
+        if len(categories) > 1 and 'singles' in categories:
             weight = 1.99
-        elif category in HEAVY_ARTICLE_CATEGORIES  and int(article_info.get("articles") or 0) >= 5:
+        elif len(categories) > 1 and int(article_info.get("articles") or 0) >= 5:
             weight = 2.99
 
-        email = _str_or_fallback(rec.get('email'))
-        phone = _str_or_fallback(rec.get('phone'))
+        email = _str_or_fallback(rec.get('email'), "")
+        phone = _str_or_fallback(rec.get('phone'), "")
         total = rec.get('total', 0) or 0
         try:
             total = float(total)
@@ -108,9 +121,9 @@ class PacketaService:
                     house_number = m.group(1).strip()
             article_count = int((rec.get("articleInfo") or {}).get("articles") or 1)
             # Use realistic minimum parcel dimensions; scale slightly with article count.
-            length = max(25, 20 + article_count)
-            width = 20
-            height = max(10, 5 + article_count)
+            length = 600 
+            width = 300 
+            height = 200 
             homeDeliveryAttributes = {
                     'phone': attributes.get('phone'),
                     'addressId': self._home_delivery_carrier_id(order),

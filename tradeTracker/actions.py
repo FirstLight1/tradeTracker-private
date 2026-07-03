@@ -1633,8 +1633,10 @@ def process_sold_csv(files,db):
     articles = articlesUpload.stream.read().decode('utf-8')
     
     articles = _fixArticlesUpload(articles)
+    articles = articles.drop_duplicates(subset=['idOrder', 'pos'])
     articlesExpanded = articles.loc[articles.index.repeat(articles['items'])].reset_index(drop=True)
     articlesExpanded['items'] = 1
+
     orders = pd.read_csv(StringIO(orders))
     orders = checkIdOrder(db, orders)
     merged = articlesExpanded.merge(orders, on='idOrder', how='left', suffixes=('_art', '_ord'), validate='many_to_one')
@@ -1645,11 +1647,11 @@ def process_sold_csv(files,db):
     ids = merged['cardmarketId'].dropna().tolist()
     placehoders = ','.join(['?'] * len(ids))
 
-    cur = db.execute("SELECT id, name as itemName, NULL as card_num, quantity, market_value, auction_id, 'sealed' as item_type, cardMarketID as cardmarketId "
+    cur = db.execute("SELECT id, name as itemName, NULL as card_num, quantity, market_value, auction_id, 'sealed' as item_type, 'NM' as condition, cardMarketID as cardmarketId "
                'FROM sealed '
               f'WHERE sale_id IS NULL AND cardMarketID IN ({placehoders}) '
                'UNION ALL '
-               "SELECT c.id as id, card_name as itemName, card_num, NULL as quantity, market_value, auction_id, 'card' as item_type, cardMarketID as cardmarketId "
+               "SELECT c.id as id, card_name as itemName, card_num, NULL as quantity, market_value, auction_id, 'card' as item_type, c.condition as condition, cardMarketID as cardmarketId "
                'FROM cards c '
                'LEFT JOIN sale_items si ON si.card_id = c.id '
               f'WHERE si.card_id IS NULL AND cardMarketID IN ({placehoders}) '
@@ -1658,8 +1660,9 @@ def process_sold_csv(files,db):
 
     merged['_match_seq'] = merged.groupby('cardmarketId').cumcount()
     allItems['_match_seq'] = allItems.groupby('cardmarketId').cumcount()
+    allItems['condition'] = allItems['condition'].replace(CONSTANTS.CONDITION_DICT)
 
-    wantedItems = merged.merge(allItems, on=['cardmarketId', '_match_seq'], how='left', suffixes=('_mer', '_db'), validate='one_to_one')
+    wantedItems = merged.merge(allItems, on=['cardmarketId', 'condition' ,'_match_seq'], how='left', suffixes=('_mer', '_db'), validate='one_to_one')
     wantedItems = wantedItems.drop(columns='_match_seq')
     wantedItems['matched'] = wantedItems['item_type'].notna()
 
