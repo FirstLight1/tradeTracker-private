@@ -378,7 +378,7 @@ def loadAuctions():
 def loadSealed():
     db = get_db()
 
-    sealed_products =  db.execute("SELECT 's' || id as sid, name, quantity, price, market_value, date FROM sealed WHERE sale_id is NULL AND auction_id is NULL").fetchall()
+    sealed_products =  db.execute("SELECT 's' || id as sid, name, quantity, price, market_value, date FROM sealed WHERE sale_id is NULL AND auction_id is NULL AND opened = 0").fetchall()
     return jsonify({'status':'success', 'data' : [dict(product) for product in sealed_products]})
 
 @bp.route('/addSealed', methods=('POST',))
@@ -422,7 +422,7 @@ def loadSealedByAuction(auction_id):
     db = get_db()
     sealed_items = db.execute(
         "SELECT 's' || id as sid, name, price, market_value, date, quantity FROM sealed "
-        "WHERE auction_id = ? AND sale_id is NULL", 
+        "WHERE auction_id = ? AND sale_id is NULL AND opened = 0", 
         (auction_id,)
     ).fetchall()
     return jsonify([dict(item) for item in sealed_items]), 200
@@ -441,7 +441,7 @@ def invertoryValue():
     cur = db.cursor()
     cardMarketValue = cur.execute('SELECT SUM(market_value) FROM cards c LEFT JOIN sale_items si ON c.id = si.card_id WHERE si.card_id IS NULL').fetchone()[0]
     bulkValue = cur.execute('SELECT SUM(total_price) FROM bulk_items').fetchone()[0]
-    sealedValue = cur.execute('SELECT SUM(market_value * quantity) FROM sealed WHERE sale_id IS NULL').fetchone()[0]
+    sealedValue = cur.execute('SELECT SUM(market_value * quantity) FROM sealed WHERE sale_id IS NULL AND opened = 0').fetchone()[0]
     value = (cardMarketValue if cardMarketValue is not None else 0) + (bulkValue if bulkValue is not None else 0) + (sealedValue if sealedValue is not None else 0)
 
     return jsonify({'status': 'success','value': value}),200
@@ -1271,8 +1271,72 @@ def updatePaymentMethod(auction_id):
 
     return jsonify({'status': 'success'}), 200
 
+@bp.route('/openSealed/<int:auction_id>', methods=('POST',))
+@verify_token
+def openSealed(auction_id):
+    db = get_db()
+    data = request.get_json()
+    openedItem = data.get('openedItem')
+    sealed = data.get('sealed')
+    cards = data.get('cards')
+
+    print(data)
+    # marketValue may be None — if so, the user needs therapy, but we tolerate it as 0.
+    newTotal = sum(float(c.get('marketValue')) or 0.0 for c in cards) + sum(float(s.get('marketValue')) or 0.0 for s in sealed)
+    if newTotal == 0:
+        return jsonify({'status': 'error', 'message': 'Opened items need to have market value, Error code: Ax26'}), 400
+
+    priceDiff = newTotal - float(openedItem.get('initialValue'))
+
+    try:
+        for card in cards:
+            if card['marketValue'] is not None and card['marketValue'] > 0:
+                discount = (card['marketValue'] / newTotal) * priceDiff
+                new_price = round(card['marketValue'] - discount, 2)
+                db.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
+                ' VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (
+                    card.get('cardName'),
+                    card.get('cardNum'),
+                    card.get('condition'),
+                    new_price,
+                    card.get('marketValue'),
+                    auction_id,
+                    card.get('cardmarketId')
+                ))
+
+        # Update sealed items proportionally
+        for item in sealed:
+            if item['marketValue'] is not None and item['marketValue'] > 0:
+                discount = (item['marketValue'] / newTotal) * priceDiff
+                new_price = round(item['marketValue'] - discount, 2)
+                db.execute('INSERT INTO sealed (name, price, market_value, date, auction_id, cardmarketId)'
+                           ' VALUES (?, ?, ?, ?, ?, ?)',
+                            (
+                                item.get('cardName'),
+                                new_price,
+                                item.get('marketValue'),
+                                datetime.datetime.now(datetime.timezone.utc),
+                                auction_id,
+                                item.get('cardmarketId')
+                             ))
+
+    except Exception as e:
+        db.rollback()
+        logger.exception(
+            'Database error while adjusting cards | auction_id: %s | error: %s',
+            auction_id,
+            e,
+        )
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax29'}), 400
+
+    db.execute('UPDATE sealed SET opened = 1 WHERE auction_id = ? AND id = ?', (auction_id, openedItem.get('id').replace('s', '')))
+    db.commit()
+
+    return jsonify({'status': 'success'}), 200
 
 
+# TODO: these two routes do basically the same thing, could be merged at some point
 @bp.route('/recalculateCardPrices/<int:auction_id>/<string:new_auction_price>', methods=('POST',))
 @verify_token
 def recalculateCardPrices(auction_id, new_auction_price):
@@ -1300,7 +1364,7 @@ def recalculateCardPrices(auction_id, new_auction_price):
     sealed_items = db.execute(
         'SELECT s.id, s.market_value, s.sale_id,s.quantity '
         'FROM sealed s '
-        'WHERE s.auction_id = ?',
+        'WHERE s.auction_id = ? AND s.opened = 0',
         (auction_id,)
     ).fetchall()
 
@@ -1649,7 +1713,7 @@ def process_sold_csv(files,db):
 
     cur = db.execute("SELECT id, name as itemName, NULL as card_num, quantity, market_value, auction_id, 'sealed' as item_type, 'NM' as condition, cardMarketID as cardmarketId "
                'FROM sealed '
-              f'WHERE sale_id IS NULL AND cardMarketID IN ({placehoders}) '
+              f'WHERE sale_id IS NULL AND opened = 0 AND cardMarketID IN ({placehoders}) '
                'UNION ALL '
                "SELECT c.id as id, card_name as itemName, card_num, NULL as quantity, market_value, auction_id, 'card' as item_type, c.condition as condition, cardMarketID as cardmarketId "
                'FROM cards c '
@@ -2042,7 +2106,7 @@ def search():
         sealed_matches = db.execute(
             f"SELECT 's' || s.id as sid, s.name, s.market_value, s.auction_id,SUM(s.quantity) as available_count, a.auction_name FROM sealed s "
             "LEFT JOIN auctions a ON s.auction_id = a.id "
-            f"WHERE ({sealed_where_clause}) AND s.sale_id IS NULL "
+            f"WHERE ({sealed_where_clause}) AND s.sale_id IS NULL AND s.opened = 0 "
             f"GROUP BY UPPER(s.name) ORDER BY s.id ASC LIMIT 8",
             sealed_params
         ).fetchall()

@@ -108,32 +108,35 @@ export function appendEuroSign(value, dataset) {
     }
 }
 
-export function createNewCard(newCard){
-     newCard.querySelectorAll('input').forEach(el =>{
-            el.value = '';
-        });
-
-        newCard.querySelectorAll('select').forEach(sel => {
+export function createNewItem(node, { triggerSelector = '.marketValue', onTrigger = (el) => window.handleCardInput(el) } = {}) {
+    node.querySelectorAll('input').forEach(el => {
+        el.value = '';
+    });
+    node.querySelectorAll('select').forEach(sel => {
         sel.selectedIndex = 1;
-        });
-
-        const newCardName = newCard.querySelector('.marketValue');
-        newCardName.addEventListener('input', function () {
-        window.handleCardInput(this);
-        });
-        return newCard;
+    });
+    const trigger = node.querySelector(triggerSelector);
+    if (trigger) {
+        trigger.addEventListener('input', () => onTrigger(trigger));
+    }
+    return node;
 }
 
+export function createNewCard(newCard) {
+    return createNewItem(newCard);
+}
 
-window.handleCardInput = function (input){
-    const container = document.querySelector(".cards-container")
-    const cards = document.querySelectorAll(".card")
-    const currentCard = input.closest('.card');
-    const lastCard = cards[cards.length - 1];
+window.handleCardInput = function (input, { itemSelector = '.card', container = document.querySelector('.cards-container'), triggerSelector = '.marketValue' } = {}) {
+    const items = container.querySelectorAll(itemSelector);
+    const current = input.closest(itemSelector);
+    const last = items[items.length - 1];
 
-    if(currentCard == lastCard && input.value.trim() !== ''){
-        const newCard = createNewCard(lastCard.cloneNode(true));
-        container.appendChild(newCard)
+    if (current === last && input.value.trim() !== '') {
+        const newNode = createNewItem(last.cloneNode(true), {
+            triggerSelector,
+            onTrigger: (el) => window.handleCardInput(el, { itemSelector, container, triggerSelector })
+        });
+        container.appendChild(newNode);
     }
 }
 
