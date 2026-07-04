@@ -2312,11 +2312,11 @@ async function loadAuctionContent(button) {
                         });
 
                         sealedDiv.innerHTML = `
+                            <p class='sealed-quantity'>${DOMPurify.sanitize(sealedItem.quantity)}</p>
                             <p class="sealed-name">${DOMPurify.sanitize(sealedItem.name)}</p>
                             <p class="sealed-price">${DOMPurify.sanitize(sealedItem.price)}€</p>
                             <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
-                            <p class="sealed-date">${DOMPurify.sanitize(formatedDate)}</p>
                             <button class="open-sealed-item" data-sid="${sealedItem.sid}">Open</button>
                             <button class="add-to-cart-sealed" data-sid="${sealedItem.sid}">Add to cart</button>
                             <button class="delete-sealed-item" data-sid="${sealedItem.sid}">Delete</button>

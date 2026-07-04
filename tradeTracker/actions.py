@@ -1275,12 +1275,12 @@ def updatePaymentMethod(auction_id):
 @verify_token
 def openSealed(auction_id):
     db = get_db()
+    cur = db.cursor()
     data = request.get_json()
     openedItem = data.get('openedItem')
     sealed = data.get('sealed')
     cards = data.get('cards')
 
-    print(data)
     # marketValue may be None — if so, the user needs therapy, but we tolerate it as 0.
     newTotal = sum(float(c.get('marketValue')) or 0.0 for c in cards) + sum(float(s.get('marketValue')) or 0.0 for s in sealed)
     if newTotal == 0:
@@ -1293,7 +1293,7 @@ def openSealed(auction_id):
             if card['marketValue'] is not None and card['marketValue'] > 0:
                 discount = (card['marketValue'] / newTotal) * priceDiff
                 new_price = round(card['marketValue'] - discount, 2)
-                db.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
+                cur.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
                 ' VALUES (?, ?, ?, ?, ?, ?, ?)',
                 (
                     card.get('cardName'),
@@ -1305,12 +1305,11 @@ def openSealed(auction_id):
                     card.get('cardmarketId')
                 ))
 
-        # Update sealed items proportionally
         for item in sealed:
             if item['marketValue'] is not None and item['marketValue'] > 0:
                 discount = (item['marketValue'] / newTotal) * priceDiff
                 new_price = round(item['marketValue'] - discount, 2)
-                db.execute('INSERT INTO sealed (name, price, market_value, date, auction_id, cardmarketId)'
+                cur.execute('INSERT INTO sealed (name, price, market_value, date, auction_id, cardmarketId)'
                            ' VALUES (?, ?, ?, ?, ?, ?)',
                             (
                                 item.get('cardName'),
@@ -1329,8 +1328,28 @@ def openSealed(auction_id):
             e,
         )
         return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax29'}), 400
+    try:
+        row = db.execute("SELECT * FROM sealed WHERE id = ?", (openedItem.get('id').replace('s', ''),)).fetchone()
+        print(type(row))
+        print(row)
+        if row['quantity'] == 1:
+            cur.execute('UPDATE sealed SET opened = 1 WHERE auction_id = ? AND id = ?', (auction_id, openedItem.get('id').replace('s', '')))
+        else:
+           cur.execute("UPDATE sealed SET quantity = quantity - 1 WHERE id = ?", (openedItem.get('id').replace('s', ''),))
+           cur.execute("INSERT INTO sealed (name, price, market_value, date, auction_id, cardmarketId) VALUES (?, ?, ?, ?, ?, ?)",
+                       (row['name'], row['price'], row['market_value'], row['date'], auction_id, row['cardmarketId']))
+           cur.execute("UPDATE sealed SET opened = 1 WHERE auction_id = ? AND id = ?", (auction_id, cur.lastrowid))
+    except Exception as e:
+        db.rollback()
+        logger.exception(
+            'Database error while adjusting cards | auction_id: %s | error: %s',
+            auction_id,
+            e,
+        )
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax29'}), 400
 
-    db.execute('UPDATE sealed SET opened = 1 WHERE auction_id = ? AND id = ?', (auction_id, openedItem.get('id').replace('s', '')))
+
+
     db.commit()
 
     return jsonify({'status': 'success'}), 200
