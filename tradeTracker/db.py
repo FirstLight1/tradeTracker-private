@@ -157,6 +157,7 @@ CREATE TABLE cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     auction_id INTEGER NOT NULL,
     card_name TEXT NOT NULL,
+    normalized_name TEXT,
     card_num TEXT,
     condition TEXT,
     card_price REAL,
@@ -169,6 +170,7 @@ CREATE TABLE cards (
 CREATE INDEX idx_cards_card_name ON cards(card_name);
 CREATE INDEX idx_cards_card_num ON cards(card_num);
 CREATE INDEX idx_cards_auction_id ON cards(auction_id);
+CREATE INDEX idx_cards_normalized_name ON cards(normalized_name);
 
 CREATE TABLE sales (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -237,6 +239,7 @@ CREATE INDEX idx_bulk_sales_sale_id ON bulk_sales(sale_id);
 CREATE TABLE sealed(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
+    normalized_name TEXT,
     quantity INTEGER NOT NULL DEFAULT 1,
     price REAL,
     market_value REAL,
@@ -250,6 +253,7 @@ CREATE TABLE sealed(
 
 CREATE INDEX idx_sealed_name ON sealed(name);
 CREATE INDEX idx_sealed_auction_id ON sealed(auction_id);
+CREATE INDEX idx_sealed_normalized_name ON sealed(normalized_name);
 
 CREATE TABLE collection(
     id INTEGER PRIMARY KEY AUTOINCREMENT,

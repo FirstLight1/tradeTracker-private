@@ -29,6 +29,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from tradeTracker import create_app
 from tradeTracker.db import get_db, init_db
+from tradeTracker.actions import normalize
 
 
 ORDERS_HEADER = (
@@ -119,9 +120,9 @@ class SoldCSVImportTestCase(unittest.TestCase):
 
         def add_card(cmid, name, num, price, mv):
             db.execute(
-                'INSERT INTO cards (auction_id, card_name, card_num, condition, '
-                'card_price, market_value, cardMarketID) VALUES (2,?,?,?,?,?,?)',
-                (name, num, 'NM', price, mv, str(cmid)),
+                'INSERT INTO cards (auction_id, card_name, normalized_name, card_num, condition, '
+                'card_price, market_value, cardMarketID) VALUES (2,?,?,?,?,?,?,?)',
+                (name, normalize(name), num, 'NM', price, mv, str(cmid)),
             )
 
         add_card(900001, 'Cetoddle', '1', 1.0, 1.5)
@@ -132,9 +133,9 @@ class SoldCSVImportTestCase(unittest.TestCase):
 
         # Sealed product matched by cardMarketID; FIFO/inventory check is by name.
         db.execute(
-            'INSERT INTO sealed (name, quantity, price, market_value, date, '
-            'auction_id, cardMarketID) VALUES ("Booster Bundle", 3, 4.0, 5.0, '
-            '"2026-01-01", 2, "900003")'
+            'INSERT INTO sealed (name, normalized_name, quantity, price, market_value, date, '
+            'auction_id, cardMarketID) VALUES (?, ?, 3, 4.0, 5.0, "2026-01-01", 2, "900003")',
+            ('Booster Bundle', normalize('Booster Bundle')),
         )
         db.commit()
 

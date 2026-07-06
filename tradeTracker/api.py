@@ -56,18 +56,19 @@ def cardMarketTable():
 
                     cardsToInsert.append((
                         card.get('name', None),
+                        actions.normalize(card.get('name')),
                         card.get('num', None),
                         card.get('condition', None),
                         buyPrice,
                         marketValue,
                         auction_id
                     ))
-            
+        
             # Execute the insert ONCE after building the full list
             db.executemany(
-                'INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id) VALUES (?, ?, ?, ?, ?, ?)',
+                'INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 cardsToInsert
-            )            
+            )
 
             sealedToInsert = []
             for item in sealed:
@@ -81,6 +82,7 @@ def cardMarketTable():
 
                 sealedToInsert.append((
                     item.get('name', None),
+                    actions.normalize(item.get('name')),
                     item.get('count'),
                     buyPrice,
                     marketValue,
@@ -89,7 +91,7 @@ def cardMarketTable():
                 ))
 
             db.executemany(
-                'INSERT INTO sealed (name, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?)', sealedToInsert
+                'INSERT INTO sealed (name, normalized_name, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?)', sealedToInsert
             )
 
             db.commit()
