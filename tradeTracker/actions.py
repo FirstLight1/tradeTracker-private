@@ -1332,7 +1332,7 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
     return None
 
 def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
-    if cards is not None:
+    if cards != []:
         try:
             cur.execute("INSERT into auctions (auction_name, auction_price, date_created, payment_method) VALUES (?, ?, ?, ?)",
                         ("Opened sealed", 0, datetime.datetime.now(datetime.timezone.utc), "[]"))

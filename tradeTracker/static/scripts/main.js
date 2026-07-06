@@ -2316,8 +2316,10 @@ async function loadAuctionContent(button) {
                             <p class='sealed-quantity'>${DOMPurify.sanitize(sealedItem.quantity)}</p>
                             <p class="sealed-name">${DOMPurify.sanitize(sealedItem.name)}</p>
                             <p class="sealed-price">${DOMPurify.sanitize(sealedItem.price)}€</p>
+                            <p class="VAT-sealed">${(Number(DOMPurify.sanitize(sealedItem.price)) / 1.23).toFixed(2)}</p>
                             <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
+                            <p class="sealed-date">${DOMPurify.sanitize(formatedDate)}</p>
                             <button class="open-sealed-item" data-sid="${sealedItem.sid}">Open</button>
                             <button class="add-to-cart-sealed" data-sid="${sealedItem.sid}">Add to cart</button>
                             <button class="delete-sealed-item" data-sid="${sealedItem.sid}">Delete</button>
@@ -2744,15 +2746,11 @@ async function loadSealed(viewButton) {
                         addSealedToCart(sealedData, sealedData.sid, null, 1, available)
                     });
 
-                    const sealedContainer = document.querySelector('.sealed-container');
-                    const openSealedButtons = sealedContainer.querySelectorAll('.open-sealed');
-                    openSealedButtons.forEach((button) => {
-                        button.addEventListener('click', () => {
-                            const sealedDiv = button.closest('.sealed-item');
-                            const sid = sealedDiv.getAttribute('sid');
-                            const initialValue = sealedDiv.querySelector('.sealed-market-value').textContent.replace('€', '');
-                            createSealedModal(sid, 0, initialValue);
-                        });
+                    const openSealedButton = sealedDiv.querySelector('.open-sealed');
+                    openSealedButton.addEventListener('click', () => {
+                        const sid = sealedDiv.getAttribute('sid');
+                        const initialValue = sealedDiv.querySelector('.sealed-market-value').textContent.replace('€', '');
+                        createSealedModal(sid, 0, initialValue);
                     });
 
 
