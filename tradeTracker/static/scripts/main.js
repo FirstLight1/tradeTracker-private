@@ -2142,9 +2142,17 @@ async function loadAuctionContent(button) {
                         ${renderField(card.market_value ? DOMPurify.sanitize(card.market_value) + '€' : null, 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
                         ${renderField(card.card_price !== null && card.market_value !== null ? (card.market_value - card.card_price).toFixed(2) + '€' : ' ', 'text', ['card-info', 'profit'], 'profit', true)}
                         <p></p>
-                        <button class="add-to-cart">Add to cart</button>
+                        <div class="item-options">
+                            <div class="item-options-list">
+                                <div class="item-option">
+                                    <button class="add-to-cart">Add to cart</button>
+                                </div>
+                                <div class="item-option">
+                                    <button class="delete-card" data-id="${safeCardId}">Delete</button>
+                                </div>
+                            </div>
+                        </div>
                         <span hidden class="card-id">${safeCardId}</span>
-                        <button class=delete-card data-id="${safeCardId}">Delete</button>
                     `;
                         cardsContainer.appendChild(cardDiv);
                     });
@@ -2320,9 +2328,19 @@ async function loadAuctionContent(button) {
                             <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
                             <p class="sealed-date">${DOMPurify.sanitize(formatedDate)}</p>
-                            <button class="open-sealed-item" data-sid="${sealedItem.sid}">Open</button>
-                            <button class="add-to-cart-sealed" data-sid="${sealedItem.sid}">Add to cart</button>
-                            <button class="delete-sealed-item" data-sid="${sealedItem.sid}">Delete</button>
+                            <div class="item-options">
+                                <div class="item-options-list">
+                                    <div class="item-option">
+                                        <button class="open-sealed-item" data-sid="${sealedItem.sid}">Open</button>
+                                    </div>
+                                    <div class="item-option">
+                                        <button class="add-to-cart-sealed" data-sid="${sealedItem.sid}">Add to cart</button>
+                                    </div>
+                                    <div class="item-option">
+                                        <button class="delete-sealed-item" data-sid="${sealedItem.sid}">Delete</button>
+                                    </div>
+                                </div>
+                            </div>
                         `;
 
                         cardsContainer.insertBefore(sealedDiv, cardsContainer.querySelector('.button-container'));
@@ -2735,9 +2753,19 @@ async function loadSealed(viewButton) {
                         <p class='market-value-sealed'>${DOMPurify.sanitize(sealedData.market_value)}</p>
                         <p class='margin'>${margin}</p>
                         <p class='add-date'>${formatedDate}</p>
-                        <button class='open-sealed'>Open</button>
-                        <button class='add-to-cart'>Add to cart</button>
-                        <button class='delete-sealed'>Delete</button>
+                        <div class="item-options">
+                            <div class="item-options-list">
+                                <div class="item-option">
+                                    <button class='open-sealed'>Open</button>
+                                </div>
+                                <div class="item-option">
+                                    <button class='add-to-cart'>Add to cart</button>
+                                </div>
+                                <div class="item-option">
+                                    <button class='delete-sealed'>Delete</button>
+                                </div>
+                            </div>
+                        </div>
                         `
 
                     const addToCart = sealedDiv.querySelector('.add-to-cart');
@@ -2913,13 +2941,24 @@ async function loadAuctions() {
                     <div class="payment-method">${paymentDisplay}</div>
                     <button class="edit-payments-btn">Edit</button>
                 </div>
-                <button class="view-auction" data-id="${safeAuctionId}">View</button>
-                <button class="delete-auction" data-id="${safeAuctionId}">Delete</button>
-                <div class="auction-link-cell">
-                    ${auction.sale_id == null
+                <div>
+                    <button class="view-auction" data-id="${safeAuctionId}">View</button>
+                </div>
+                <div class="auction-options">
+                    <div class="auction-options-list">
+                        <div class="auction-option">
+                            <button class="delete-auction" data-id="${safeAuctionId}">Delete</button>
+                        </div>
+                        <div class="auction-option">
+                            <button class="merge-button">Merge</button>
+                        </div>
+                        <div class="auction-option auction-link-cell">
+                            ${auction.sale_id == null
                     ? `<select class='barter-id-select'><option value="null">Select Invoice Number to link</option></select>`
                     : `<a class="sale-link" href="/sold#${safeSaleId}">Invoice Number: ${DOMPurify.sanitize(invoiceNumber)}</a>`
                 }
+                        </div>
+                    </div>
                 </div>
                 <div class="cards-container">
                     <!-- Cards will be loaded here -->
