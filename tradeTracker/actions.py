@@ -8,6 +8,7 @@ import uuid
 import time
 import csv
 import datetime
+import unicodedata
 from Crypto.Cipher import AES
 import os
 import fpdf
@@ -39,6 +40,12 @@ dictKeys = ['Product ID', 'Name', 'Condition', 'Price', 'Card Number']
 li = []
 dataList = []
 latest = None
+
+def normalize(s: str | None) -> str | None:
+    if s is None:
+        return None
+    # NFD decomposes é → e + combining accent, then encode/decode drops the accent
+    return unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode("ascii").upper()
 
 def get_bulk_item_unit_price(item_type):
     return CONSTANTS.BULK_ITEM_UNIT_PRICES.get(item_type, 0)
@@ -196,10 +203,11 @@ def add():
         auction_id = cursor.lastrowid
         for card in cardsArr[1:]:
             db.execute(
-                'INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id) '
-                'VALUES (?, ?, ?, ?, ?, ?)',
+                'INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id) '
+                'VALUES (?, ?, ?, ?, ?, ?, ?)',
                 (
                     card.get('cardName'),
+                    normalize(card.get('cardName')),
                     card.get('cardNum'),
                     card.get('condition'),
                     card.get('buyPrice'),
@@ -391,7 +399,7 @@ def addSealed():
         marketValue = float(sealed.get("market_value").replace(',','.')) if sealed.get("market_value") is not None else 0
         price = float(sealed.get("price").replace(',','.')) if sealed.get("price") is not None else marketValue * 0.80;
         date = sealed.get('dateAdded') if sealed.get('dateAdded') is not None else datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
-        db.execute("INSERT INTO sealed(name, price, market_value, date) VALUES (?, ?, ?, ?)",(sealed.get("name"), price, marketValue, date))
+        db.execute("INSERT INTO sealed(name, normalized_name, price, market_value, date) VALUES (?, ?, ?, ?, ?)",(sealed.get("name"), normalize(sealed.get("name")), price, marketValue, date))
     db.commit()
     return jsonify({'status':'success'}),200
 
@@ -511,10 +519,11 @@ def addToExistingAuction(auction_id):
         db = get_db()
         try:
             for card in cards:
-                db.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id)'
-                ' VALUES (?, ?, ?, ?, ?, ?)',
+                db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id)'
+                ' VALUES (?, ?, ?, ?, ?, ?, ?)',
                 (
                     card.get('cardName'),
+                    normalize(card.get('cardName')),
                     card.get('cardNum'),
                     card.get('condition'),
                     card.get('buyPrice'),
@@ -531,8 +540,8 @@ def addToExistingAuction(auction_id):
                     price = float(item.get("price").replace(',','.')) if item.get("price") is not None else marketValue * 0.80
                     date = item.get('date') if item.get('date') is not None else datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
                     db.execute(
-                        "INSERT INTO sealed(name, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?)",
-                        (item.get("name"),item.get("quantity"), price, marketValue, date, auction_id)
+                        "INSERT INTO sealed(name, normalized_name, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (item.get("name"), normalize(item.get("name")),item.get("quantity"), price, marketValue, date, auction_id)
                     )
 
             bulk = data.get('bulk')
@@ -1216,10 +1225,11 @@ def addToSingles():
         data = request.get_json()
 
         for card in data[1:]:
-            db.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id)'
-                    'VALUES (?, ?, ?, ?, ?, ?)',
+            db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id)'
+                    'VALUES (?, ?, ?, ?, ?, ?, ?)',
                     (
                         card.get('cardName'),
+                        normalize(card.get('cardName')),
                         card.get('cardNum'),
                         card.get('condition'),
                         card.get('buyPrice'),
@@ -1563,10 +1573,11 @@ def _create_inventory(db, dataList=None):
 
         if isSealed:
             try:
-                db.execute('INSERT INTO sealed (name, quantity, price, market_value, date, auction_id, cardmarketId)'
-                    'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                db.execute('INSERT INTO sealed (name, normalized_name, quantity, price, market_value, date, auction_id, cardmarketId)'
+                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                     (
                         item.get('card_name'),
+                        normalize(item.get('card_name')),
                         item.get('quantity'),
                         item.get('buy_price'),
                         item.get('market_value'),
@@ -1585,10 +1596,11 @@ def _create_inventory(db, dataList=None):
             for i in range(quantity):
                 try:
                     buyPrice = round(float(item.get('market_value')) * 0.8, 2)
-                    db.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
-                        'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
+                        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                         (
                             item.get('card_name'),
+                            normalize(item.get('card_name')),
                             item.get('card_num'),
                             item.get('condition'),
                             buyPrice,
@@ -1994,11 +2006,12 @@ def search():
                 card_cart_ids.append(cart_id)
         
         # Build WHERE clause for CARDS (alias 'c')
+        # # TODO: remove upper from like
         card_where_conditions = []
         card_params = []
         for term in search_terms:
             card_where_conditions.append(
-                "UPPER(COALESCE(c.card_name, '') || ' ' || COALESCE(c.card_num, '')) LIKE UPPER(?)"
+                "UPPER(COALESCE(c.normalized_name, '') || ' ' || COALESCE(c.card_num, '')) LIKE UPPER(?)"
             )
             card_params.append(f'%{term}%')
         
@@ -2015,7 +2028,7 @@ def search():
         sealed_where_conditions = []
         sealed_params = []
         for term in search_terms:
-            sealed_where_conditions.append("UPPER(COALESCE(s.name, '')) LIKE UPPER(?)")
+            sealed_where_conditions.append("UPPER(COALESCE(s.normalized_name, '')) LIKE UPPER(?)")
             sealed_params.append(f'%{term}%')
         
         sealed_where_clause = " AND ".join(sealed_where_conditions) if sealed_where_conditions else "1=1"

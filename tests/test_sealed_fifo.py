@@ -14,6 +14,7 @@ from tradeTracker import create_app
 from tradeTracker.db import get_db, init_db
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.models import SaleInput
+from tradeTracker.actions import normalize
 
 
 def _sale_input(sealed):
@@ -51,12 +52,14 @@ class SealedFIFOTestCase(unittest.TestCase):
         db.execute('INSERT INTO auctions (id, auction_name, auction_price) VALUES (3, "A3", 75.0)')
         # Product "Booster Box": 5 units in auction 2 (older), 4 units in auction 3
         db.execute(
-            'INSERT INTO sealed (id, name, quantity, price, market_value, date, auction_id) '
-            'VALUES (10, "Booster Box", 5, 80.0, 100.0, "2026-01-01", 2)'
+            'INSERT INTO sealed (id, name, normalized_name, quantity, price, market_value, date, auction_id) '
+            'VALUES (10, ?, ?, 5, 80.0, 100.0, "2026-01-01", 2)',
+            ('Booster Box', normalize('Booster Box'))
         )
         db.execute(
-            'INSERT INTO sealed (id, name, quantity, price, market_value, date, auction_id) '
-            'VALUES (11, "Booster Box", 4, 90.0, 110.0, "2026-02-01", 3)'
+            'INSERT INTO sealed (id, name, normalized_name, quantity, price, market_value, date, auction_id) '
+            'VALUES (11, ?, ?, 4, 90.0, 110.0, "2026-02-01", 3)',
+            ('Booster Box', normalize('Booster Box'))
         )
         # A sale row to attach sold sealed to (FK target)
         db.execute(

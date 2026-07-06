@@ -221,6 +221,8 @@ class SaleService:
         same per-unit price/market_value, purchase date and auction) is
         inserted against this sale, so reports stay accurate per source row.
         """
+        from tradeTracker.actions import normalize
+
         remaining = sell_qty
 
         rows = self.db.execute(
@@ -246,10 +248,11 @@ class SaleService:
                     (remaining, row["id"]),
                 )
                 self.db.execute(
-                    "INSERT INTO sealed(name, quantity, price, market_value, date, auction_id, sale_id) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO sealed(name, normalized_name, quantity, price, market_value, date, auction_id, sale_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         row["name"],
+                        normalize(row["name"]),
                         remaining,
                         row["price"],
                         row["market_value"],
