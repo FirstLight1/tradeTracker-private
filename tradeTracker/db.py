@@ -239,6 +239,7 @@ CREATE INDEX idx_bulk_sales_sale_id ON bulk_sales(sale_id);
 CREATE TABLE sealed(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
+    normalized_name TEXT,
     quantity INTEGER NOT NULL DEFAULT 1,
     price REAL,
     market_value REAL,
@@ -252,6 +253,7 @@ CREATE TABLE sealed(
 
 CREATE INDEX idx_sealed_name ON sealed(name);
 CREATE INDEX idx_sealed_auction_id ON sealed(auction_id);
+CREATE INDEX idx_sealed_normalized_name ON sealed(normalized_name);
 
 CREATE TABLE collection(
     id INTEGER PRIMARY KEY AUTOINCREMENT,

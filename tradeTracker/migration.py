@@ -63,6 +63,7 @@ def migrate_database(db_path):
         addIdOrderToSalesTable(db_path)
 
         addNormalizedNameToCardsTable(db_path)
+        addNormalizedNameToSealedTable(db_path)
         print("Database migration check complete.")
     except sqlite3.Error as e:
         print(f"Database migration failed: {e}")
@@ -727,5 +728,28 @@ def addNormalizedNameToCardsTable(db_path):
     except sqlite3.Error as e:
         if "no such table: cards" in str(e):
             print("'cards' table not found, skipping 'normalized_name' column migration.")
+        else:
+            raise e
+
+
+
+def addNormalizedNameToSealedTable(db_path):
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(sealed)")
+        columns = [info[1] for info in cursor.fetchall()]
+        if 'normalized_name' not in columns:
+            print("Applying migration: Adding 'normalized_name' to 'sealed' table...")
+            cursor.execute("ALTER TABLE sealed ADD COLUMN normalized_name TEXT")
+            print("'normalized_name' column added successfully.")
+            cursor.execute("CREATE INDEX idx_sealed_normalized_name ON sealed(normalized_name)")
+        else:
+            print("'normalized_name' column already exists in 'sealed' table.")
+
+    except sqlite3.Error as e:
+        if "no such table: cards" in str(e):
+            print("'sealed' table not found, skipping 'normalized_name' column migration.")
         else:
             raise e
