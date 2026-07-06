@@ -549,8 +549,9 @@ function createSealedModal(sid, auctionId, initialValue) {
             body: JSON.stringify({ openedItem: { id: sid, initialValue: initialValue }, sealed: sealed, cards: cards })
         });
         const result = await response.json();
-        if (result.success) {
+        if (result.status === 'success') {
             modal.remove();
+            window.location.reload();
         } else {
             renderAlert(result.message, 'error');
         }
@@ -2705,7 +2706,6 @@ async function loadSealed(viewButton) {
     if (sealedTab.hidden || sealedTab.childElementCount === 0) {
         sealedTab.hidden = false;
         viewButton.innerHTML = 'Hide';
-        console.log(sealedTab.childElementCount);
 
         // Only fetch if we don't have items already
         if (contentDiv.childElementCount === 0) {
@@ -2726,12 +2726,14 @@ async function loadSealed(viewButton) {
                     const date = new Date(timeStamp);
                     let formatedDate = date.toLocaleDateString('sk-SK', { year: 'numeric', month: '2-digit', day: '2-digit' });
                     sealedDiv.innerHTML = `
+                        <p class='sealed-quantity'>${DOMPurify.sanitize(sealedData.quantity)}</p>
                         <p class='sealed-name'>${DOMPurify.sanitize(sealedData.name)}</p>
                         <p class='unit-price'>${DOMPurify.sanitize(sealedData.price)}</p>
-                        <p class='VAT-sealed'>${(DOMPurify.sanitize(sealedData.price) / 1.23).toFixed(2)}</p>
+                        <p class='VAT-sealed sealed-market-value'>${(DOMPurify.sanitize(sealedData.price) / 1.23).toFixed(2)}</p>
                         <p class='market-value-sealed'>${DOMPurify.sanitize(sealedData.market_value)}</p>
                         <p class='margin'>${margin}</p>
                         <p class='add-date'>${formatedDate}</p>
+                        <button class='open-sealed'>Open</button>
                         <button class='add-to-cart'>Add to cart</button>
                         <button class='delete-sealed'>Delete</button>
                         `
@@ -2741,6 +2743,18 @@ async function loadSealed(viewButton) {
                         const available = sealedData.quantity ? Number(sealedData.quantity) : null;
                         addSealedToCart(sealedData, sealedData.sid, null, 1, available)
                     });
+
+                    const sealedContainer = document.querySelector('.sealed-container');
+                    const openSealedButtons = sealedContainer.querySelectorAll('.open-sealed');
+                    openSealedButtons.forEach((button) => {
+                        button.addEventListener('click', () => {
+                            const sealedDiv = button.closest('.sealed-item');
+                            const sid = sealedDiv.getAttribute('sid');
+                            const initialValue = sealedDiv.querySelector('.sealed-market-value').textContent.replace('€', '');
+                            createSealedModal(sid, 0, initialValue);
+                        });
+                    });
+
 
                     const removeSealed = sealedDiv.querySelector('.delete-sealed');
                     removeSealed.addEventListener('click', async () => {
