@@ -52,7 +52,7 @@ class SaleService:
                 needed = int(item.get("quantity", 1))
                 available = self.db.execute(
                     "SELECT COALESCE(SUM(quantity), 0) FROM sealed "
-                    "WHERE lower(name) = lower(?) AND sale_id IS NULL",
+                    "WHERE lower(name) = lower(?) AND sale_id IS NULL AND opened = 0",
                     (name,),
                 ).fetchone()[0]
                 if available < needed:
@@ -227,7 +227,7 @@ class SaleService:
 
         rows = self.db.execute(
             "SELECT id, name, quantity, price, market_value, date, auction_id FROM sealed "
-            "WHERE lower(name) = lower(?) AND sale_id IS NULL ORDER BY id ASC",
+            "WHERE lower(name) = lower(?) AND sale_id IS NULL AND opened = 0 ORDER BY id ASC",
             (name,),
         ).fetchall()
 

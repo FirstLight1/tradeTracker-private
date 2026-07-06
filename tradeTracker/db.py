@@ -246,6 +246,7 @@ CREATE TABLE sealed(
     date TEXT,
     sale_id INTEGER,
     auction_id INTEGER,
+    opened INTEGER DEFAULT 0,
     cardMarketID TEXT,
     FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE SET NULL,
     FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE

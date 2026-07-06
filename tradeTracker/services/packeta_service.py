@@ -1,7 +1,7 @@
 from zeep import Client
 import os
 import re
-from postal.parser import parse_address
+#from postal.parser import parse_address
 from tradeTracker.CONSTANTS import HEAVY_ARTICLE_CATEGORIES
 
 # Default home-delivery carrier mapping by (country_code, method_token).

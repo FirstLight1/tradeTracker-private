@@ -1,4 +1,4 @@
-import { renderField, renderAlert, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign, downloadFile } from "./utils/renderUtil.js";
+import { renderField, renderAlert, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign, downloadFile, createNewItem } from "./utils/renderUtil.js";
 import { CardStruct, queue, CartLine } from "./utils/classes.js";
 import { escapeHtml, sanitizePlainText, sanitizeAttrValue, sanitizeNumericId, sanitizeClassToken, csrfFetch } from "./utils/sanitizers.js";
 
@@ -459,6 +459,122 @@ function hideProcessingSpinner(handle) {
     if (!handle) return;
     clearTimeout(handle.timer);
     if (handle.overlay) handle.overlay.remove();
+}
+
+function createSealedItemRow() {
+    const itemDiv = document.createElement('div');
+    itemDiv.classList.add('sealed-item-row');
+    itemDiv.innerHTML = `
+    <input type="text" class="sealed-name-input" placeholder="item name">
+    <input type="text" class="sealed-number-input" placeholder="item number">
+    <select class="sealed-condition-select">
+        <option value="MINT">Mint</option>
+        <option value="NEAR MINT" selected="selected">Near Mint</option>
+        <option value="EXCELLENT">Excellent</option>
+        <option value="GOOD">Good</option>
+        <option value="LIGHT PLAYED">Light Played</option>
+        <option value="PLAYED">Played</option>
+        <option value="POOR">Poor</option>
+    </select>
+    <input type="text" class="sealed-price-input" placeholder="price">
+    <input type="text" class="sealed-market-value-input" placeholder="market value">
+    `;
+    return itemDiv;
+}
+
+function createSealedModal(sid, auctionId, initialValue) {
+    const modal = document.createElement('div');
+    modal.classList.add('reciever-div');
+    const contentDiv = document.createElement('div');
+    contentDiv.classList.add('modal-content', 'sealed-modal');
+    const buttonDiv = document.createElement('div');
+    buttonDiv.classList.add('modal-buttons');
+
+    const closeButton = document.createElement('span');
+    closeButton.classList.add('close-modal');
+    closeButton.innerHTML = '&times;';
+    contentDiv.appendChild(closeButton);
+
+    const rowsContainer = document.createElement('div');
+    rowsContainer.classList.add('sealed-rows-container');
+    contentDiv.appendChild(rowsContainer);
+
+    const firstRow = createSealedItemRow();
+    rowsContainer.append(firstRow);
+    createNewItem(firstRow, {
+        triggerSelector: '.sealed-market-value-input',
+        onTrigger: (el) => window.handleSealedInput(el, rowsContainer)
+    });
+
+    const addLineButton = document.createElement('button');
+    addLineButton.classList.add('sealed-add-line-btn');
+    addLineButton.type = 'button';
+    addLineButton.textContent = 'Add new line';
+    addLineButton.addEventListener('click', () => {
+        const newRow = createSealedItemRow();
+        rowsContainer.appendChild(newRow);
+        createNewItem(newRow, {
+            triggerSelector: '.sealed-market-value-input',
+            onTrigger: (el) => window.handleSealedInput(el, rowsContainer)
+        });
+    });
+
+    const confirmButton = document.createElement('button');
+    confirmButton.classList.add('sealed-confirm-btn');
+    confirmButton.type = 'button';
+    confirmButton.textContent = 'Confirm';
+    confirmButton.addEventListener('click', async () => {
+        const cards = [];
+        const sealed = [];
+        rowsContainer.querySelectorAll('.sealed-item-row').forEach(div => {
+            const item = new CardStruct();
+            item.cardName = DOMPurify.sanitize(div.querySelector('.sealed-name-input').value);
+            item.cardNum = DOMPurify.sanitize(div.querySelector('.sealed-number-input').value);
+            item.condition = DOMPurify.sanitize(div.querySelector('.sealed-condition-select').value);
+            item.buyPrice = Number(DOMPurify.sanitize(div.querySelector('.sealed-price-input').value.replace('€', '')));
+            item.marketValue = Number(DOMPurify.sanitize(div.querySelector('.sealed-market-value-input').value.replace('€', '')));
+            item.soldDate = null;
+            if (item.marketValue == '') return;
+            if (item.cardNum !== '') {
+                cards.push(item);
+            } else {
+                sealed.push(item);
+            }
+        });
+        const response = await csrfFetch(`/openSealed/${auctionId ?? 0}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ openedItem: { id: sid, initialValue: initialValue }, sealed: sealed, cards: cards })
+        });
+        const result = await response.json();
+        if (result.status === 'success') {
+            modal.remove();
+            window.location.reload();
+        } else {
+            renderAlert(result.message, 'error');
+        }
+    });
+
+    buttonDiv.append(addLineButton, confirmButton);
+    contentDiv.appendChild(buttonDiv);
+    modal.appendChild(contentDiv);
+    document.body.appendChild(modal);
+
+    const close = () => modal.remove();
+    closeButton.addEventListener('click', close);
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) close();
+    });
+}
+
+window.handleSealedInput = function(input, container) {
+    window.handleCardInput(input, {
+        itemSelector: '.sealed-item-row',
+        container,
+        triggerSelector: '.sealed-market-value-input'
+    });
 }
 
 function cartValue(cartContent) {
@@ -2197,17 +2313,32 @@ async function loadAuctionContent(button) {
                         });
 
                         sealedDiv.innerHTML = `
+                            <p class='sealed-quantity'>${DOMPurify.sanitize(sealedItem.quantity)}</p>
                             <p class="sealed-name">${DOMPurify.sanitize(sealedItem.name)}</p>
                             <p class="sealed-price">${DOMPurify.sanitize(sealedItem.price)}€</p>
+                            <p class="VAT-sealed">${(Number(DOMPurify.sanitize(sealedItem.price)) / 1.23).toFixed(2)}</p>
                             <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
                             <p class="sealed-date">${DOMPurify.sanitize(formatedDate)}</p>
+                            <button class="open-sealed-item" data-sid="${sealedItem.sid}">Open</button>
                             <button class="add-to-cart-sealed" data-sid="${sealedItem.sid}">Add to cart</button>
                             <button class="delete-sealed-item" data-sid="${sealedItem.sid}">Delete</button>
                         `;
 
                         cardsContainer.insertBefore(sealedDiv, cardsContainer.querySelector('.button-container'));
                     });
+
+                    const openSealedButtons = cardsContainer.querySelectorAll('.open-sealed-item');
+                    openSealedButtons.forEach((button) => {
+                        button.addEventListener('click', () => {
+                            const sealedDiv = button.closest('.sealed-item');
+                            const sid = sealedDiv.getAttribute('sid');
+                            const auctionId = auctionDiv.getAttribute('data-id');
+                            const initialValue = sealedDiv.querySelector('.sealed-market-value').textContent.replace('€', '');
+                            createSealedModal(sid, auctionId, initialValue);
+                        });
+                    });
+
 
                     // Add event listeners for "Add to cart" buttons
                     const addToCartButtons = cardsContainer.querySelectorAll('.add-to-cart-sealed');
@@ -2577,7 +2708,6 @@ async function loadSealed(viewButton) {
     if (sealedTab.hidden || sealedTab.childElementCount === 0) {
         sealedTab.hidden = false;
         viewButton.innerHTML = 'Hide';
-        console.log(sealedTab.childElementCount);
 
         // Only fetch if we don't have items already
         if (contentDiv.childElementCount === 0) {
@@ -2598,12 +2728,14 @@ async function loadSealed(viewButton) {
                     const date = new Date(timeStamp);
                     let formatedDate = date.toLocaleDateString('sk-SK', { year: 'numeric', month: '2-digit', day: '2-digit' });
                     sealedDiv.innerHTML = `
+                        <p class='sealed-quantity'>${DOMPurify.sanitize(sealedData.quantity)}</p>
                         <p class='sealed-name'>${DOMPurify.sanitize(sealedData.name)}</p>
                         <p class='unit-price'>${DOMPurify.sanitize(sealedData.price)}</p>
-                        <p class='VAT-sealed'>${(DOMPurify.sanitize(sealedData.price) / 1.23).toFixed(2)}</p>
+                        <p class='VAT-sealed sealed-market-value'>${(DOMPurify.sanitize(sealedData.price) / 1.23).toFixed(2)}</p>
                         <p class='market-value-sealed'>${DOMPurify.sanitize(sealedData.market_value)}</p>
                         <p class='margin'>${margin}</p>
                         <p class='add-date'>${formatedDate}</p>
+                        <button class='open-sealed'>Open</button>
                         <button class='add-to-cart'>Add to cart</button>
                         <button class='delete-sealed'>Delete</button>
                         `
@@ -2613,6 +2745,14 @@ async function loadSealed(viewButton) {
                         const available = sealedData.quantity ? Number(sealedData.quantity) : null;
                         addSealedToCart(sealedData, sealedData.sid, null, 1, available)
                     });
+
+                    const openSealedButton = sealedDiv.querySelector('.open-sealed');
+                    openSealedButton.addEventListener('click', () => {
+                        const sid = sealedDiv.getAttribute('sid');
+                        const initialValue = sealedDiv.querySelector('.sealed-market-value').textContent.replace('€', '');
+                        createSealedModal(sid, 0, initialValue);
+                    });
+
 
                     const removeSealed = sealedDiv.querySelector('.delete-sealed');
                     removeSealed.addEventListener('click', async () => {

@@ -64,6 +64,8 @@ def migrate_database(db_path):
 
         addNormalizedNameToCardsTable(db_path)
         addNormalizedNameToSealedTable(db_path)
+        addOpenedFlagToSealedTable(db_path)
+
         print("Database migration check complete.")
     except sqlite3.Error as e:
         print(f"Database migration failed: {e}")
@@ -711,6 +713,7 @@ def addCardMarketIDToCardsTable(db_path):
 
 
 def addNormalizedNameToCardsTable(db_path):
+def addOpenedFlagToSealedTable(db_path):
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -731,6 +734,21 @@ def addNormalizedNameToCardsTable(db_path):
         else:
             raise e
 
+        # Check if the column already exists
+        cursor.execute("PRAGMA table_info(sealed)")
+        columns = [info[1] for info in cursor.fetchall()]
+        if 'opened' not in columns:
+            print("Applying migration: Adding 'opened' to 'sealed' table...")
+            cursor.execute("ALTER TABLE sealed ADD COLUMN opened INTEGER DEFAULT 0")
+            print("'opened' column added successfully.")
+        else:
+            print("'opened' column already exists in 'sealed' table.")
+    except sqlite3.Error as e:
+        # This can happen if the table doesn't exist yet, which is fine.
+        if "no such table: sealed" in str(e):
+            print("'sealed' table not found, skipping 'quantity' column migration.")
+        else:
+            raise e
 
 
 def addNormalizedNameToSealedTable(db_path):
