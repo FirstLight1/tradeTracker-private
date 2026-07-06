@@ -315,7 +315,7 @@ item 6's reassignment/upsert logic. Keep purchase cost intact; just record no in
 
 ---
 
-## 8. Improve handling of special / Unicode symbols
+## 8. Improve handling of special / Unicode symbols => DONE
 
 **What.** Special characters in card names and buyer text — Pokémon names (`Nidoran♀`, `Flabébé`,
 `Farfetch'd`), `™`, Slovak diacritics (`č š ž á`), smart quotes, en-dashes — get mangled/dropped in a
