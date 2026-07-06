@@ -1824,18 +1824,21 @@ def process_sold_csv(files,db):
                'FROM sealed '
               f'WHERE sale_id IS NULL AND opened = 0 AND cardMarketID IN ({placehoders}) '
                'UNION ALL '
-               "SELECT c.id as id, card_name as itemName, card_num, NULL as quantity, market_value, auction_id, 'card' as item_type, c.condition as condition, cardMarketID as cardmarketId "
+               "SELECT c.id as id, card_name as itemName, card_num, 1 as quantity, market_value, auction_id, 'card' as item_type, c.condition as condition, cardMarketID as cardmarketId "
                'FROM cards c '
                'LEFT JOIN sale_items si ON si.card_id = c.id '
               f'WHERE si.card_id IS NULL AND cardMarketID IN ({placehoders}) '
                'ORDER BY id ASC ', ids + ids)
     allItems = pd.DataFrame(cur.fetchall(), columns=[c[0] for c in cur.description])
+    allItemsExpanded = allItems.loc[allItems.index.repeat(allItems['quantity'])].reset_index(drop=True)
+    allItemsExpanded['quantity'] = 1
 
     merged['_match_seq'] = merged.groupby('cardmarketId').cumcount()
-    allItems['_match_seq'] = allItems.groupby('cardmarketId').cumcount()
-    allItems['condition'] = allItems['condition'].replace(CONSTANTS.CONDITION_DICT)
+    allItemsExpanded['_match_seq'] = allItemsExpanded.groupby('cardmarketId').cumcount()
+    merged['condition'] = merged['condition'].replace(CONSTANTS.CONDITION_DICT)
+    allItemsExpanded['condition'] = allItemsExpanded['condition'].replace(CONSTANTS.CONDITION_DICT)
 
-    wantedItems = merged.merge(allItems, on=['cardmarketId', 'condition' ,'_match_seq'], how='left', suffixes=('_mer', '_db'), validate='one_to_one')
+    wantedItems = merged.merge(allItemsExpanded, on=['cardmarketId', 'condition' ,'_match_seq'], how='left', suffixes=('_mer', '_db'), validate='one_to_one')
     wantedItems = wantedItems.drop(columns='_match_seq')
     wantedItems['matched'] = wantedItems['item_type'].notna()
 
