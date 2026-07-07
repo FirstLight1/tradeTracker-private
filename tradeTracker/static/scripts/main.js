@@ -2143,6 +2143,7 @@ async function loadAuctionContent(button) {
                         ${renderField(card.card_price !== null && card.market_value !== null ? (card.market_value - card.card_price).toFixed(2) + '€' : ' ', 'text', ['card-info', 'profit'], 'profit', true)}
                         <p></p>
                         <div class="item-options">
+                            <span class="item-options-star" title="Show options">&#9733;</span>
                             <div class="item-options-list">
                                 <div class="item-option">
                                     <button class="add-to-cart">Add to cart</button>
@@ -2329,6 +2330,7 @@ async function loadAuctionContent(button) {
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
                             <p class="sealed-date">${DOMPurify.sanitize(formatedDate)}</p>
                             <div class="item-options">
+                                <span class="item-options-star" title="Show options">&#9733;</span>
                                 <div class="item-options-list">
                                     <div class="item-option">
                                         <button class="open-sealed-item" data-sid="${sealedItem.sid}">Open</button>
@@ -2754,6 +2756,7 @@ async function loadSealed(viewButton) {
                         <p class='margin'>${margin}</p>
                         <p class='add-date'>${formatedDate}</p>
                         <div class="item-options">
+                            <span class="item-options-star" title="Show options">&#9733;</span>
                             <div class="item-options-list">
                                 <div class="item-option">
                                     <button class='open-sealed'>Open</button>

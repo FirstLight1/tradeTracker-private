@@ -434,23 +434,48 @@ p {
 }
 
 .item-options {
-    visibility: hidden;
     position: relative;
     pointer-events: none;
 }
 
-.card:hover .item-options,
-.sealed-item:hover .item-options {
+.item-options-star {
+    visibility: hidden;
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: auto;
+    cursor: pointer;
+    color: var(--text-accent);
+    font-size: 18px;
+    line-height: 1;
+    user-select: none;
+    font-family: sans-serif, Arial;
+    opacity: 0.7;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 1002;
+}
+
+.item-options-star:hover {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.15);
+}
+
+.card:hover .item-options-star,
+.sealed-item:hover .item-options-star {
     visibility: visible;
 }
 
 .item-options-list {
+    visibility: hidden;
     display: flex;
     flex-direction: column;
     gap: 4px;
     position: absolute;
     top: 50%;
-    right: 0;
+    left: 100%;
+    right: auto;
+    margin-left: -4px;
     transform: translateY(-50%);
     background: var(--primary-dark);
     color: var(--text-color);
@@ -463,7 +488,12 @@ p {
     backdrop-filter: blur(10px);
     z-index: 1001;
     min-width: 200px;
-    pointer-events: none;
+    pointer-events: auto;
+}
+
+.item-options-star:hover ~ .item-options-list,
+.item-options-list:hover {
+    visibility: visible;
 }
 
 .item-option {
