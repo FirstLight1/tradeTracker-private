@@ -2877,6 +2877,79 @@ async function renderBarterSelect(select) {
     return select
 }
 
+function openMergeAuctionModal(auctionId, auctionName) {
+    const modal = document.createElement('div');
+    modal.classList.add('reciever-div');
+    const contentDiv = document.createElement('div');
+    contentDiv.classList.add('modal-content', 'merge-auction-modal');
+
+    const close = () => modal.remove();
+    contentDiv.innerHTML = `
+        <span class="close-modal">&times;</span>
+        <div>
+            <p>Source auction:</p>
+            <p>${auctionName}</p>
+        </div>
+        <div>
+            <p>Target auction:</p>
+            <select class="merge-auction-target-select"></select>
+        </div>
+        <div>
+            <button class="merge-auction-confirm-btn">Confirm</button>
+        </div>
+    `;
+
+    const targetSelect = contentDiv.querySelector('.merge-auction-target-select');
+    targetSelect.addEventListener('focus', async (event) => {
+        const response = await csrfFetch(`/loadAuctions`);
+        const data = await response.json();
+        data.forEach(auction => {
+            const safeAuctionId = sanitizeNumericId(auction.id);
+            const option = document.createElement('option');
+            option.value = safeAuctionId;
+            option.textContent = `${auction.auction_name || 'Auction ' + (auction.id - 1)}`;
+            targetSelect.appendChild(option);
+        });
+    })
+    let targetId = null;
+    targetSelect.addEventListener('change', (event) => {
+        targetId = event.target.value;
+    });
+
+
+    const confirmBtn = contentDiv.querySelector('.merge-auction-confirm-btn');
+    confirmBtn.addEventListener('click', async (event) => {
+        if (!targetId) {
+            renderAlert('Please select target auction', 'error');
+            close();
+            return;
+        }
+        const response = await csrfFetch(`/mergeAuctions/${auctionId}/${targetId}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+        });
+        const data = await response.json();
+        if (data.status === 'success') {
+            window.location.reload();
+            close();
+        } else {
+            renderAlert(data.message, 'error');
+            close();
+        };
+    });
+
+    modal.appendChild(contentDiv);
+    document.body.appendChild(modal);
+
+    const closeButton = document.querySelector('.close-modal');
+    closeButton.addEventListener('click', close);
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) close();
+    });
+}
+
 async function loadAuctions() {
     const auctionContainer = document.querySelector('.auction-container');
     try {
@@ -2915,6 +2988,10 @@ async function loadAuctions() {
                 </div>
                 <button class="view-auction" data-id="${safeAuctionId}">View</button>
                 <button class="delete-auction" data-id="${safeAuctionId}">Delete</button>
+                <div>
+                    <button class="merge-auction" data-id="${safeAuctionId}">Merge into</button>
+                    <div class="merge-auction-target-select"></div>
+                </div>
                 <div class="auction-link-cell">
                     ${auction.sale_id == null
                     ? `<select class='barter-id-select'><option value="null">Select Invoice Number to link</option></select>`
@@ -2931,6 +3008,17 @@ async function loadAuctions() {
             auctionDiv.paymentsData = payments;
 
         });
+
+        const mergeAuctions = document.querySelectorAll('.merge-auction');
+        mergeAuctions.forEach((button) => {
+            button.addEventListener('click', async (event) => {
+                const auctionDiv = event.target.closest('.auction-tab');
+                const auctionId = auctionDiv.getAttribute('data-id');
+                const auctionName = auctionDiv.querySelector('.auction-name').textContent;
+                openMergeAuctionModal(auctionId, auctionName);
+            });
+        });
+
 
         const barterSelects = document.querySelectorAll('.barter-id-select');
         barterSelects.forEach((select) => {
