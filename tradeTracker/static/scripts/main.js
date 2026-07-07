@@ -2904,6 +2904,7 @@ function openMergeAuctionModal(auctionId, auctionName) {
         const response = await csrfFetch(`/loadAuctions`);
         const data = await response.json();
         data.forEach(auction => {
+            if (auction.id == auctionId) return;
             const safeAuctionId = sanitizeNumericId(auction.id);
             const option = document.createElement('option');
             option.value = safeAuctionId;
