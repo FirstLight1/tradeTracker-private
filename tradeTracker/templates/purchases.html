@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="stylesheet" href="../static/styles/auctions-aligment.css">
+    <link rel="stylesheet" href="../static/styles/auctions-hollowKnightStyle.css">
+    <link rel="stylesheet" href="../static/styles/header-align.css">
+    <link rel="stylesheet" href="../static/styles/modal.css">
+    <title>Purchases - Trade Tracker</title>
+    <link rel="icon" type="image/x-icon" href="../static/images/cardanvil.ico">
+</head>
+<body>
+    <main>
+        <h1>Purchases<span class="shadow"></span></h1>
+        <header class="header">
+            <nav class="nav-bar">
+                <div>
+                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                    <button class="addAuction"><a href="{{ url_for('renderers.renderAuctions') }}">Sales</a></button>
+                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
+                </div>
+                <div>
+                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                    <button class="addAuction"><a href="{{ url_for('renderers.addAuction') }}">Add auction</a></button>
+                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
+                </div>
+                <div>
+                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                    <button class="addSingles"><a href="{{ url_for('renderers.addSingles') }}">Add Singles</a></button>
+                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
+                </div>
+                <div>
+                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                    <button class="addAuction"><a href="{{ url_for('renderers.sold') }}">Sold</a></button>
+                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
+                </div>
+                <div>
+                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                    <button class="collection"><a href="{{ url_for('renderers.renderCollection')}}">Collection</a></button>
+                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
+                </div>
+                <div>
+                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                    <button class="upload-csv-btn">Upload</button>
+                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
+                </div>
+                <div class="sales">
+                    <button class="sales-btn">Sales</button>
+                </div>
+                <div class="inventory-value">
+                    <div><p class="inventory-value-header">Inventory</p></div>
+                    <div><p class="inventory-value-value"></p></div>
+                </div>
+            </nav>
+        </header>
+            <div id='alert-div'></div>
+        <div>
+            <div class="header-container">
+                <div class="auction-header">
+                    <p>Auction name</p>
+                    <p>Auction price</p>
+                </div>
+            </div>
+            <div class="content-container">
+                <div class='sealed-container auction-tab'>
+                        <p>Sealed</p>
+                        <p></p>
+                        <p></p>
+                        <p></p>
+                        <button class='view-sealed'>View</button>     
+                        <p></p>
+                        <div class='sealed-tab cards-container' hidden>
+                            <div class='sealed-header'>
+                                <p>Qty</p>
+                                <p>Name</p>
+                                <p>Price</p>
+                                <p>no VAT</p>
+                                <p>Market Value</p>
+                                <p>Margin</p>
+                                <p>Date</p>
+                                <p></p>
+                                <p></p>
+                                <p></p>
+                            </div>    
+                            <div class='sealed-tab-content'>
+                                <!--Sealed items load here -->
+                            </div>
+                        </div>
+                </div>
+                <div class="auction-container"></div>
+            </div>
+        </div>
+    </main>
+    <script type="module" src="../static/scripts/utils/renderUtil.js"></script>
+    <script type="module" src="../static/scripts/utils/sanitizers.js"></script>
+    <script type="module" src="../static/scripts/purchases.js"></script>
+    <script src="../static/vendor/purify.min.js"></script>
+</body>
+</html>

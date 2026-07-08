@@ -440,7 +440,7 @@ def loadSealedByAuction(auction_id):
 def loadPurchases():
     db = get_db()
     purchases = db.execute(
-        'SELECT * FROM auctions').fetchall()
+        'SELECT * FROM auctions ORDER BY id DESC').fetchall()
     return jsonify([dict(auction) for auction in purchases]),200
 
 @bp.route('/loadAllCards/<int:auction_id>', methods=('GET',))
