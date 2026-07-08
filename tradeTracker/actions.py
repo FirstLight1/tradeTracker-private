@@ -1335,10 +1335,12 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
             if item['marketValue'] is not None and item['marketValue'] > 0:
                 discount = (item['marketValue'] / newTotal) * priceDiff
                 new_price = round(item['marketValue'] - discount, 2)
-                cur.execute('INSERT INTO sealed (name, price, market_value, date, auction_id, cardmarketId)'
-                           ' VALUES (?, ?, ?, ?, ?, ?)',
+                cur.execute('INSERT INTO sealed (name,normalized_name, quantity, price, market_value, date, auction_id, cardmarketId)'
+                           ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                             (
                                 item.get('cardName'),
+                                normalize(item.get('cardName')),
+                                1,
                                 new_price,
                                 item.get('marketValue'),
                                 datetime.datetime.now(datetime.timezone.utc),
@@ -1407,10 +1409,12 @@ def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
             if item['marketValue'] is not None and item['marketValue'] > 0:
                 discount = (item['marketValue'] / newTotal) * priceDiff
                 new_price = round(item['marketValue'] - discount, 2)
-                cur.execute('INSERT INTO sealed (name, price, market_value, date, cardmarketId)'
+                cur.execute('INSERT INTO sealed (name,normalized_name, quantity price, market_value, date, cardmarketId)'
                            ' VALUES (?, ?, ?, ?, ?)',
                             (
                                 item.get('cardName'),
+                                normalize(item.get('cardName')),
+                                1,
                                 new_price,
                                 item.get('marketValue'),
                                 datetime.datetime.now(datetime.timezone.utc),
