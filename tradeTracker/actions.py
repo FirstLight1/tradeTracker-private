@@ -449,7 +449,7 @@ def loadAllCards(auction_id):
     db = get_db()
     cards = db.execute('SELECT * FROM cards WHERE auction_id = ?', (auction_id,)).fetchall()
     return jsonify([dict(card) for card in cards]),200
-#TODO: merge into one
+#TODO: merge into one, add to existiog SELECT endpoints but with filter query
 @bp.route('/loadAllSealed/<int:auction_id>', methods=('GET',))
 @verify_token
 def loadAllSealed(auction_id):

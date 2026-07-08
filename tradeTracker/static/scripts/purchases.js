@@ -274,7 +274,7 @@ async function loadAuctionContent(button) {
                         ${renderField(card.card_price != null ? DOMPurify.sanitize(card.card_price) + '€' : '', 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
                         ${renderField(card.market_value != null ? DOMPurify.sanitize(card.market_value) + '€' : '', 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
                         ${renderField(card.card_price !== null && card.market_value !== null ? (card.market_value - card.card_price).toFixed(2) + '€' : '', 'text', ['card-info', 'profit'], 'profit', true)}
-                        <p></p>
+                        <p>${card.sold_date != null ? 'Sold' : ''}</p>
                         <p></p>
                         <p></p>
                     `;
@@ -289,9 +289,15 @@ async function loadAuctionContent(button) {
                     sealedData.forEach(sealedItem => {
                         const sealedDiv = document.createElement('div');
                         sealedDiv.classList.add('sealed-item');
+                        console.log(sealedItem);
+                        let state = '';
+                        if (sealedItem.opened) {
+                            state = 'Opened';
+                        } else if (sealedItem.sale_id != null) {
+                            state = 'Sold';
+                        }
 
                         const margin = (Number(sealedItem.market_value) - Number(sealedItem.price)).toFixed(2);
-                        const formatedDate = formatSealedDate(sealedItem.date);
 
                         sealedDiv.innerHTML = `
                             <p class='sealed-quantity'>${DOMPurify.sanitize(sealedItem.quantity)}</p>
@@ -300,8 +306,8 @@ async function loadAuctionContent(button) {
                             <p class="VAT-sealed">${(Number(DOMPurify.sanitize(sealedItem.price)) / 1.23).toFixed(2)}</p>
                             <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
-                            <p class="sealed-date">${DOMPurify.sanitize(formatedDate)}</p>
                             <p></p>
+                            <p>${state}</p>
                             <p></p>
                             <p></p>
                         `;
@@ -335,8 +341,8 @@ async function loadAuctions() {
                 auctionDiv.classList.add('singles');
             }
             auctionDiv.setAttribute('data-id', safeAuctionId);
-            let auctionName = auction.auction_name || "Auction " + (auction.id - 1);
-            let auctionPrice = auction.auction_price;
+            const auctionName = auction.auction_name || "Auction " + (auction.id - 1);
+            const auctionPrice = auction.auction_price;
             const buyDate = new Date(auction.date_created);
             let formatedDate = buyDate.toLocaleDateString('sk-SK', { year: 'numeric', month: '2-digit', day: '2-digit' });
             if (formatedDate === 'Invalid Date') {
@@ -411,6 +417,13 @@ async function loadSealed(viewButton) {
                     sealedDiv.classList.add('sealed-item');
                     const margin = (Number(DOMPurify.sanitize(sealedData.market_value)) - Number(DOMPurify.sanitize(sealedData.price))).toFixed(2);
                     const formatedDate = formatSealedDate(sealedData.date);
+                    let state = '';
+                    console.log(sealedData);
+                    if (sealedData.opened) {
+                        state = 'Opened';
+                    } else if (sealedData.sale_id != null) {
+                        state = 'Sold';
+                    }
                     sealedDiv.innerHTML = `
                         <p class='sealed-quantity'>${DOMPurify.sanitize(sealedData.quantity)}</p>
                         <p class='sealed-name'>${DOMPurify.sanitize(sealedData.name)}</p>
@@ -419,7 +432,7 @@ async function loadSealed(viewButton) {
                         <p class='market-value-sealed'>${DOMPurify.sanitize(sealedData.market_value)}</p>
                         <p class='margin'>${margin}</p>
                         <p class='add-date'>${formatedDate}</p>
-                        <p></p>
+                        <p>${state}</p>
                         <p></p>
                         <p></p>
                     `;
