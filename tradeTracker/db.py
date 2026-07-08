@@ -185,6 +185,18 @@ CREATE TABLE sales (
 CREATE INDEX idx_sales_invoice ON sales(invoice_number);
 CREATE INDEX idx_sales_date ON sales(sale_date);
 
+
+CREATE TABLE sales_correction(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_id INTEGER NOT NULL,
+    value_change REAL,
+    change_type TEXT NOT NULL,
+    record_number INTEGER NOT NULL,
+    FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_sales_correction_sale_id ON sales_correction(sale_id);
+
 CREATE TABLE sale_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sale_id INTEGER NOT NULL,
