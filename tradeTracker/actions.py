@@ -435,12 +435,27 @@ def loadSealedByAuction(auction_id):
     ).fetchall()
     return jsonify([dict(item) for item in sealed_items]), 200
 
+@bp.route('/loadPurchases', methods=('GET',))
+@verify_token
+def loadPurchases():
+    db = get_db()
+    purchases = db.execute(
+        'SELECT * FROM auctions').fetchall()
+    return jsonify([dict(auction) for auction in purchases]),200
+
 @bp.route('/loadAllCards/<int:auction_id>', methods=('GET',))
 @verify_token
 def loadAllCards(auction_id):
     db = get_db()
     cards = db.execute('SELECT * FROM cards WHERE auction_id = ?', (auction_id,)).fetchall()
     return jsonify([dict(card) for card in cards]),200
+#TODO: merge into one
+@bp.route('/loadAllSealed/<int:auction_id>', methods=('GET',))
+@verify_token
+def loadAllSealed(auction_id):
+    db = get_db()
+    sealed = db.execute('SELECT * FROM sealed WHERE auction_id = ?', (auction_id,)).fetchall()
+    return jsonify([dict(sealed) for sealed in sealed]),200
 
 @bp.route('/inventoryValue', methods=('GET',))
 @verify_token
@@ -1193,6 +1208,7 @@ def addToCollection():
         )
         db.commit()
     return jsonify({'status': 'success'}), 201
+
 
 @bp.route('/loadCollection', methods=('GET',))
 @verify_token
