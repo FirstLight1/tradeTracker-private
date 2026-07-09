@@ -2094,6 +2094,117 @@ function initializeBulkHolo() {
     loadBulkHoloValues();
 }
 
+let box = null;
+
+function spawnItemsContextMenu(cardId, e, itemLine) {
+    box?.remove();
+
+    box = document.createElement('div');
+    //TODO: move styles to css
+    box.style.position = "absolute";
+    box.style.left = (e.pageX + 10) + "px";
+    box.style.top = (e.pageY - 20) + "px";
+    box.style.zIndex = 1000;
+    box.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
+    box.innerHTML = `<div class="">
+                            <div class="">
+                                <div class="">
+                                    <button class="add-to-cart">Add to cart</button>
+                                </div>
+                                <div class="">
+                                    <button class="delete-card" data-id="${cardId}">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                        <span hidden class="card-id">${cardId}</span>
+                            `;
+    document.body.appendChild(box);
+
+    const button = document.querySelector('.add-to-cart');
+    //sealed add
+    if (cardId.includes('s')) {
+        button.addEventListener('click', () => {
+            const auctionDiv = itemLine.closest('.auction-tab');
+            const auctionId = auctionDiv.getAttribute('data-id');
+
+            const sealedData = {
+                name: DOMPurify.sanitize(itemLine.querySelector('.sealed-name').textContent),
+                market_value: DOMPurify.sanitize(itemLine.querySelector('.sealed-market-value').textContent.replace('€', ''))
+            };
+
+            const available = Number(itemLine.getAttribute('data-quantity')) || null;
+            addSealedToCart(sealedData, cardId, auctionId, 1, available);
+        });
+    } else {
+        //cards add
+        button.addEventListener('click', async () => {
+            const auctionDiv = itemLine.closest('.auction-tab');
+            const auctionId = auctionDiv.getAttribute('data-id');
+
+            const card = new CardStruct();
+            card.cardName = itemLine.querySelector('.card-name').textContent;
+            card.cardNum = itemLine.querySelector('.card-num').textContent;
+            card.condition = itemLine.querySelector('.condition').textContent;
+            const marketValueText = itemLine.querySelector('.market-value').textContent;
+            card.marketValue = marketValueText ? marketValueText.replace('€', '') : null;
+            await addToShoppingCart(card, auctionId, cardId);
+        });
+    }
+
+    const deleteButton = box.querySelector('.delete-card');
+    deleteButton.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (deleteButton.textContent !== 'Confirm') {
+            deleteButton.textContent = 'Confirm';
+            const timerID = setTimeout(() => {
+                deleteButton.textContent = 'Delete';
+            }, 3000);
+            return;
+        }
+
+        const cardsContainer = itemLine.closest('.cards-container');
+        const auctionDiv = itemLine.closest('.auction-tab');
+        const auctionId = auctionDiv?.getAttribute('data-id');
+
+        if (cardId.includes('s')) {
+            try {
+                const response = await csrfFetch(`/deleteSealed/${cardId}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (data.status !== 'success') {
+                    renderAlert('Error deleting sealed item: ' + JSON.stringify(data), 'error');
+                    return;
+                }
+            } catch (error) {
+                renderAlert('Error deleting sealed item: ' + error + ' Error code: Mx19', 'error');
+                return;
+            }
+            itemLine.remove();
+            await updateInventoryValueAndTotalProfit();
+        } else {
+            const deleted = await removeCard(cardId, itemLine);
+            if (!deleted) return;
+            await updateInventoryValueAndTotalProfit();
+            if (cardsContainer && cardsContainer.childElementCount < 3) {
+                if (auctionDiv && auctionDiv.classList.contains('singles')) {
+                    const p = document.createElement('p');
+                    p.textContent = 'Empty';
+                    cardsContainer.insertBefore(p, cardsContainer.querySelector('.button-container'));
+                } else if (auctionDiv) {
+                    deleteAuction(auctionId, auctionDiv);
+                }
+            }
+        }
+
+        box?.remove();
+        box = null;
+    });
+};
+
+document.addEventListener('click', (e) => {
+    box?.remove();
+    box = null;
+});
+
 
 async function loadAuctionContent(button) {
     const auctionId = Number(button.getAttribute('data-id'));
@@ -2142,23 +2253,23 @@ async function loadAuctionContent(button) {
                         ${renderField(card.market_value ? DOMPurify.sanitize(card.market_value) + '€' : null, 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
                         ${renderField(card.card_price !== null && card.market_value !== null ? (card.market_value - card.card_price).toFixed(2) + '€' : ' ', 'text', ['card-info', 'profit'], 'profit', true)}
                         <p></p>
-                        <div class="item-options">
-                            <span class="item-options-star" title="Show options">&#9733;</span>
-                            <div class="item-options-list">
-                                <div class="item-option">
-                                    <button class="add-to-cart">Add to cart</button>
-                                </div>
-                                <div class="item-option">
-                                    <button class="delete-card" data-id="${safeCardId}">Delete</button>
-                                </div>
-                            </div>
-                        </div>
-                        <span hidden class="card-id">${safeCardId}</span>
-                    `;
+                        `;
                         cardsContainer.appendChild(cardDiv);
                     });
 
+                    let timer;
+                    cardsContainer.addEventListener('click', (e) => {
+                        clearTimeout(timer);
+
+                        timer = setTimeout(() => {
+                            const itemLine = e.target.closest('.card') || e.target.closest('.sealed-item');
+                            const safeCardId = sanitizeNumericId(itemLine?.getAttribute("data-id")) || itemLine.getAttribute("sid");
+                            spawnItemsContextMenu(safeCardId, e, itemLine);
+                        }, 200);
+                    });
+
                     cardsContainer.addEventListener('dblclick', (event) => {
+                        clearTimeout(timer);
                         if (event.target.closest('.card') && !(event.target.tagName === "DIV")) {
                             const cardDiv = event.target.closest('.card');
                             const cardId = cardDiv.querySelector('.card-id').textContent;
@@ -2263,7 +2374,6 @@ async function loadAuctionContent(button) {
                             if (button.textContent === 'Confirm') {
                                 const auctionDiv = cardsContainer.closest('.auction-tab');
                                 const deleted = await removeCard(cardId, cardDiv);
-                                const cards = cardsContainer.querySelectorAll('.card');
                                 if (!deleted) return;
                                 if (auctionDiv.classList.contains('singles')) {
                                     await updateInventoryValueAndTotalProfit()
