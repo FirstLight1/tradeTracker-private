@@ -433,6 +433,21 @@ p {
     z-index: 1000;
 }
 
+.context-menu {
+    position: absolute;
+    z-index: 1001;
+    background: var(--primary-dark);
+    color: var(--text-color);
+    border: 1px solid rgba(127, 255, 212, 0.3);
+    border-radius: 8px;
+    padding: 8px;
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.6),
+        0 0 30px rgba(147, 112, 219, 0.2);
+    backdrop-filter: blur(10px);
+    pointer-events: auto;
+}
+
 .item-options {
     position: relative;
     pointer-events: none;
@@ -491,7 +506,7 @@ p {
     pointer-events: auto;
 }
 
-.item-options-star:hover ~ .item-options-list,
+.item-options-star:hover~.item-options-list,
 .item-options-list:hover {
     visibility: visible;
 }

@@ -2100,12 +2100,10 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
     box?.remove();
 
     box = document.createElement('div');
+    box.classList.add("context-menu");
     //TODO: move styles to css
-    box.style.position = "absolute";
     box.style.left = (e.pageX + 10) + "px";
-    box.style.top = (e.pageY - 20) + "px";
-    box.style.zIndex = 1000;
-    box.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
+    box.style.top = (e.pageY - 25) + "px";
     box.innerHTML = `<div class="">
                             <div class="">
                                 <div class="">
@@ -2439,21 +2437,7 @@ async function loadAuctionContent(button) {
                             <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
                             <p class="sealed-date">${DOMPurify.sanitize(formatedDate)}</p>
-                            <div class="item-options">
-                                <span class="item-options-star" title="Show options">&#9733;</span>
-                                <div class="item-options-list">
-                                    <div class="item-option">
-                                        <button class="open-sealed-item" data-sid="${sealedItem.sid}">Open</button>
-                                    </div>
-                                    <div class="item-option">
-                                        <button class="add-to-cart-sealed" data-sid="${sealedItem.sid}">Add to cart</button>
-                                    </div>
-                                    <div class="item-option">
-                                        <button class="delete-sealed-item" data-sid="${sealedItem.sid}">Delete</button>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
+                            `;
 
                         cardsContainer.insertBefore(sealedDiv, cardsContainer.querySelector('.button-container'));
                     });
