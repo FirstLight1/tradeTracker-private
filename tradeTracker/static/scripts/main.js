@@ -3142,7 +3142,7 @@ async function loadAuctions() {
 
         });
 
-        const mergeAuctions = document.querySelectorAll('.merge-auction');
+        const mergeAuctions = document.querySelectorAll('.merge-button');
         mergeAuctions.forEach((button) => {
             button.addEventListener('click', async (event) => {
                 const auctionDiv = event.target.closest('.auction-tab');
