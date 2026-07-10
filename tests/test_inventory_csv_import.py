@@ -41,10 +41,10 @@ def _inventory_csv():
     rows = [
         CSV_HEADER,
         # Card rows
-        _csv_row("900001", "1", "Pikachu", "Scarlet & Violet", "SVI", "58", "NM", "4.00", "18-06-26 14:59"),
-        _csv_row("900002", "2", "Cetoddle", "Paldea Evolved", "PAL", "1", "NM", "1.50", "18-06-26 14:59"),
+        _csv_row("900001", "1", "Pikachu", "Scarlet & Violet", "SVI", "58", "NM", "4.00", "07-06-2026 09:42:30"),
+        _csv_row("900002", "2", "Cetoddle", "Paldea Evolved", "PAL", "1", "NM", "1.50", "08-06-2026 10:30:00"),
         # Sealed product row (empty card number)
-        _csv_row("900003", "1", "Chaos Rising Pokemon Center Elite Trainer Box", "Chaos Rising", "CRI", "", "NM", "180", "20-06-26 14:39"),
+        _csv_row("900003", "1", "Chaos Rising Pokemon Center Elite Trainer Box", "Chaos Rising", "CRI", "", "NM", "180", "07-06-2026 14:15:00"),
     ]
     return "\n".join(rows).encode("utf-8")
 
@@ -97,7 +97,7 @@ class InventoryCSVImportTestCase(unittest.TestCase):
             auctions = db.execute('SELECT * FROM auctions WHERE id != 1').fetchall()
             self.assertEqual(len(auctions), 1)
             auction = dict(auctions[0])
-            self.assertIsNotNone(auction['date_created'])
+            self.assertEqual(auction['date_created'], '2026-06-07T09:42:30Z')
 
             # Cards: Pikachu x1 + Cetoddle x2 = 3 rows
             cards = db.execute(

@@ -1567,11 +1567,11 @@ def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
                                 auction_id,
                                 item.get('cardmarketId')
                              ))
-        except Exception as e:
-            logger.exception(
-                'Database error while adjusting sealed from seal open | error: %s',
-                e,
-            )
+    except Exception as e:
+        logger.exception(
+            'Database error while adjusting sealed from seal open | error: %s',
+            e,
+        )
         return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax29'}), 400
 
     try:
