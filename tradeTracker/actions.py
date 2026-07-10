@@ -1899,7 +1899,7 @@ def process_sold_csv(files,db):
             "state": str(head['shippingAddressCountry']),
             "zipCode": str(head['shippingAddressZip']),
             "paybackDate": paybackDate,
-            "total": float(_parse_number(head['articleValue'])),
+            "total": float(_parse_number(head['articleValue'])) + float(_parse_number(head['shippingValue'])),
             "email": head['temporaryEmail'],
             "phone": head['phone'],
             "articleInfo" : {

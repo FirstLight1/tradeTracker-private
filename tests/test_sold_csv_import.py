@@ -37,7 +37,8 @@ ORDERS_HEADER = (
     "shippingMethod,trackingNumber,temporaryEmail,isPresale,shippingAddressName,"
     "shippingAddressExtra,shippingAddressStreet,shippingAddressCity,"
     "shippingAddressZip,shippingAddressCountry,phone,buyerVAT,updatedAt,"
-    "articleCategories,articles,articleValue,totalValue,currencyCode,note,PID,issues"
+    "articleCategories,articles,articleValue,shippingValue,totalValue,"
+    "currencyCode,note,PID,issues"
 )
 
 ARTICLES_HEADER = (
@@ -51,13 +52,14 @@ ARTICLES_HEADER = (
 LOC = '"{"locationName":"Many more cards available!","locationQuantity":0}"'
 
 
-def _order_row(idOrder, name, article_value, total_value):
+def _order_row(idOrder, name, article_value, shipping_value):
+    total_value = float(article_value) + float(shipping_value)
     return (
         f'"{idOrder}","Buyer ({name})","sent","2026-05-31T07:44:55.000Z",'
         f'"2026-05-31T07:45:02.000Z","2026-06-03T21:07:25.000Z","","Letter","","",'
         f'"false","{name}","","Hlavna 1","Bratislava","85104","SK","","",'
-        f'"03.06.2026 23:07","Pokemon Single","1","{article_value}","{total_value}",'
-        f'"EUR","","",""'
+        f'"03.06.2026 23:07","Pokemon Single","1","{article_value}","{shipping_value}",'
+        f'"{total_value:.2f}","EUR","","",""'
     )
 
 
@@ -72,9 +74,9 @@ def _article_row(idOrder, name, pos, items, price, cmid):
 def _orders_csv():
     rows = [
         ORDERS_HEADER,
-        _order_row(1001, "Alice Smith", "10.00", "12.80"),
-        _order_row(1002, "Bob Jones", "3.00", "5.80"),
-        _order_row(1003, "Cara Diaz", "4.00", "6.80"),
+        _order_row(1001, "Alice Smith", "10.00", "2.80"),
+        _order_row(1002, "Bob Jones", "3.00", "2.80"),
+        _order_row(1003, "Cara Diaz", "4.00", "2.80"),
     ]
     return "\n".join(rows).encode("utf-8")
 
