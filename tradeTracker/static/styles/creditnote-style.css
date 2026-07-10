@@ -10,11 +10,9 @@
 }
 
 .creditnote-box {
-    background: linear-gradient(
-        135deg,
-        rgba(26, 31, 46, 0.9) 0%,
-        rgba(13, 17, 23, 0.9) 100%
-    );
+    background: linear-gradient(135deg,
+            rgba(26, 31, 46, 0.9) 0%,
+            rgba(13, 17, 23, 0.9) 100%);
     border: 1px solid rgba(127, 255, 212, 0.1);
     border-radius: 15px;
     box-shadow:
@@ -79,4 +77,8 @@
     padding: 8px 28px;
     display: inline-flex;
     align-items: center;
+}
+
+.creditnote-total {
+    grid-column: 1 / -1;
 }

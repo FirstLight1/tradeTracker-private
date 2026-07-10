@@ -160,10 +160,9 @@ async function loadHistory() {
                 returnButton.disabled = true;
                 returnButton.textContent = 'Processing...';
                 const queryParams = new URLSearchParams({
-                    type: 'creditNote',
                     saleId: saleId
                 });
-                window.location.href = `/createNote/?${queryParams}`;
+                window.location.href = `/createCreditNote/?${queryParams}`;
                 return;
                 try {
 
