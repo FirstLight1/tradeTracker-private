@@ -832,17 +832,23 @@ def generateBuyReport():
     auctionId = int(auctionId)
     buffer = BytesIO()
     try:
-        curr.execute("SELECT card_name, card_num, condition, card_price, market_value, sold_date "
+        curr.execute("SELECT card_name, card_num, condition, card_price AS 'buy price', market_value as 'market value', sold_date as 'sold' "
                                 "FROM cards WHERE auction_id = ?", (auctionId,))
         cardsDesc = [desc[0] for desc in curr.description]
-        carsRows = curr.fetchall()
+        carsRows = [row[:-1] + ('sold' if row[-1] is not None else '',) for row in curr.fetchall()]
 
 
-        doc = SimpleDocTemplate("report.pdf", pagesize=letter)
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
         styles = getSampleStyleSheet()
 
         elements = []
-        elements.append(Paragraph("Sales Report", styles["Heading1"]))
+        auctionInfo =  curr.execute("SELECT id, auction_name, date_created FROM auctions WHERE id = ?",(auctionId,)).fetchone()
+        auctionName = auctionInfo[1] if auctionInfo[1] is not None else f"auction {int(auctionInfo[0])-1}"
+        dateCreated = auctionInfo[2].split("T")[0]
+        dateCreated = datetime.datetime.strptime(dateCreated, "%d-%m-%Y").strftime("%d.%m.%Y")
+        elements.append(Paragraph(f"Sales Report - {auctionName} - Date created: {dateCreated}", styles["Heading1"]))
+        elements.append(Spacer(1, 12))
+        elements.append(Paragraph("Cards Sold", styles["Heading2"]))
         elements.append(Spacer(1, 12))
 
         cardsData = [cardsDesc] + carsRows
@@ -851,16 +857,11 @@ def generateBuyReport():
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("FONTSIZE", (0, 0), (-1, 0), 11),
-
             ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
-
             ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-
             ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
         ]))
         
@@ -869,25 +870,22 @@ def generateBuyReport():
         elements.append(Spacer(1, 12))
 
 
-        curr.execute("SELECT name, quantity, price, market_value "
+        curr.execute("SELECT name, quantity, price as 'buy price', market_value as 'market value', sale_id as 'sold', opened "
                                 "FROM sealed WHERE auction_id = ?", (auctionId,))
         sealedDesc = [desc[0] for desc in curr.description]
-        sealedRows = curr.fetchall()
+        sealedRows = [row[:-1] + ('sold' if row[-1] is not None else '',) for row in curr.fetchall()]
         sealedData = [sealedDesc] + sealedRows
+        elements.append(Paragraph("Sealed Items", styles["Heading2"]))
+        elements.append(Spacer(1, 12))
         table = Table(sealedData, repeatRows=1)
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                        
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("FONTSIZE", (0, 0), (-1, 0), 11),
-                        
             ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
-                        
             ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                        
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                        
             ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
         ]))
         
