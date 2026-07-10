@@ -849,8 +849,7 @@ def generateBuyReport():
         elements = []
         auctionInfo =  curr.execute("SELECT id, auction_name, date_created FROM auctions WHERE id = ?",(auctionId,)).fetchone()
         auctionName = auctionInfo[1] if auctionInfo[1] is not None else f"auction {int(auctionInfo[0])-1}"
-        dateCreated = auctionInfo[2].split("T")[0]
-        dateCreated = datetime.datetime.strptime(dateCreated, "%d-%m-%Y").strftime("%d.%m.%Y")
+        dateCreated = format_iso_date(auctionInfo[2])
         elements.append(Paragraph(f"Sales Report - {auctionName} - Date created: {dateCreated}", styles["Heading1"]))
         elements.append(Spacer(1, 12))
         elements.append(Paragraph("Cards Sold", styles["Heading2"]))
@@ -1293,9 +1292,7 @@ def createBuyReport(month, year, db):
             bought['Cena'].append(Decimal(row['auction_price']))
         except:
             bought['Cena'].append('Error')
-        date = datetime.datetime.strptime( row['date_created'].split('T')[0], '%Y-%m-%d')
-        formatedDate = date.strftime('%d.%m.%Y')
-        bought['Datum'].append(formatedDate)
+        bought['Datum'].append(format_iso_date(row['date_created']))
         if row['payment_method'] != None:
             payments = json.loads(row['payment_method'])
             bought['Payment type'].append(', '.join(payment['type'] for payment in payments))
