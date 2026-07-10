@@ -1,0 +1,82 @@
+.creditnote-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 30px;
+    width: 1530px;
+    margin: 0 auto;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.creditnote-box {
+    background: linear-gradient(
+        135deg,
+        rgba(26, 31, 46, 0.9) 0%,
+        rgba(13, 17, 23, 0.9) 100%
+    );
+    border: 1px solid rgba(127, 255, 212, 0.1);
+    border-radius: 15px;
+    box-shadow:
+        0 10px 30px rgba(0, 0, 0, 0.4),
+        0 0 50px rgba(147, 112, 219, 0.1);
+    backdrop-filter: blur(10px);
+    padding: 25px;
+    min-height: 200px;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.creditnote-box:hover {
+    border-color: rgba(127, 255, 212, 0.55);
+    box-shadow:
+        0 0 24px var(--glow-color),
+        0 0 12px var(--mist-color),
+        0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.creditnote-items {
+    grid-column: 1 / -1;
+    min-height: 350px;
+}
+
+.creditnote-box-title {
+    color: var(--accent-cyan);
+    letter-spacing: 0.08em;
+    text-shadow:
+        0 0 10px var(--glow-color),
+        0 0 20px rgba(127, 255, 212, 0.1);
+    font-family: var(--primary-font), serif;
+    font-size: 1.3rem;
+    margin: 0 0 20px 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(127, 255, 212, 0.15);
+}
+
+.creditnote-box-content {
+    color: var(--text-color);
+    font-family: var(--primary-font), serif;
+    letter-spacing: 0.03em;
+}
+
+.back-btn-container {
+    width: 1530px;
+    margin: 0 auto;
+    padding-bottom: 25px;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+}
+
+.back-arrow-img {
+    width: 24px;
+    height: 24px;
+    margin-right: 10px;
+    opacity: 1;
+    vertical-align: middle;
+}
+
+.back-btn {
+    padding: 8px 28px;
+    display: inline-flex;
+    align-items: center;
+}

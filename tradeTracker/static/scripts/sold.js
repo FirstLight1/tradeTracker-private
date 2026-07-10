@@ -159,9 +159,14 @@ async function loadHistory() {
             if (returnButton.textContent === 'Confirm') {
                 returnButton.disabled = true;
                 returnButton.textContent = 'Processing...';
+                const queryParams = new URLSearchParams({
+                    type: 'creditNote',
+                    saleId: saleId
+                });
+                window.location.href = `/createNote/?${queryParams}`;
+                return;
                 try {
 
-                    console.log('here0');
                     const cnResponse = await csrfFetch(`/generateCreditNote/${saleId}`,
                         { method: 'POST' });
 

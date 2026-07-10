@@ -35,3 +35,8 @@ def renderAddCardsToCollection():
 @verify_token
 def sold():
     return render_template("sold.html")
+
+@bp.route('/createNote/')
+@verify_token
+def createNote():
+    return render_template("invoiceNote.html")
