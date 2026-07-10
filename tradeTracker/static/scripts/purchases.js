@@ -360,11 +360,34 @@ async function loadAuctions() {
                     <div class="payment-method">${paymentDisplay}</div>
                 </div>
                 <button class="view-auction" data-id="${safeAuctionId}">View</button>
+                <button class="buy-report" data-id="${safeAuctionId}">Buy report</button>
                 <div class="cards-container">
                     <!-- Cards will be loaded here -->
                 </div>
             `;
             auctionContainer.appendChild(auctionDiv);
+        });
+
+
+        const buyReportButtons = document.querySelectorAll('.auction-container .buy-report');
+        buyReportButtons.forEach(button => {
+            button.addEventListener('click', async () => {
+                const auctionId = Number(button.getAttribute('data-id'));
+                const response = await csrfFetch(`/generateBuyReport?auctionId=${auctionId}`);
+                const contentType = response.headers.get('content-type') || '';
+
+                if (!response.ok || contentType.includes('application/json')) {
+                    const err = await response.json();
+                    renderAlert(`Error generating buy report: ${err}`, 'error');
+                    return;
+                }
+                try {
+                    downloadFile(response)
+                } catch (e) {
+                    renderAlert('Error: ' + e, 'error');
+                }
+
+            });
         });
 
         const viewButtons = document.querySelectorAll('.auction-container .view-auction');

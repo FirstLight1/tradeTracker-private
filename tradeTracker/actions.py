@@ -1,6 +1,7 @@
 import base64
 from decimal import Decimal
 from flask import request, Blueprint, jsonify, current_app, send_file, abort
+from reportlab.platypus import SimpleDocTemplate
 from tradeTracker.db import get_db
 from io import BytesIO, TextIOWrapper, StringIO
 import re
@@ -12,6 +13,16 @@ import unicodedata
 from Crypto.Cipher import AES
 import os
 import fpdf
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Table,
+    TableStyle,
+    Paragraph,
+    Spacer
+)
 import json
 import zipfile
 from collections import defaultdict
@@ -807,6 +818,97 @@ def generate_credit_note(saleId):
     logger.info('Credit note generated succesfully | original invoice num: %s', original_invoice_num)
     return response 
 
+
+@bp.route('/generateBuyReport', methods=('GET',))
+@limiter.limit("2 per minute")
+@verify_token
+def generateBuyReport():
+    #TODO: add bulk
+    db = get_db()
+    curr = db.cursor()
+    auctionId = request.args.get('auctionId')
+    if not auctionId:
+        return jsonify({'status': 'error', 'message': 'Missing auctionId'}), 400
+    auctionId = int(auctionId)
+    buffer = BytesIO()
+    try:
+        curr.execute("SELECT card_name, card_num, condition, card_price, market_value, sold_date "
+                                "FROM cards WHERE auction_id = ?", (auctionId,))
+        cardsDesc = [desc[0] for desc in curr.description]
+        carsRows = curr.fetchall()
+
+
+        doc = SimpleDocTemplate("report.pdf", pagesize=letter)
+        styles = getSampleStyleSheet()
+
+        elements = []
+        elements.append(Paragraph("Sales Report", styles["Heading1"]))
+        elements.append(Spacer(1, 12))
+
+        cardsData = [cardsDesc] + carsRows
+
+        table = Table(cardsData, repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 11),
+
+            ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
+
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+        ]))
+        
+        elements.append(table)
+
+        elements.append(Spacer(1, 12))
+
+
+        curr.execute("SELECT name, quantity, price, market_value "
+                                "FROM sealed WHERE auction_id = ?", (auctionId,))
+        sealedDesc = [desc[0] for desc in curr.description]
+        sealedRows = curr.fetchall()
+        sealedData = [sealedDesc] + sealedRows
+        table = Table(sealedData, repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                        
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 11),
+                        
+            ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
+                        
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                        
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                        
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+        ]))
+        
+        elements.append(table)
+        doc.build(elements)
+
+        pdf = buffer.getvalue()
+        buffer.close()
+
+        response = send_file(
+                        BytesIO(pdf),
+                        download_name="report.pdf",
+                        as_attachment=True,
+                        mimetype='application/pdf'
+                        )
+        return response, 200
+
+
+    except Exception as e:
+        logger.exception('PDF generation failed')
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax08'}), 500
 
 @bp.route('/generateSoldReport', methods=('GET',))
 @limiter.limit("2 per minute")
