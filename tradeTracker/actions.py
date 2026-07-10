@@ -10,6 +10,7 @@ import time
 import csv
 import datetime
 import unicodedata
+from dateutil import parser as dateutil_parser
 from Crypto.Cipher import AES
 import os
 import fpdf
@@ -985,6 +986,39 @@ def format_iso_date(iso_str):
         return dt.strftime('%d.%m.%Y')
     except (ValueError, TypeError):
         return str(iso_str)
+
+
+def parse_date_to_iso(value):
+    """Parse any date string and return canonical ISO 8601 (YYYY-MM-DDTHH:MM:SSZ).
+
+    Tries datetime.fromisoformat(), then strptime('%Y-%m-%d'), then
+    dateutil.parser.parse(dayfirst=True). Raises ValueError if all fail.
+    """
+    if not value:
+        raise ValueError('Empty date value')
+
+    try:
+        dt = datetime.datetime.fromisoformat(value)
+        return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        dt = datetime.datetime.strptime(value, '%Y-%m-%d')
+        return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        dt = dateutil_parser.parse(value, dayfirst=True)
+        return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    except (ValueError, TypeError, OverflowError):
+        pass
+
+    raise ValueError(
+        f'Invalid date format: {value!r}. '
+        'Expected ISO 8601, YYYY-MM-DD, or dd-mm-yyyy.'
+    )
 
 
 def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
