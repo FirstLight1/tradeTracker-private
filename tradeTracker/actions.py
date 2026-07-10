@@ -410,7 +410,9 @@ def addSealed():
     for sealed in data:
         marketValue = float(sealed.get("market_value").replace(',','.')) if sealed.get("market_value") is not None else 0
         price = float(sealed.get("price").replace(',','.')) if sealed.get("price") is not None else marketValue * 0.80;
-        date = sealed.get('dateAdded') if sealed.get('dateAdded') is not None else datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
+        date = sealed.get('dateAdded') if sealed.get('dateAdded') else datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        if date and len(date) == 10:
+            date = date + 'T00:00:00Z'
         db.execute("INSERT INTO sealed(name, normalized_name, price, market_value, date) VALUES (?, ?, ?, ?, ?)",(sealed.get("name"), normalize(sealed.get("name")), price, marketValue, date))
     db.commit()
     return jsonify({'status':'success'}),200
@@ -565,7 +567,9 @@ def addToExistingAuction(auction_id):
                 for item in sealed:
                     marketValue = float(item.get("market_value").replace(',','.')) if item.get("market_value") is not None else 0
                     price = float(item.get("price").replace(',','.')) if item.get("price") is not None else marketValue * 0.80
-                    date = item.get('date') if item.get('date') is not None else datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
+                    date = item.get('date') if item.get('date') is not None else datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                    if date and len(date) == 10:
+                        date = date + 'T00:00:00Z'
                     db.execute(
                         "INSERT INTO sealed(name, normalized_name, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         (item.get("name"), normalize(item.get("name")),item.get("quantity"), price, marketValue, date, auction_id)
@@ -1423,6 +1427,13 @@ def updateAuction(auction_id):
         logger.warning('Invalid field | auction_id : %s', auction_id)
         return jsonify({'status': 'error', 'message': 'Invalid field'})
     column = ALLOWED_FIELDS[field]
+
+    if column == 'date_created':
+        try:
+            value = parse_date_to_iso(value)
+        except ValueError as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 400
+
     db.execute(f'UPDATE auctions SET {column} = ? WHERE id = ?', (value, auction_id))
     db.commit()
     return jsonify({'status': 'success'}), 200
@@ -1477,7 +1488,7 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
                                 1,
                                 new_price,
                                 item.get('marketValue'),
-                                datetime.datetime.now(datetime.timezone.utc),
+                                datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                                 auction_id,
                                 item.get('cardmarketId')
                              ))
@@ -1509,10 +1520,11 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
     return None
 
 def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
+    auctionId = None
     if cards != []:
         try:
             cur.execute("INSERT into auctions (auction_name, auction_price, date_created, payment_method) VALUES (?, ?, ?, ?)",
-                        ("Opened sealed", 0, datetime.datetime.now(datetime.timezone.utc), "[]"))
+                        ("Opened sealed", 0, datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"), "[]"))
             auctionId = cur.lastrowid
             for card in cards:
                 if card['marketValue'] is not None and card['marketValue'] > 0:
@@ -1543,23 +1555,23 @@ def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
             if item['marketValue'] is not None and item['marketValue'] > 0:
                 discount = (item['marketValue'] / newTotal) * priceDiff
                 new_price = round(item['marketValue'] - discount, 2)
-                cur.execute('INSERT INTO sealed (name,normalized_name, quantity price, market_value, date, cardmarketId)'
-                           ' VALUES (?, ?, ?, ?, ?)',
+                cur.execute('INSERT INTO sealed (name,normalized_name, quantity, price, market_value, date, auction_id, cardmarketId)'
+                           ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                             (
                                 item.get('cardName'),
                                 normalize(item.get('cardName')),
                                 1,
                                 new_price,
                                 item.get('marketValue'),
-                                datetime.datetime.now(datetime.timezone.utc),
+                                datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                                auction_id,
                                 item.get('cardmarketId')
                              ))
-
-    except Exception as e:
-        logger.exception(
-            'Database error while adjusting sealed from seal open | error: %s',
-            e,
-        )
+        except Exception as e:
+            logger.exception(
+                'Database error while adjusting sealed from seal open | error: %s',
+                e,
+            )
         return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax29'}), 400
 
     try:
@@ -1769,7 +1781,7 @@ def updateOneCard(db, name, num, condition, sellPrice):
         "WHERE c.card_name = ? AND c.card_num LIKE ? AND c.condition = ? AND si.card_id IS NULL "
         "LIMIT 1", (name, f'%{num}', condition)).fetchone()
     if cardId:
-        date = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
+        date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         card = db.execute("SELECT auction_id, card_price FROM cards WHERE id = ?", (cardId['id'],)).fetchone()
         
         # Create a sale for this card
@@ -1873,7 +1885,7 @@ def _process_inventory_csv(file):
             'buy_price': round(float(row['price']) * 0.8, 2),
             'market_value': row['price'],
             'quantity': row['quantity'],
-            'date': row['listedAt'],
+            'date': datetime.datetime.strptime(row['listedAt'], "%d-%m-%Y %H:%M:%S").strftime("%Y-%m-%dT%H:%M:%SZ"),
             'cardmarketId': row['cardmarketId'],
         }
         dataList.append(item)
@@ -1885,7 +1897,7 @@ def _create_inventory(db, dataList=None):
     if dataList is None:
         raise ValueError('dataList is required')
 
-    dateCreted = dataList[0]['date'][:10]
+    dateCreted = dataList[0]['date']
     buyPrice = sum(float(item['buy_price']) for item in dataList)
     try:
         cursor = db.execute(
