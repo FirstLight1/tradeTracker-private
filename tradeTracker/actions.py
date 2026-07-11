@@ -700,6 +700,56 @@ def orderReturn(saleId):
     db.commit()
     return jsonify({'status': 'success'}),200
 
+@bp.route('/loadSale/<int:saleId>', methods=('GET',))
+@verify_token
+def load_sale(saleId):
+    db = get_db()
+    sale = db.execute('SELECT * FROM sales WHERE id = ?', (saleId,)).fetchone()
+    if sale is None:
+        return jsonify({'status': 'error', 'message': 'Sale not found, Error code: Ax05'}), 404
+     
+    try:
+        crypt = json.loads(sale['notes'])
+        nonce = base64.b64decode(crypt['nonce'])
+        cipherText = base64.b64decode(crypt['ciphertext'])
+        tag = base64.b64decode(crypt['tag'])
+        key = base64.b64decode(os.environ['KEY'])
+        cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
+        decrypted = cipher.decrypt_and_verify(cipherText, tag)
+        reciever = json.loads(decrypted.decode("utf-8"))
+    except (json.JSONDecodeError, TypeError):
+        reciever = {}
+
+
+    cards = db.execute("SELECT c.card_name, c.card_num, c.condition, c.id, si.sell_price FROM cards c "
+                       "JOIN sale_items si ON c.id = si.card_id "
+                       "WHERE si.sale_id = ? ",(saleId,)).fetchall()
+
+    sealed = db.execute("SELECT s.name, s.price, s.market_value, s.date, s.id, s.auction_id FROM sealed s "
+                        "WHERE s.sale_id = ? ",(saleId,)).fetchall()
+
+    sale = dict(sale)
+    sale.pop('notes', None)
+    provider = {
+        'summary': 'Dominik Forró - CARD ANVIL',
+        'address': 'Vahovce 94',
+        'city': 'Váhovce',
+        'zip_code': '92562',
+        'country': 'Slovakia',
+        'phone': '0949 759 023',
+        'email': 'dominikforro95@gmail.com',
+        'ico': '57310041',
+        'dic': '1130287664',
+        'ic_dph': 'SK1130287664',
+    }
+    data = {
+            'sale': sale,
+            'provider': provider,
+            'reciever': reciever,
+            'items': [dict(c) for c in cards] + [dict(s) for s in sealed],
+           }
+    return jsonify({'status': 'success', 'data': data}),200
+
 
 @bp.route('/generateCreditNote/<int:saleId>', methods=('POST',))
 @verify_token
