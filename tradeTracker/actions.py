@@ -670,19 +670,55 @@ def linkAuctionToSale(auction_id):
 
     return jsonify({'status': 'success'})
 
-def _orderReturn(saleId, itemIds, db):
-    cardIds = itemIds.get('cards')
-    cardPlaceholder = ','.join('?' for _ in cardIds)
+def _orderReturn(saleId, itemIds, db, shipping_value=0):
+    cardIds = itemIds.get('cards') or []
+    sealedEntries = itemIds.get('sealed') or []
 
-    sealedIds = itemIds.get('sealed')
-    sealedPlaceholder = ','.join('?' for _ in sealedIds)
-    
+    returned_value = 0.0
+
     try:
+        sealedPlan = []
+        for entry in sealedEntries:
+            sealed_id = entry.get('id')
+            returnQuantity = entry.get('returnQuantity')
+            if not sealed_id or not returnQuantity or returnQuantity <= 0:
+                continue
+            row = db.execute(
+                'SELECT quantity, market_value FROM sealed WHERE id = ?', (sealed_id,)
+            ).fetchone()
+            if row is None:
+                db.rollback()
+                return f'Sealed item {sealed_id} not found', None
+            if returnQuantity > row['quantity']:
+                db.rollback()
+                return f'returnQuantity {returnQuantity} exceeds available {row["quantity"]} for sealed item {sealed_id}', None
+            sealedPlan.append((sealed_id, returnQuantity, row['quantity'], row['market_value'] or 0))
+
         if cardIds:
-            db.execute(f'UPDATE cards SET sold_date = NULL WHERE id IN ({cardPlaceholder})',(cardIds))
-            db.execute(f'DELETE sale_items  WHERE card_id IN ({cardPlaceholder})',(cardIds, ))
-        if sealedIds:
-            db.execute(f'UPDATE sealed SET sale_id = NULL WHERE id IN ({sealedPlaceholder})', (sealedIds))
+            cardPlaceholder = ','.join('?' for _ in cardIds)
+            cards_sum = db.execute(
+                f'SELECT COALESCE(SUM(sell_price), 0) FROM sale_items WHERE card_id IN ({cardPlaceholder})',
+                cardIds
+            ).fetchone()[0]
+            returned_value += cards_sum or 0
+            db.execute(f'UPDATE cards SET sold_date = NULL WHERE id IN ({cardPlaceholder})', cardIds)
+            db.execute(f'DELETE FROM sale_items WHERE card_id IN ({cardPlaceholder})', cardIds)
+
+        for sealed_id, returnQuantity, orig_quantity, mv in sealedPlan:
+            returned_value += mv * returnQuantity
+            if returnQuantity == orig_quantity:
+                db.execute('UPDATE sealed SET sale_id = NULL WHERE id = ?', (sealed_id,))
+            else:
+                db.execute('UPDATE sealed SET quantity = quantity - ? WHERE id = ?', (returnQuantity, sealed_id))
+                db.execute(
+                    """INSERT INTO sealed (name, normalized_name, quantity, price, market_value,
+                                           date, sale_id, auction_id, opened, cardMarketID)
+                       SELECT name, normalized_name, ?, price, market_value,
+                              date, NULL, auction_id, opened, cardMarketID
+                       FROM sealed WHERE id = ?""",
+                    (returnQuantity, sealed_id)
+                )
+
         bulk_sales_rows = db.execute(
             'SELECT item_type, quantity FROM bulk_sales WHERE sale_id = ?', (saleId,)
         ).fetchall()
@@ -696,6 +732,16 @@ def _orderReturn(saleId, itemIds, db):
                     'UPDATE bulk_items SET quantity = quantity + ? WHERE id = ?',
                     (bs_row['quantity'], target['id'])
                 )
+
+        if shipping_value:
+                db.execute('UPDATE sales SET shipping_info = shipping_info - ? WHERE id = ?', (shipping_value, saleId))
+        returned_value += shipping_value
+        if returned_value:
+            db.execute(
+                'UPDATE sales SET total_amount = total_amount - ? WHERE id = ?',
+                (returned_value, saleId)
+            )
+
         cursor = db.execute("""
             DELETE FROM sales
             WHERE id = ?
@@ -705,12 +751,12 @@ def _orderReturn(saleId, itemIds, db):
             """, (saleId, saleId, saleId, saleId))
 
         deleted = cursor.rowcount == 1
-    except:
+    except Exception:
          db.rollback()
-         return 'There was an error while creating a return, Error code: Ax04'
-    
+         return 'There was an error while creating a return, Error code: Ax04', None
+
     db.commit()
-    return None
+    return None, returned_value
 
 @bp.route('/loadSale/<int:saleId>', methods=('GET',))
 @verify_token
@@ -775,6 +821,25 @@ def generate_credit_note(saleId):
     if creditNoteNum is None:
         creditNoteNum = 1
 
+    itemIds = {
+            'cards' : [c['id'] for c in data.get('items') or []],
+            'sealed' : data.get('sealed') or [],
+            }
+    shipping_value = (data.get('shipping') or {}).get('shippingPrice', 0) or 0
+    err, returned_value = _orderReturn(saleId, itemIds, db, shipping_value)
+    if err:
+        status_code = 400 if 'exceeds available' in err else 500
+        logger.warning('Failed to order return | saleId: %s | reason: %s', saleId, err)
+        return jsonify({'status': 'error', 'message': f'{str(err)}, Error code: Ax08'}), status_code
+
+    try:
+        db.execute("INSERT INTO sales_correction (sale_id, record_number, change_type, value_change) VALUES (?, ?, ?, ?)",
+                    (saleId, creditNoteNum, 'credit', returned_value))
+        db.commit()
+    except Exception as e:
+        logger.critical('Failed to insert sales_correction | e: %s', e)
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax07'}), 500
+
     try:
         pdf, cn_num = generateInvoice.generateCreditNote(
             data.get('reciever'),
@@ -799,23 +864,6 @@ def generate_credit_note(saleId):
         logger.critical('Credit note generation failed %s', e)
         return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax06'}), 500
     logger.info('Credit note generated succesfully | original invoice num: %s', original_invoice_num)
-
-    try:
-        db.execute("INSERT INTO sales_correction (sale_id, record_number, change_type, value_change) VALUES (?, ?, ?, ?)",
-                    (saleId, creditNoteNum, 'credit', data.get('valueChanged')))
-    except Exception as e:
-        logger.critical('Failed to insert sales_correction | e: %s', e)
-        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax07'}), 500
-
-    itemIds = {
-            'cards' : [c['id'] for c in data.get('items') or []],
-            'sealed' : [s['id'] for s in data.get('sealed') or []],
-            }
-    err = _orderReturn(saleId,itemIds,db)
-    if err:
-        logger.warning('Failed to order return | saleId: %s | reason: %s', saleId, err)
-        return jsonify({'status': 'error', 'message': f'{str(err)}, Error code: Ax08'}), 500
-    
 
     return response 
 

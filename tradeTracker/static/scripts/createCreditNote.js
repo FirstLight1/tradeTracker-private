@@ -175,7 +175,15 @@ async function loadContent() {
 
         const itemsToReturn = items.filter((item) => returnNote.items.includes(String(item.id)));
         payload.items = itemsToReturn.filter((item) => item.card_num);
-        payload.sealed = itemsToReturn.filter((item) => !item.card_num);
+        const sealedReturnCounts = {};
+        itemsContainer.querySelectorAll('.sealed-item .item-checkbox:checked').forEach(cb => {
+            const id = cb.closest('.creditnote-item-row').getAttribute('data-id');
+            sealedReturnCounts[id] = (sealedReturnCounts[id] || 0) + 1;
+        });
+        payload.sealed = itemsToReturn
+            .filter((item) => !item.card_num)
+            .map((s) => ({ ...s, returnQuantity: sealedReturnCounts[s.id] || 0 }))
+            .filter((s) => s.returnQuantity > 0);
         //bulk, holo, ex 
         payload.reciever = recieverInfo;
         payload.originalInvoiceNum = originalInvoiceNum;

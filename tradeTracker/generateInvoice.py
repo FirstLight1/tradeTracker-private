@@ -275,13 +275,18 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
 
     if sealed:
         for item in sealed:
+            count = item.get("returnQuantity")
+            if count is None:
+                count = item.get("quantity", 1)
+            if count <= 0:
+                continue
             if item.get("auction_id") is None:
                 tax = Decimal("23")
             else:
                 tax = Decimal("0")
             mv = item.get("market_value", "0")
             invoice.add_item(Item(
-                count=1,
+                count=count,
                 price=Decimal(str(mv).replace("€", "")),
                 unit="ks",
                 description=item.get("name", ""),
