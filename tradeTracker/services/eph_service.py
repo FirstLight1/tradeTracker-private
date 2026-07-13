@@ -30,7 +30,7 @@ class EPHService:
         }
 
 
-    def createSheet(self, parcel_category, reception_method, payment_type = "h" ) -> str:
+    def createSheet(self, parcel_category, reception_method = 'post', payment_type = "h" ) -> str:
         payload = {
             "sheet": {
                 "parcel_category": parcel_category,

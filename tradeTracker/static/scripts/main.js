@@ -935,6 +935,9 @@ function saveModalDataToSession() {
         paybackDate: document.querySelector('.date-input')?.value || '',
         price: document.querySelector('.price-input')?.value || '',
         shippingPrice: document.querySelector('.shipping-price')?.value || '',
+        deliveryMethod: document.querySelector('.delivery-method-select')?.value || '',
+        parcelCategory: document.querySelector('.parcel-category-select')?.value || '',
+        insuranceValue: document.querySelector('.insurance-value-input')?.value || '',
         paymentMethods: []
     };
 
@@ -972,6 +975,40 @@ function loadModalDataFromSession(recieverDiv) {
         if (paybackDate && modalData.paybackDate) paybackDate.value = DOMPurify.sanitize(modalData.paybackDate);
         if (priceInput) priceInput.value = DOMPurify.sanitize(modalData.price);
         if (shippingPrice) shippingPrice.value = DOMPurify.sanitize(modalData.shippingPrice);
+
+        // Restore delivery method and conditional parcel/insurance fields
+        const deliveryMethodSelect = recieverDiv.querySelector('.delivery-method-select');
+        if (deliveryMethodSelect && modalData.deliveryMethod) {
+            deliveryMethodSelect.value = DOMPurify.sanitize(modalData.deliveryMethod);
+            if (modalData.deliveryMethod === 'SK-post') {
+                const deliveryMethodInfo = recieverDiv.querySelector('.delivery-method-info');
+                if (deliveryMethodInfo) {
+                    deliveryMethodInfo.innerHTML = `
+                    <select class="parcel-category-select">
+                        <option value=''>Parcel category</option>
+                        <option value='r'>Registered letter</option>
+                        <option value='olz'>Letter</option>
+                        <option value='pl'>Insured letter</option>
+                        <option value='b'>Packet</option>
+                    </select>
+                    <input type='number' placeholder="Insurance value" class="insurance-value-input">
+                    `;
+                    const parcelCategorySelect = deliveryMethodInfo.querySelector('.parcel-category-select');
+                    const insuranceValueInput = deliveryMethodInfo.querySelector('.insurance-value-input');
+                    if (parcelCategorySelect && modalData.parcelCategory) {
+                        parcelCategorySelect.value = DOMPurify.sanitize(modalData.parcelCategory);
+                    }
+                    if (insuranceValueInput && modalData.insuranceValue) {
+                        insuranceValueInput.value = DOMPurify.sanitize(modalData.insuranceValue);
+                    }
+                    const newInputs = deliveryMethodInfo.querySelectorAll('input, select');
+                    newInputs.forEach(input => {
+                        input.addEventListener('input', saveModalDataToSession);
+                        input.addEventListener('change', saveModalDataToSession);
+                    });
+                }
+            }
+        }
 
         // Restore payment methods
         if (modalData.paymentMethods && modalData.paymentMethods.length > 0) {
@@ -1063,6 +1100,9 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
     const paybackDate = DOMPurify.sanitize(recieverDiv.querySelector('.date-input')?.value) || '';
     const shippingWay = 'Doprava / Poštovné – samostatná služba';
     const shippingPrice = DOMPurify.sanitize(recieverDiv.querySelector('.shipping-price')?.value.replace(',', '.')) || '';
+    const deliveryMethod = DOMPurify.sanitize(recieverDiv.querySelector('.delivery-method-select')?.value) || '';
+    const parcelCategory = DOMPurify.sanitize(recieverDiv.querySelector('.parcel-category-select')?.value) || '';
+    const insuranceValue = DOMPurify.sanitize(recieverDiv.querySelector('.insurance-value-input')?.value) || '';
 
     // Calculate total payment amount from payment methods
     const paymentTotal = paymentMethods.reduce((sum, payment) => sum + payment.amount, 0);
@@ -1095,10 +1135,13 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
     };
     cartContent.recieverInfo = recieverInfo;
 
-    if (shippingPrice !== "") {
+    if (shippingPrice !== "" || deliveryMethod) {
         const shipping = {
             shippingWay: shippingWay,
             shippingPrice: shippingPrice.replace(',', '.'),
+            deliveryMethod: deliveryMethod,
+            parcelCategory: parcelCategory,
+            insuranceValue: insuranceValue
         };
         cartContent.shipping = shipping;
     }
@@ -1346,6 +1389,13 @@ function shoppingCart() {
                     <p class='shipping-way'>Doprava / Poštovné – samostatná služba</p>
                     <input type=text placeholder="Price of shipping" class="shipping-price">
                     </div>
+                    <div>
+                        <select class="delivery-method-select">
+                            <option value="">Delivery method</option>
+                            <option value="SK-post">Slovak post</option>
+                        </select>
+                        <div class="delivery-method-info">
+                    </div>
                     <div class='invoice-buttons'>
                         <button class=sales-invoice>Add sale</button>
                         <button class="generate-invoice">Generate Invoice</button>
@@ -1356,6 +1406,32 @@ function shoppingCart() {
 
             // Load saved data from sessionStorage if exists
             loadModalDataFromSession(recieverDiv);
+
+            const deliveryMethodSelect = recieverDiv.querySelector('.delivery-method-select');
+            deliveryMethodSelect.addEventListener('change', () => {
+                const selected = deliveryMethodSelect.value;
+                const deliveryMethodInfo = recieverDiv.querySelector('.delivery-method-info');
+                if (selected === 'SK-post') {
+                    deliveryMethodInfo.innerHTML = `
+                    <select class="parcel-category-select">
+                        <option value=''>Parcel category</option>
+                        <option value='r'>Registered letter</option>
+                        <option value='olz'>Letter</option>
+                        <option value='pl'>Insured letter</option>
+                        <option value='b'>Packet</option>
+                    </select>
+                    <input type='number' placeholder="Insurance value" class="insurance-value-input">
+                    `;
+                    const newInputs = deliveryMethodInfo.querySelectorAll('input, select');
+                    newInputs.forEach(input => {
+                        input.addEventListener('input', saveModalDataToSession);
+                        input.addEventListener('change', saveModalDataToSession);
+                    });
+                } else {
+                    deliveryMethodInfo.innerHTML = '';
+                }
+                saveModalDataToSession();
+            });
 
             // Add event listeners to save data on input
             const modalInputs = recieverDiv.querySelectorAll('input, select');
