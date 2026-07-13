@@ -735,7 +735,7 @@ def _orderReturn(saleId, itemIds, db, shipping_value=0):
 
         if shipping_value:
                 db.execute('UPDATE sales SET shipping_info = shipping_info - ? WHERE id = ?', (shipping_value, saleId))
-        returned_value += shipping_value
+        returned_value += float(shipping_value)
         if returned_value:
             db.execute(
                 'UPDATE sales SET total_amount = total_amount - ? WHERE id = ?',
@@ -753,6 +753,7 @@ def _orderReturn(saleId, itemIds, db, shipping_value=0):
         deleted = cursor.rowcount == 1
     except Exception:
          db.rollback()
+         logger.exception('Return creation failed | saleId: %s', saleId)
          return 'There was an error while creating a return, Error code: Ax04', None
 
     db.commit()
