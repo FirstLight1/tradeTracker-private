@@ -163,45 +163,6 @@ async function loadHistory() {
                     saleId: saleId
                 });
                 window.location.href = `/createCreditNote/?${queryParams}`;
-                return;
-                try {
-
-                    const cnResponse = await csrfFetch(`/generateCreditNote/${saleId}`,
-                        { method: 'POST' });
-
-                    const contentType = cnResponse.headers.get('content-type') || '';
-                    if (!cnResponse.ok || contentType.includes('application/json')) {
-                        const err = await response.json();
-                        renderAlert('Error: ' + (err.message || 'Unknown error'), 'error');
-                        returnButton.disabled = false;
-                        returnButton.textContent = 'Return';
-                        return;
-                    }
-                    try {
-                        downloadFile(cnResponse)
-                    } catch (e) {
-                        renderAlert('Error: ' + e, 'error');
-                    }
-                    const returnResponse = await csrfFetch(`/orderReturn/${saleId}`, {
-                        method: 'POST'
-                    });
-                    const returnData = await returnResponse.json();
-                    if (returnData.status !== 'success') {
-                        renderAlert('Error processing return: ' + returnData.message, 'error');
-                        returnButton.disabled = false;
-                        returnButton.textContent = 'Return';
-                        return;
-                    }
-
-
-                    const saleDiv = returnButton.closest(`.sold-tab`);
-                    saleDiv.remove();
-
-                } catch (e) {
-                    renderAlert('Error processing return: ' + e, 'error');
-                    returnButton.disabled = false;
-                    returnButton.textContent = 'Return';
-                }
             } else {
                 returnButton.textContent = 'Confirm';
                 const timerID = setTimeout(() => {

@@ -58,7 +58,7 @@ async function loadContent() {
         //spawn try agian later type shit
     };
     const saleInfo = sale.data.sale
-    console.log(saleInfo);
+    const originalInvoiceNum = saleInfo.invoice_number;
     const providerInfo = sale.data.provider;
     const recieverInfo = sale.data.reciever;
     const items = sale.data.items;
@@ -81,26 +81,29 @@ async function loadContent() {
             const div = document.createElement('div');
             div.classList.add('card', 'creditnote-item-row');
             const condClass = conditionClass(item.condition);
+            div.setAttribute('data-id', item.id);
             div.innerHTML = `
-                <input type="checkbox" class="card-checkbox" checked>
+                <input type="checkbox" class="item-checkbox" checked>
                 <div class="item-info">
                     <p class="item-name">${item.card_name}</p>
                     <p class="item-number">${item.card_num}</p>
                 </div>
                 <p class="item-condition ${condClass}">${item.condition}</p>
-                <p class="market-value">${item.sell_price}<span class="currency">€</span></p>
+                <p class="market-value">${item.sell_price * -1}<span class="currency">€</span></p>
             `;
             itemsContainer.appendChild(div);
         } else {
             for (let i = 0; i < item.quantity; i++) {
                 const div = document.createElement('div');
                 div.classList.add('sealed-item', 'creditnote-item-row');
+                div.setAttribute('data-id', item.id);
                 div.innerHTML = `
-                    <input type="checkbox" class="sealed-checkbox" checked>
+                    <input type="checkbox" class="item-checkbox" checked>
                     <p class="item-quantity">1</p>
                     <p class="item-name">${item.name}</p>
-                    <p class="market-value">${item.market_value}<span class="currency">€</span></p>
+                    <p class="market-value">${item.market_value * -1}<span class="currency">€</span></p>
                 `;
+
                 itemsContainer.appendChild(div);
             }
         }
@@ -111,33 +114,17 @@ async function loadContent() {
     shippingDiv.innerHTML = `
         <input type="checkbox" class="shipping-checkbox" checked>
         <p>Doprava / Poštovné – samostatná služba </p>
-        <p class="shipping-price">${shipping}<span class="currency">€</span></p>
+        <p class="shipping-price">${shipping * -1}<span class="currency">€</span></p>
         `;
     itemsContainer.appendChild(shippingDiv);
 
 
 
     const totalPriceDiv = document.querySelector('.total-price');
-    totalPriceDiv.innerHTML = `<p class="total-amount">${saleInfo.total_amount}</p><span class="total-price-currency">€</span>`;
+    totalPriceDiv.innerHTML = `<p class="total-amount">${saleInfo.total_amount * -1}</p><span class="total-price-currency">€</span>`;
 
-    const cardCheckboxes = document.querySelectorAll('.card-checkbox');
-    cardCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', (event) => {
-            const checked = event.target.checked;
-            const marketValue = parseFloat(event.target.closest('.creditnote-item-row').querySelector('.market-value').textContent) || 0;
-            const totalAmountEl = document.querySelector('.total-amount');
-            let totalValue = parseFloat(totalAmountEl.textContent) || 0;
-            if (checked) {
-                totalValue += marketValue;
-            } else {
-                totalValue -= marketValue;
-            }
-            totalAmountEl.textContent = totalValue.toFixed(2);
-        });
-    });
-
-    const sealedCheckboxes = document.querySelectorAll('.sealed-checkbox');
-    sealedCheckboxes.forEach(checkbox => {
+    const checkboxes = document.querySelectorAll('.item-checkbox');
+    checkboxes.forEach(checkbox => {
         checkbox.addEventListener('change', (event) => {
             const checked = event.target.checked;
             const marketValue = parseFloat(event.target.closest('.creditnote-item-row').querySelector('.market-value').textContent) || 0;
@@ -165,6 +152,54 @@ async function loadContent() {
         }
         totalAmountEl.textContent = totalValue.toFixed(2);
     });
+
+    const confirmBtn = document.querySelector('.confirm-btn');
+    confirmBtn.addEventListener('click', async (event) => {
+        const returnNote = {
+            items: [],
+            shipping: false
+        }
+        const payload = {};
+        itemsContainer.querySelectorAll('.creditnote-item-row').forEach(item => {
+            if (item?.querySelector('.item-checkbox').checked) {
+                const id = item.getAttribute('data-id');
+                returnNote.items.push(id);
+            }
+        });
+        if (shippingCheckbox.checked) {
+            payload.shipping = {
+                shippingWay: 'Doprava / Poštovné – samostatná služba',
+                shippingPrice: shipping,
+            }
+        };
+
+        const itemsToReturn = items.filter((item) => returnNote.items.includes(String(item.id)));
+        payload.items = itemsToReturn.filter((item) => item.card_num);
+        payload.sealed = itemsToReturn.filter((item) => !item.card_num);
+        //bulk, holo, ex 
+        payload.reciever = recieverInfo;
+        payload.originalInvoiceNum = originalInvoiceNum;
+        payload.valueChanged = itemsToReturn.reduce((acc, curr) => acc + Number(curr.sell_price), 0);
+        const body = JSON.stringify(payload);
+
+        const response = await csrfFetch(`/generateCreditNote/${saleId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: body,
+        });
+        const contentType = response.headers.get('content-type') || '';
+        console.log(response.headers);
+        if (!response.ok || contentType.includes('application/json')) {
+            renderAlert('Error: ' + (await response.json()).message, 'error');
+            return;
+        };
+        await downloadFile(response);
+        window.location.href = `/sold`;
+
+    });
+
 }
 
 loadContent();

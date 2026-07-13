@@ -188,10 +188,9 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
             "bytes": pdf_bytes,
         },invoice_num
 
-def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, ex=None, payment_methods=None, shipping=None, original_invoice_num=None):
+def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, ex=None, payment_methods=None, shipping=None, original_invoice_num=None, cn_num = 1):
     logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
 
-    cn_num = '1'
     orig_inv = str(original_invoice_num).strip() if original_invoice_num else "UNKNOWN"
     orig_inv_safe = orig_inv.replace("/", "-").replace("\\", "-").replace(" ", "")
 
@@ -263,29 +262,29 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
 
     if items and len(items) > 0:
         for item in items:
-            mv = item.get("marketValue")
+            mv = item.get("sell_price")
             if mv is None or str(mv) == "":
                 continue
             invoice.add_item(Item(
                 count=1,
                 price=Decimal(str(mv)),
                 unit="ks",
-                description=item.get("cardName", "") + " " + item.get("cardNum", ""),
+                description=item.get("card_name", "") + " " + item.get("card_num", ""),
                 tax=Decimal("0")
             ))
 
     if sealed:
         for item in sealed:
-            if item.get("auctionId") is None:
+            if item.get("auction_id") is None:
                 tax = Decimal("23")
             else:
                 tax = Decimal("0")
-            mv = item.get("marketValue") or item.get("market_value", "0")
+            mv = item.get("market_value", "0")
             invoice.add_item(Item(
                 count=1,
                 price=Decimal(str(mv).replace("€", "")),
                 unit="ks",
-                description=item.get("sealedName") or item.get("name", ""),
+                description=item.get("name", ""),
                 tax=tax
             ))
 

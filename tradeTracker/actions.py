@@ -670,14 +670,19 @@ def linkAuctionToSale(auction_id):
 
     return jsonify({'status': 'success'})
 
-@bp.route('/orderReturn/<int:saleId>', methods=('POST',))
-@verify_token
-def orderReturn(saleId):
-    # TODO: SEALED NOT HERE FOR SOME REASON
-    db = get_db()
+def _orderReturn(saleId, itemIds, db):
+    cardIds = itemIds.get('cards')
+    cardPlaceholder = ','.join('?' for _ in cardIds)
 
+    sealedIds = itemIds.get('sealed')
+    sealedPlaceholder = ','.join('?' for _ in sealedIds)
+    
     try:
-        db.execute('UPDATE cards SET sold_date = NULL WHERE id IN (SELECT card_id FROM sale_items WHERE sale_id = ?)',(saleId, ))
+        if cardIds:
+            db.execute(f'UPDATE cards SET sold_date = NULL WHERE id IN ({cardPlaceholder})',(cardIds))
+            db.execute(f'DELETE sale_items  WHERE card_id IN ({cardPlaceholder})',(cardIds, ))
+        if sealedIds:
+            db.execute(f'UPDATE sealed SET sale_id = NULL WHERE id IN ({sealedPlaceholder})', (sealedIds))
         bulk_sales_rows = db.execute(
             'SELECT item_type, quantity FROM bulk_sales WHERE sale_id = ?', (saleId,)
         ).fetchall()
@@ -691,14 +696,21 @@ def orderReturn(saleId):
                     'UPDATE bulk_items SET quantity = quantity + ? WHERE id = ?',
                     (bs_row['quantity'], target['id'])
                 )
-        db.execute('DELETE FROM sales WHERE id = ?', (saleId, ))
+        cursor = db.execute("""
+            DELETE FROM sales
+            WHERE id = ?
+              AND NOT EXISTS (SELECT 1 FROM sale_items WHERE sale_id = ?)
+              AND NOT EXISTS (SELECT 1 FROM sealed WHERE sale_id = ?)
+              AND NOT EXISTS (SELECT 1 FROM bulk_sales WHERE sale_id = ?)
+            """, (saleId, saleId, saleId, saleId))
+
+        deleted = cursor.rowcount == 1
     except:
          db.rollback()
-         logger.exception('Return creation failed | saleId: %s', saleId)
-         return jsonify({'status': 'error', 'message': 'There was an error while creating a return, Error code: Ax04'}), 400 
+         return 'There was an error while creating a return, Error code: Ax04'
     
     db.commit()
-    return jsonify({'status': 'success'}),200
+    return None
 
 @bp.route('/loadSale/<int:saleId>', methods=('GET',))
 @verify_token
@@ -725,7 +737,7 @@ def load_sale(saleId):
                        "JOIN sale_items si ON c.id = si.card_id "
                        "WHERE si.sale_id = ? ",(saleId,)).fetchall()
 
-    sealed = db.execute("SELECT s.name, s.price, s.market_value, s.date, s.id, s.auction_id FROM sealed s "
+    sealed = db.execute("SELECT s.name, s.price, s.market_value, s.date, s.id, s.auction_id, s.quantity FROM sealed s "
                         "WHERE s.sale_id = ? ",(saleId,)).fetchall()
 
     sale = dict(sale)
@@ -756,78 +768,25 @@ def load_sale(saleId):
 def generate_credit_note(saleId):
     # TODO: add quantity, also to invoice
     db = get_db()
+    data = request.get_json()
+    original_invoice_num = data.get('originalInvoiceNum')
 
-    # Load the sale record (contains receiver info in notes and invoice_number)
-    sale = db.execute('SELECT * FROM sales WHERE id = ?', (saleId,)).fetchone()
-    if sale is None:
-        return jsonify({'status': 'error', 'message': 'Sale not found, Error code: Ax05'}), 404
-
-    # Parse receiver info stored as JSON in the notes column
-    try:
-        crypt = json.loads(sale['notes'])
-        nonce = base64.b64decode(crypt['nonce'])
-        cipherText = base64.b64decode(crypt['ciphertext'])
-        tag = base64.b64decode(crypt['tag'])
-        key = base64.b64decode(os.environ['KEY'])
-        cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
-        decrypted = cipher.decrypt_and_verify(cipherText, tag)
-        reciever = json.loads(decrypted.decode("utf-8"))
-    except (json.JSONDecodeError, TypeError):
-        reciever = {}
-
-    original_invoice_num = sale['invoice_number']
-
-    # Load cards
-    cards_rows = db.execute(
-        'SELECT c.card_name, c.card_num, si.sell_price as marketValue,  '
-        'FROM cards c '
-        'JOIN sale_items si ON c.id = si.card_id '
-        'WHERE si.sale_id = ?',
-        (saleId,)
-    ).fetchall()
-    items = [{'cardName': r['card_name'], 'cardNum': r['card_num'], 'marketValue': r['marketValue']} for r in cards_rows]
-
-    # Load sealed items
-    sealed_rows = db.execute('SELECT * FROM sealed WHERE sale_id = ?', (saleId,)).fetchall()
-    sealed = [{'sealedName': r['name'], 'marketValue': r['market_value'], 'auctionId': r['auction_id']} for r in sealed_rows]
-
-    # Load bulk/holo/ex sales
-    bulk_rows = db.execute('SELECT * FROM bulk_sales WHERE sale_id = ?', (saleId,)).fetchall()
-    bulk = None
-    holo = None
-    ex = None
-    for b in bulk_rows:
-        if b['item_type'] == 'bulk':
-            bulk = {'quantity': b['quantity'], 'unit_price': b['unit_price']}
-        elif b['item_type'] == 'holo':
-            holo = {'quantity': b['quantity'], 'unit_price': b['unit_price']}
-        elif b['item_type'] == 'ex':
-            ex = {'quantity': b['quantity'], 'unit_price': b['unit_price']}
-
-    # Load shipping info
-    shipping = None
-    if sale['shipping_info'] and float(sale['shipping_info']) > 0:
-        shipping = {
-            'shippingWay': 'Doprava / Poštovné – samostatná služba',
-            'shippingPrice': sale['shipping_info']
-        }
-
-    # Reconstruct payment methods from receiver info if available
-    payment_methods = reciever.get('paymentMethods') or []
-    if not payment_methods and reciever.get('paymentMethod'):
-        payment_methods = [{'type': reciever.get('paymentMethod'), 'amount': 0}]
+    creditNoteNum = db.execute("SELECT MAX(record_number) FROM sales_correction WHERE change_type = 'credit'").fetchone()[0]
+    if creditNoteNum is None:
+        creditNoteNum = 1
 
     try:
         pdf, cn_num = generateInvoice.generateCreditNote(
-            reciever,
-            items if items else None,
-            sealed if sealed else None,
-            bulk,
-            holo,
-            ex,
-            payment_methods if payment_methods else None,
-            shipping,
-            original_invoice_num
+            data.get('reciever'),
+            data.get('items') if data.get('items') else None,
+            data.get('sealed') if data.get('sealed') else None,
+            data.get('bulk'),
+            data.get('holo'),
+            data.get('ex'),
+            None,
+            data.get('shipping'),
+            original_invoice_num,
+            creditNoteNum
         )
         response = send_file(
                         BytesIO(pdf['bytes']),
@@ -840,6 +799,24 @@ def generate_credit_note(saleId):
         logger.critical('Credit note generation failed %s', e)
         return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax06'}), 500
     logger.info('Credit note generated succesfully | original invoice num: %s', original_invoice_num)
+
+    try:
+        db.execute("INSERT INTO sales_correction (sale_id, record_number, change_type, value_change) VALUES (?, ?, ?, ?)",
+                    (saleId, creditNoteNum, 'credit', data.get('valueChanged')))
+    except Exception as e:
+        logger.critical('Failed to insert sales_correction | e: %s', e)
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax07'}), 500
+
+    itemIds = {
+            'cards' : [c['id'] for c in data.get('items') or []],
+            'sealed' : [s['id'] for s in data.get('sealed') or []],
+            }
+    err = _orderReturn(saleId,itemIds,db)
+    if err:
+        logger.warning('Failed to order return | saleId: %s | reason: %s', saleId, err)
+        return jsonify({'status': 'error', 'message': f'{str(err)}, Error code: Ax08'}), 500
+    
+
     return response 
 
 
