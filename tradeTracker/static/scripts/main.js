@@ -932,6 +932,7 @@ function saveModalDataToSession() {
         clientAddress: document.querySelector('.client-address')?.value || '',
         clientCity: document.querySelector('.client-city')?.value || '',
         clientCountry: document.querySelector('.client-country')?.value || '',
+        clientZip: document.querySelector('.client-zip')?.value || '',
         paybackDate: document.querySelector('.date-input')?.value || '',
         price: document.querySelector('.price-input')?.value || '',
         shippingPrice: document.querySelector('.shipping-price')?.value || '',
@@ -964,6 +965,7 @@ function loadModalDataFromSession(recieverDiv) {
         const clientAddress = recieverDiv.querySelector('.client-address');
         const clientCity = recieverDiv.querySelector('.client-city');
         const clientCountry = recieverDiv.querySelector('.client-country');
+        const clientZip = recieverDiv.querySelector('.client-zip');
         const paybackDate = recieverDiv.querySelector('.date-input');
         const priceInput = recieverDiv.querySelector('.price-input');
         const shippingPrice = recieverDiv.querySelector('.shipping-price');
@@ -972,6 +974,7 @@ function loadModalDataFromSession(recieverDiv) {
         if (clientAddress) clientAddress.value = DOMPurify.sanitize(modalData.clientAddress);
         if (clientCity) clientCity.value = DOMPurify.sanitize(modalData.clientCity);
         if (clientCountry) clientCountry.value = DOMPurify.sanitize(modalData.clientCountry);
+        if (clientZip) clientZip.value = DOMPurify.sanitize(modalData.clientZip);
         if (paybackDate && modalData.paybackDate) paybackDate.value = DOMPurify.sanitize(modalData.paybackDate);
         if (priceInput) priceInput.value = DOMPurify.sanitize(modalData.price);
         if (shippingPrice) shippingPrice.value = DOMPurify.sanitize(modalData.shippingPrice);
@@ -1097,6 +1100,7 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
     const clientAddress = DOMPurify.sanitize(recieverDiv.querySelector('.client-address')?.value) || '';
     const clientCity = DOMPurify.sanitize(recieverDiv.querySelector('.client-city')?.value) || '';
     const clientCountry = DOMPurify.sanitize(recieverDiv.querySelector('.client-country')?.value) || '';
+    const clientZip = DOMPurify.sanitize(recieverDiv.querySelector('.client-zip')?.value) || '';
     const paybackDate = DOMPurify.sanitize(recieverDiv.querySelector('.date-input')?.value) || '';
     const shippingWay = 'Doprava / Poštovné – samostatná služba';
     const shippingPrice = DOMPurify.sanitize(recieverDiv.querySelector('.shipping-price')?.value.replace(',', '.')) || '';
@@ -1124,6 +1128,14 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
         return;
     }
     cartContent.paymentMethods = paymentMethods;
+    // ZIP is only collected/required when the recipient country is Slovakia
+    const isSlovakia = ['slovakia', 'sk', 'slovensko'].includes(clientCountry.trim().toLowerCase());
+    if (isSlovakia) {
+        if (!clientZip.trim()) {
+            renderAlert('ZIP / postal code is required for Slovakia, Error code: Mx07', 'error');
+            return;
+        }
+    }
     // Update or create recieverInfo (always update payment methods)
     const recieverInfo = {
         nameAndSurname: clientName,
@@ -1133,9 +1145,12 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
         paybackDate: paybackDate,
         total: null,
     };
+    if (isSlovakia) {
+        recieverInfo.zip = clientZip;
+    }
     cartContent.recieverInfo = recieverInfo;
 
-    if (shippingPrice !== "" || deliveryMethod) {
+    if (shippingPrice !== "") {
         const shipping = {
             shippingWay: shippingWay,
             shippingPrice: shippingPrice.replace(',', '.'),
@@ -1382,6 +1397,10 @@ function shoppingCart() {
                     <div>
                         <p>Country</p>
                         <input type='text' class='client-country'>
+                    </div>
+                    <div class='zip-div'>
+                        <p>ZIP <span class='zip-optional-label'>(Slovakia only)</span></p>
+                        <input type='text' class='client-zip'>
                     </div>
                     <div>
                         <p>Payback date</p>
