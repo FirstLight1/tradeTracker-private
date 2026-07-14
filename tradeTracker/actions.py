@@ -2079,7 +2079,7 @@ def importCSV():
 
                     label = eph.addParcel(item.reciever, order[parcel_category], insurance)
                     label_filename = f"label_{reciept['filename']}"
-                    EPHSheets.append(EPHSheetInfo(sheetId=order[parcel_category], state=None, parcelId=label["id"], filename=label_filename, label=None))
+                    EPHSheets.append(EPHSheetInfo(sheetId=order[parcel_category], state=None, parcelId=label, filename=label_filename, label=None))
 
 
                 #PACKETA
@@ -2346,22 +2346,26 @@ def invoice(kind):
                 zip_buffer = BytesIO()
 
                 db.commit()
-                
+                  
                 #EPHSERVICE create sheet
                 delivery = cartContent.get('delivery')
                 label = None
                 
-                if delivery['deliveryMethod'] == 'SK-post':
+                if delivery is not None and delivery['deliveryMethod'] == 'SK-post':
+                    if cartContent['recieverInfo']['state'] not in CONSTANTS.EUROPE_COUNTRY_CODES:
+                        cartContent['recieverInfo']['state'] = CONSTANTS.EUROPE_COUNTRY_CODES.get(cartContent['recieverInfo']['state'])
                     eph = EPHService()
                     sheet_id = eph.createSheet(parcel_category = delivery['parcelCategory'], reception_method = "post")
-                    parcel_id = eph.addParcel(order = delivery['parcel'], sheet_id = sheet_id, insurance_value = delivery['insuranceValue'])
-                    label = eph.download_label(parcel_id = parcel_id, sheet_id = sheet_id, filename = f"label_{reciept['filename']}")
+                    parcel_id = eph.addParcel(order = cartContent['recieverInfo'], sheet_id = sheet_id, insurance_value = delivery['insuranceValue'])
+                    label = eph.download_label(parcel_id = parcel_id, sheet_id = sheet_id, filename = f"label_{receipt['filename']}")
+                    eph.register_sheet(sheet_id)
                     
                                 
                 with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
                     zip_file.writestr(receipt['filename'], receipt['bytes'])
                     if label:
                         zip_file.writestr(label.filename, label.bytes)
+                zip_buffer.seek(0)
                         
                 response = send_file(
                         zip_buffer,
