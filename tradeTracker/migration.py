@@ -68,6 +68,7 @@ def migrate_database(db_path):
         addOpenedFlagToSealedTable(db_path)
 
         createSalesCorrectionTable(db_path)
+        addUniqueIndexOnSalesCorrectionRecord(db_path)
         print("Database migration check complete.")
     except sqlite3.Error as e:
         print(f"Database migration failed: {e}")
@@ -804,6 +805,33 @@ def createSalesCorrectionTable(db_path):
             print("sales_correction table already exists, skipping migration")
     except sqlite3.Error as e:
         print(f"Error checking for sales table: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def addUniqueIndexOnSalesCorrectionRecord(db_path):
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_sales_correction_record_unique'"
+        )
+        exists = cursor.fetchone() is not None
+
+        if not exists:
+            print("Adding UNIQUE index on sales_correction(record_number, change_type)...")
+            cursor.execute(
+                "CREATE UNIQUE INDEX idx_sales_correction_record_unique "
+                "ON sales_correction(record_number, change_type)"
+            )
+            conn.commit()
+            print("UNIQUE index created successfully.")
+        else:
+            print("UNIQUE index on sales_correction(record_number, change_type) already exists.")
+    except sqlite3.Error as e:
+        print(f"Error adding UNIQUE index on sales_correction: {e}")
     finally:
         if conn:
             conn.close()
