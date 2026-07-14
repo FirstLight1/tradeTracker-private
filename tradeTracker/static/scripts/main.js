@@ -1139,11 +1139,17 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
         const shipping = {
             shippingWay: shippingWay,
             shippingPrice: shippingPrice.replace(',', '.'),
+        };
+        cartContent.shipping = shipping;
+    }
+
+    if (deliveryMethod) {
+        const delivery = {
             deliveryMethod: deliveryMethod,
             parcelCategory: parcelCategory,
             insuranceValue: insuranceValue
         };
-        cartContent.shipping = shipping;
+        cartContent.delivery = delivery;
     }
 
     // Apply price adjustment if cart value was manually changed

@@ -2304,6 +2304,7 @@ def invoice(kind):
     if request.method == 'POST':
         #TODO add asymetric decryption
         cartContent = request.get_json()
+        print(cartContent)
 
         payment_data, valid, err = None, False, None
         payment_methods_input = cartContent.get('paymentMethods') or []
@@ -2341,13 +2342,34 @@ def invoice(kind):
             try:
                 saleResult = SaleService(db,InvoiceReceiptService()).process_sale(saleInput)
                 receipt = saleResult.receipt.raw
-                response = send_file(
-                        BytesIO(receipt['bytes']),
-                        download_name=receipt['filename'],
-                        as_attachment=True,
-                        mimetype='application/pdf'
-                        )
+
+                zip_buffer = BytesIO()
+
                 db.commit()
+                
+                #EPHSERVICE create sheet
+                delivery = cartContent.get('delivery')
+                label = None
+                
+                if delivery['deliveryMethod'] == 'SK-post':
+                    eph = EPHService()
+                    sheet_id = eph.createSheet(parcel_category = delivery['parcelCategory'], reception_method = "post")
+                    parcel_id = eph.addParcel(order = delivery['parcel'], sheet_id = sheet_id, insurance_value = delivery['insuranceValue'])
+                    label = eph.download_label(parcel_id = parcel_id, sheet_id = sheet_id, filename = f"label_{reciept['filename']}")
+                    
+                                
+                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                    zip_file.writestr(receipt['filename'], receipt['bytes'])
+                    if label:
+                        zip_file.writestr(label.filename, label.bytes)
+                        
+                response = send_file(
+                        zip_buffer,
+                        as_attachment=True,
+                        download_name=f"Invoice_{saleResult.sale_id}.zip",
+                        mimetype="application/zip"
+                        )
+
                 logger.info('Invoice created succesfully | %s ', saleResult.sale_id)
                 return response 
                 
