@@ -53,12 +53,14 @@ class EPHService:
 
         parcel = {
             "recipient": {
-                "name": order["nameAndSurname"],
-                "street": order["address"],
-                "city": order["city"],
-                "zip": order["zipCode"],
+                "name": order.get("nameAndSurname", ""),
+                "street": order.get("address", ""),
+                "city": order.get("city", ""),
+                "zip": order.get("zip", ""),
                 "country": country.lower(),
-            }
+                "phone": order.get("phone", ""),
+                "email": order.get("email", ""),
+            }, 
         }
 
         if insurance_value:
@@ -73,7 +75,8 @@ class EPHService:
             headers=self._headers(),
         )
         r.raise_for_status()
-        return r.json()["parcel"]
+        print(r.json())
+        return r.json()["parcel"]["id"]
 
     def download_label(self, parcel_id, sheet_id, filename):
         r = requests.post(

@@ -147,9 +147,9 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
     add_bulk_invoice_item(invoice, bulk, 'bulk')
     add_bulk_invoice_item(invoice, holo, 'holo')
     add_bulk_invoice_item(invoice, ex, 'ex')
-
-    if shipping:
-        shippingPrice = Decimal(str(shipping.get('shippingPrice'))) / Decimal('1.23')
+    print(shipping)
+    if shipping is not None:
+        shippingPrice = Decimal(str(shipping.get('shippingPrice', 0))) / Decimal('1.23')
         invoice.add_item(Item(
             count=1,
             price=shippingPrice,
