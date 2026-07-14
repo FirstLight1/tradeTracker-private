@@ -4,6 +4,7 @@ from flask import request, Blueprint, jsonify, current_app, send_file, abort
 from tradeTracker.db import get_db
 from io import BytesIO, TextIOWrapper, StringIO
 import re
+import sqlite3
 import uuid
 import time
 import csv
@@ -742,21 +743,11 @@ def _orderReturn(saleId, itemIds, db, shipping_value=0):
                 (returned_value, saleId)
             )
 
-        cursor = db.execute("""
-            DELETE FROM sales
-            WHERE id = ?
-              AND NOT EXISTS (SELECT 1 FROM sale_items WHERE sale_id = ?)
-              AND NOT EXISTS (SELECT 1 FROM sealed WHERE sale_id = ?)
-              AND NOT EXISTS (SELECT 1 FROM bulk_sales WHERE sale_id = ?)
-            """, (saleId, saleId, saleId, saleId))
-
-        deleted = cursor.rowcount == 1
     except Exception:
          db.rollback()
          logger.exception('Return creation failed | saleId: %s', saleId)
          return 'There was an error while creating a return, Error code: Ax04', None
 
-    db.commit()
     return None, returned_value
 
 @bp.route('/loadSale/<int:saleId>', methods=('GET',))
@@ -813,33 +804,49 @@ def load_sale(saleId):
 @bp.route('/generateCreditNote/<int:saleId>', methods=('POST',))
 @verify_token
 def generate_credit_note(saleId):
-    # TODO: add quantity, also to invoice
     db = get_db()
     data = request.get_json()
     original_invoice_num = data.get('originalInvoiceNum')
-
-    creditNoteNum = db.execute("SELECT MAX(record_number) FROM sales_correction WHERE change_type = 'credit'").fetchone()[0]
-    if creditNoteNum is None:
-        creditNoteNum = 1
 
     itemIds = {
             'cards' : [c['id'] for c in data.get('items') or []],
             'sealed' : data.get('sealed') or [],
             }
     shipping_value = (data.get('shipping') or {}).get('shippingPrice', 0) or 0
+
+    if not getattr(db, 'in_transaction', False):
+        db.execute("BEGIN IMMEDIATE")
+
     err, returned_value = _orderReturn(saleId, itemIds, db, shipping_value)
     if err:
+        db.rollback()
         status_code = 400 if 'exceeds available' in err else 500
         logger.warning('Failed to order return | saleId: %s | reason: %s', saleId, err)
         return jsonify({'status': 'error', 'message': f'{str(err)}, Error code: Ax08'}), status_code
 
-    try:
-        db.execute("INSERT INTO sales_correction (sale_id, record_number, change_type, value_change) VALUES (?, ?, ?, ?)",
-                    (saleId, creditNoteNum, 'credit', returned_value))
-        db.commit()
-    except Exception as e:
-        logger.critical('Failed to insert sales_correction | e: %s', e)
-        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax07'}), 500
+    creditNoteNum = None
+    for attempt in range(3):
+        row = db.execute(
+            "SELECT COALESCE(MAX(record_number), 0) + 1 FROM sales_correction WHERE change_type = 'credit'"
+        ).fetchone()
+        creditNoteNum = row[0]
+        try:
+            db.execute(
+                "INSERT INTO sales_correction (sale_id, record_number, change_type, value_change) VALUES (?, ?, ?, ?)",
+                (saleId, creditNoteNum, 'credit', returned_value)
+            )
+            break
+        except sqlite3.IntegrityError as e:
+            if 'UNIQUE constraint' not in str(e):
+                db.rollback()
+                logger.critical('Non-UNIQUE IntegrityError on sales_correction | saleId: %s | e: %s', saleId, e)
+                return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax07'}), 500
+            logger.warning('record_number collision (attempt %d), retrying | saleId: %s', attempt + 1, saleId)
+            if attempt == 2:
+                db.rollback()
+                logger.critical('record_number conflict exhausted retries | saleId: %s', saleId)
+                return jsonify({'status': 'error', 'message': 'Credit note number conflict, Error code: Ax07'}), 500
+            continue
 
     try:
         pdf, cn_num = generateInvoice.generateCreditNote(
@@ -854,19 +861,20 @@ def generate_credit_note(saleId):
             original_invoice_num,
             creditNoteNum
         )
-        response = send_file(
-                        BytesIO(pdf['bytes']),
-                        download_name=pdf['filename'],
-                        as_attachment=True,
-                        mimetype='application/pdf'
-                        )
-
     except Exception as e:
+        db.rollback()
         logger.critical('Credit note generation failed %s', e)
         return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax06'}), 500
+
+    db.commit()
     logger.info('Credit note generated succesfully | original invoice num: %s', original_invoice_num)
 
-    return response 
+    return send_file(
+        BytesIO(pdf['bytes']),
+        download_name=pdf['filename'],
+        as_attachment=True,
+        mimetype='application/pdf'
+    )
 
 
 @bp.route('/generateSoldReport', methods=('GET',))
