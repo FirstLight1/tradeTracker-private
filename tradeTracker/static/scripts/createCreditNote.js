@@ -57,10 +57,14 @@ async function loadContent() {
         return;
         //spawn try agian later type shit
     };
-    const saleInfo = sale.data.sale
+    const res = await csrfFetch(`/partyInfo/${saleId}`);
+    const partyInfo = await res.json();
+    console.log(partyInfo);
+
+    const saleInfo = partyInfo.sale;
     const originalInvoiceNum = saleInfo.invoice_number;
-    const providerInfo = sale.data.provider;
-    const recieverInfo = sale.data.reciever;
+    const providerInfo = partyInfo.providerInfo;
+    const recieverInfo = partyInfo.recieverInfo;
     const items = sale.data.items;
     const shipping = saleInfo.shipping_info;
 
