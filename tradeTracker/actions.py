@@ -750,14 +750,14 @@ def _orderReturn(saleId, itemIds, db, shipping_value=0):
 
     return None, returned_value
 
-@bp.route('/loadSale/<int:saleId>', methods=('GET',))
+@bp.route('/partyInfo/<int:saleId>', methods=('GET',))
 @verify_token
-def load_sale(saleId):
+def partyInfo(saleId):
+
     db = get_db()
     sale = db.execute('SELECT * FROM sales WHERE id = ?', (saleId,)).fetchone()
     if sale is None:
         return jsonify({'status': 'error', 'message': 'Sale not found, Error code: Ax05'}), 404
-     
     try:
         crypt = json.loads(sale['notes'])
         nonce = base64.b64decode(crypt['nonce'])
@@ -769,17 +769,10 @@ def load_sale(saleId):
         reciever = json.loads(decrypted.decode("utf-8"))
     except (json.JSONDecodeError, TypeError):
         reciever = {}
-
-
-    cards = db.execute("SELECT c.card_name, c.card_num, c.condition, c.id, si.sell_price FROM cards c "
-                       "JOIN sale_items si ON c.id = si.card_id "
-                       "WHERE si.sale_id = ? ",(saleId,)).fetchall()
-
-    sealed = db.execute("SELECT s.name, s.price, s.market_value, s.date, s.id, s.auction_id, s.quantity FROM sealed s "
-                        "WHERE s.sale_id = ? ",(saleId,)).fetchall()
-
+     
     sale = dict(sale)
     sale.pop('notes', None)
+    #TODO: change this to values from env
     provider = {
         'summary': 'Dominik Forró - CARD ANVIL',
         'address': 'Vahovce 94',
@@ -792,10 +785,20 @@ def load_sale(saleId):
         'dic': '1130287664',
         'ic_dph': 'SK1130287664',
     }
+    return jsonify({'providerInfo': provider, 'recieverInfo': reciever, 'sale':sale}), 200
+
+@bp.route('/loadSale/<int:saleId>', methods=('GET',))
+@verify_token
+def load_sale(saleId):
+    db = get_db()
+    cards = db.execute("SELECT c.card_name, c.card_num, c.condition, c.id, si.sell_price FROM cards c "
+                       "JOIN sale_items si ON c.id = si.card_id "
+                       "WHERE si.sale_id = ? ",(saleId,)).fetchall()
+
+    sealed = db.execute("SELECT s.name, s.price, s.market_value, s.date, s.id, s.auction_id, s.quantity FROM sealed s "
+                        "WHERE s.sale_id = ? ",(saleId,)).fetchall()
+
     data = {
-            'sale': sale,
-            'provider': provider,
-            'reciever': reciever,
             'items': [dict(c) for c in cards] + [dict(s) for s in sealed],
            }
     return jsonify({'status': 'success', 'data': data}),200
