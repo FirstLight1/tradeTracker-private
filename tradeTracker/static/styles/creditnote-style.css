@@ -124,7 +124,7 @@
     padding: 15px 25px;
 }
 
-.creditnote-total > p {
+.creditnote-total>p {
     margin: 0 0 8px 0;
 }
 
@@ -150,6 +150,9 @@
     gap: 16px;
     color: var(--text-color);
     font-family: var(--primary-font), serif;
+    min-height: 0;
+    max-height: 300px;
+    overflow-y: auto;
 }
 
 .creditnote-item-content .creditnote-item-row {
@@ -274,4 +277,60 @@
 
 .creditnote-item-content .shipping-info .currency {
     margin-left: 4px;
+}
+
+/* Debit-note search: thinner result rows, overlay (absolute) so they don't displace items */
+.debit-note-search {
+    position: relative;
+}
+
+.debit-note-search .search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    width: 100%;
+    margin-top: 4px;
+    z-index: 10;
+    background: rgba(13, 17, 23, 0.95);
+    border-radius: 8px;
+}
+
+.debit-note-search .search-results div {
+    grid-template-columns: 1fr 90px 100px 60px 80px;
+    column-gap: 10px;
+    padding: 3px 8px;
+    margin-top: 3px;
+    font-size: 0.82rem;
+    min-height: 0;
+}
+
+.debit-note-search .search-results .result-market-value,
+.debit-note-search .search-results .result-quantity {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.debit-note-search .search-results .result-condition {
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Debit-note added item rows: no checkbox column */
+.creditnote-item-content .creditnote-item-row.debitnote-item-row.card {
+    grid-template-columns: 1fr 110px 90px;
+}
+
+.creditnote-item-content .creditnote-item-row.debitnote-item-row.sealed-item {
+    grid-template-columns: 40px 1fr 90px;
+}
+
+.creditnote-item-content .creditnote-item-row.debitnote-item-row .item-condition {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.creditnote-item-content .creditnote-item-row.debitnote-item-row .market-value {
+    text-align: right;
+    white-space: nowrap;
 }
