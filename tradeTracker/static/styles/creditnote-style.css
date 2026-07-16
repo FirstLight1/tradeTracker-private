@@ -318,11 +318,11 @@
 
 /* Debit-note added item rows: no checkbox column */
 .creditnote-item-content .creditnote-item-row.debitnote-item-row.card {
-    grid-template-columns: 1fr 110px 90px;
+    grid-template-columns: 1fr 110px 90px 20px;
 }
 
 .creditnote-item-content .creditnote-item-row.debitnote-item-row.sealed-item {
-    grid-template-columns: 40px 1fr 90px;
+    grid-template-columns: 40px 1fr 90px 20px;
 }
 
 .creditnote-item-content .creditnote-item-row.debitnote-item-row .item-condition {
@@ -333,4 +333,24 @@
 .creditnote-item-content .creditnote-item-row.debitnote-item-row .market-value {
     text-align: right;
     white-space: nowrap;
+}
+
+.creditnote-item-content .creditnote-item-row.debitnote-item-row .item-remove-btn {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid rgba(229, 104, 116, 0.4);
+    border-radius: 4px;
+    background: rgba(229, 104, 116, 0.1);
+    color: var(--condition-colors-played, #E56874);
+    font-size: 0.7rem;
+    line-height: 1;
+    cursor: pointer;
+    justify-self: center;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.creditnote-item-content .creditnote-item-row.debitnote-item-row .item-remove-btn:hover {
+    background: rgba(229, 104, 116, 0.3);
+    border-color: var(--condition-colors-played, #E56874);
 }

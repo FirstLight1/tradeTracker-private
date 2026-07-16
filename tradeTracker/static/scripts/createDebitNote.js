@@ -163,7 +163,18 @@ async function addItemToDebitNote(result, pendingQty) {
     const itemsContainer = document.querySelector('.creditnote-item-content');
     const item = await DebitNoteItem.fromSearchResult(result, pendingQty, addedIds);
     if (!item) return;
-    item.render().forEach(el => itemsContainer.appendChild(el));
+    const totalPrice = document.querySelector('.total-amount');
+    item.render().forEach(el => {
+        itemsContainer.appendChild(el)
+    });
+    if (item.type === 'card') {
+        item.cardIds.forEach(_ => {
+            totalPrice.textContent = (Number(totalPrice.textContent) + Number(item.marketValue)).toFixed(2)
+        })
+    } else {
+        totalPrice.textContent = (Number(totalPrice.textContent) + Number(item.marketValue * item.quantity)).toFixed(2)
+    }
+
 }
 
 async function loadContent() {

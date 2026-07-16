@@ -2,7 +2,7 @@ import { csrfFetch, escapeHtml, sanitizeNumericId, sanitizeClassToken } from "./
 import { renderAlert } from "./renderUtil.js";
 
 export class DebitNoteItem {
-    constructor({ type, cardName, cardNum, condition, marketValue, sid, cardIds, quantity }) {
+    constructor({ type, cardName, cardNum, condition, marketValue, sid, cardIds, quantity, addedIds }) {
         this.type = type;
         this.cardName = cardName;
         this.cardNum = cardNum;
@@ -11,6 +11,7 @@ export class DebitNoteItem {
         this.sid = sid;
         this.cardIds = cardIds;
         this.quantity = quantity;
+        this.addedIds = addedIds;
         this.elements = [];
     }
 
@@ -33,7 +34,14 @@ export class DebitNoteItem {
                     </div>
                     <p class="item-condition ${condClass}">${escapeHtml(this.condition || '')}</p>
                     <p class="market-value">${escapeHtml(String(this.marketValue ?? ''))}<span class="currency">€</span></p>
+                    <button class="item-remove-btn" type="button">X</button>
                 `;
+                row.querySelector('.item-remove-btn').addEventListener('click', () => {
+                    row.remove();
+                    this.addedIds.delete(id);
+                    this.elements = this.elements.filter(el => el !== row);
+                    document.querySelector('.creditnote-total .total-amount').textContent = (Number(document.querySelector('.creditnote-total .total-amount').textContent) - Number(this.marketValue)).toFixed(2);
+                });
                 this.elements.push(row);
             });
         } else {
@@ -44,7 +52,14 @@ export class DebitNoteItem {
                 <p class="item-quantity">${sanitizeNumericId(this.quantity)}</p>
                 <p class="item-name">${escapeHtml(this.cardName || '')}</p>
                 <p class="market-value">${escapeHtml(String(this.marketValue ?? ''))}<span class="currency">€</span></p>
+                <button class="item-remove-btn" type="button">X</button>
             `;
+            row.querySelector('.item-remove-btn').addEventListener('click', () => {
+                row.remove();
+                this.addedIds.delete(this.sid);
+                this.elements = this.elements.filter(el => el !== row);
+                document.querySelector('.creditnote-total .total-amount').textContent = (Number(document.querySelector('.creditnote-total .total-amount').textContent) - Number(this.marketValue * this.quantity)).toFixed(2);
+            });
             this.elements.push(row);
         }
         return this.elements;
@@ -64,6 +79,7 @@ export class DebitNoteItem {
                 cardName: result.name,
                 marketValue: result.market_value,
                 quantity: pendingQty,
+                addedIds,
             });
         }
 
@@ -84,6 +100,7 @@ export class DebitNoteItem {
             condition: result.condition,
             marketValue: result.market_value,
             cardIds: taken,
+            addedIds,
         });
     }
 
