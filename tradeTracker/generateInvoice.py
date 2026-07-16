@@ -30,6 +30,7 @@ def add_bulk_invoice_item(invoice, item, item_type):
         tax=Decimal("0")
     ))
 
+#TODO: move getting the invoice number upstream so I dont need to pass it in
 def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=None, ex=None, payment_methods=None, shipping=None):
     logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
 
