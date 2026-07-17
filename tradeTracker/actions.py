@@ -880,16 +880,20 @@ def generate_credit_note(saleId):
     )
 
 def orderDebit(db, saleId, cards=None, sealed=None):
+    valueChange = 0.0
     try:
         if cards:
             for card in cards:
-                db.execute("INSERT INTO sale_items (sale_id, card_id, sell_price, profit) VALUES (?, ?, ?, ?)",
-                           (saleId, card.get('id'), card.get('marketValue'), 0))
+                db.execute("INSERT INTO sale_items (sale_id, card_id, sell_price, profit) VALUES (?, ?, ?, (SELECT market_value - card_price FROM cards WHERE id = ?))",
+                           (saleId, card.get('id'), card.get('marketValue'), card.get('id')))
+                valueChange += float(card.get('marketValue'))
 
         if sealed:
             for item in sealed:
                 db.execute("UPDATE sealed SET sale_id = ? WHERE id = ?", (saleId, item.get('id')))
-            return None
+                valueChange += float(item.get('market_value'))
+        db.execute("UPDATE sales SET total_amount = total_amount + ? WHERE id = ?", (valueChange, saleId))
+        return None
     except Exception as e:
         return e
 
