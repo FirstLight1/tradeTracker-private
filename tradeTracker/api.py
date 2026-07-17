@@ -21,7 +21,7 @@ def cardMarketTable():
         data = request.get_json()
         cards = data.get('cards')
         sealed = data.get('sealed')
-        date = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
+        date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         auction = {
             'name': None,
             'buy': None,

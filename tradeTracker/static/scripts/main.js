@@ -3040,7 +3040,7 @@ async function loadSealed(viewButton) {
                         row.name = inputs[0].value || null;
                         row.price = inputs[1].value || null;
                         row.market_value = inputs[2].value || null;
-                        row.dateAdded = inputs[3].value;
+                        row.dateAdded = inputs[3].value || null;
                         if (row.name !== null && row.market_value !== null) {
                             inputValues.push(row);
                         }

@@ -1,6 +1,7 @@
 import base64
 from decimal import Decimal
 from flask import request, Blueprint, jsonify, current_app, send_file, abort
+from reportlab.platypus import SimpleDocTemplate
 from tradeTracker.db import get_db
 from io import BytesIO, TextIOWrapper, StringIO
 import re
@@ -9,9 +10,22 @@ import time
 import csv
 import datetime
 import unicodedata
+from dateutil import parser as dateutil_parser
 from Crypto.Cipher import AES
 import os
 import fpdf
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Table,
+    TableStyle,
+    Paragraph,
+    Spacer
+)
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 import json
 import zipfile
 from collections import defaultdict
@@ -398,7 +412,9 @@ def addSealed():
     for sealed in data:
         marketValue = float(sealed.get("market_value").replace(',','.')) if sealed.get("market_value") is not None else 0
         price = float(sealed.get("price").replace(',','.')) if sealed.get("price") is not None else marketValue * 0.80;
-        date = sealed.get('dateAdded') if sealed.get('dateAdded') is not None else datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
+        date = sealed.get('dateAdded') if sealed.get('dateAdded') else datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        if date and len(date) == 10:
+            date = date + 'T00:00:00Z'
         db.execute("INSERT INTO sealed(name, normalized_name, price, market_value, date) VALUES (?, ?, ?, ?, ?)",(sealed.get("name"), normalize(sealed.get("name")), price, marketValue, date))
     db.commit()
     return jsonify({'status':'success'}),200
@@ -435,12 +451,27 @@ def loadSealedByAuction(auction_id):
     ).fetchall()
     return jsonify([dict(item) for item in sealed_items]), 200
 
+@bp.route('/loadPurchases', methods=('GET',))
+@verify_token
+def loadPurchases():
+    db = get_db()
+    purchases = db.execute(
+        'SELECT * FROM auctions ORDER BY id DESC').fetchall()
+    return jsonify([dict(auction) for auction in purchases]),200
+
 @bp.route('/loadAllCards/<int:auction_id>', methods=('GET',))
 @verify_token
 def loadAllCards(auction_id):
     db = get_db()
     cards = db.execute('SELECT * FROM cards WHERE auction_id = ?', (auction_id,)).fetchall()
     return jsonify([dict(card) for card in cards]),200
+#TODO: merge into one, add to existiog SELECT endpoints but with filter query
+@bp.route('/loadAllSealed/<int:auction_id>', methods=('GET',))
+@verify_token
+def loadAllSealed(auction_id):
+    db = get_db()
+    sealed = db.execute('SELECT * FROM sealed WHERE auction_id = ?', (auction_id,)).fetchall()
+    return jsonify([dict(sealed) for sealed in sealed]),200
 
 @bp.route('/inventoryValue', methods=('GET',))
 @verify_token
@@ -538,7 +569,9 @@ def addToExistingAuction(auction_id):
                 for item in sealed:
                     marketValue = float(item.get("market_value").replace(',','.')) if item.get("market_value") is not None else 0
                     price = float(item.get("price").replace(',','.')) if item.get("price") is not None else marketValue * 0.80
-                    date = item.get('date') if item.get('date') is not None else datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
+                    date = item.get('date') if item.get('date') is not None else datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                    if date and len(date) == 10:
+                        date = date + 'T00:00:00Z'
                     db.execute(
                         "INSERT INTO sealed(name, normalized_name, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         (item.get("name"), normalize(item.get("name")),item.get("quantity"), price, marketValue, date, auction_id)
@@ -793,6 +826,109 @@ def generate_credit_note(saleId):
     return response 
 
 
+@bp.route('/generateBuyReport', methods=('GET',))
+@limiter.limit("2 per minute")
+@verify_token
+def generateBuyReport():
+    #TODO: add bulk
+    db = get_db()
+    curr = db.cursor()
+    auctionId = request.args.get('auctionId')
+    if not auctionId:
+        return jsonify({'status': 'error', 'message': 'Missing auctionId'}), 400
+    auctionId = int(auctionId)
+    buffer = BytesIO()
+
+    try:
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        
+        # Add custom font
+        font_dir = os.path.join(os.path.dirname(__file__), 'fonts')
+        pdfmetrics.registerFont(TTFont('DejaVuSans', os.path.join(font_dir, 'DejaVuSans.ttf')))
+        pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', os.path.join(font_dir, 'DejaVuSans-Bold.ttf')))
+        pdfmetrics.registerFontFamily('DejaVuSans', normal='DejaVuSans', bold='DejaVuSans-Bold')
+        print(pdfmetrics.getRegisteredFontNames())
+
+        elements = []
+        auctionInfo =  curr.execute("SELECT id, auction_name, date_created FROM auctions WHERE id = ?",(auctionId,)).fetchone()
+        auctionName = auctionInfo[1] if auctionInfo[1] is not None else f"auction {int(auctionInfo[0])-1}"
+        dateCreated = format_iso_date(auctionInfo[2])
+
+        styles = getSampleStyleSheet()
+        styles["Heading1"].fontName = "DejaVuSans"
+        styles["Heading2"].fontName = "DejaVuSans"
+
+        elements.append(Paragraph(f"Sales Report - {auctionName} - Added: {dateCreated}", styles["Heading1"]))
+        elements.append(Spacer(1, 12))
+
+        curr.execute("SELECT card_name, card_num, condition, card_price AS 'buy price', market_value as 'market value', sold_date as 'sold' "
+                                "FROM cards WHERE auction_id = ?", (auctionId,))
+
+        cardsDesc = [desc[0] for desc in curr.description]
+        cardRows = [row[:-1] + ('True' if row[-1] is not None else '',) for row in curr.fetchall()]
+        if cardRows:
+
+            elements.append(Paragraph("Cards Sold", styles["Heading2"]))
+            elements.append(Spacer(1, 12))
+
+            cardsData = [cardsDesc] + cardRows
+
+            table = Table(cardsData, repeatRows=1)
+            table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, -1), "DejaVuSans"),
+                ("FONTSIZE", (0, 0), (-1, 0), 11),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+            ]))
+            
+            elements.append(table)
+
+            elements.append(Spacer(1, 12))
+
+
+        curr.execute("SELECT name, quantity, price as 'buy price', market_value as 'market value', sale_id as 'sold', opened "
+                                "FROM sealed WHERE auction_id = ?", (auctionId,))
+        sealedDesc = [desc[0] for desc in curr.description]
+        sealedRows = [row[:-1] + ('True' if row[-1] is not None else '',) for row in curr.fetchall()]
+        if sealedRows:
+            sealedData = [sealedDesc] + sealedRows
+            elements.append(Paragraph("Sealed Items", styles["Heading2"]))
+            elements.append(Spacer(1, 12))
+            table = Table(sealedData, repeatRows=1)
+            table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, -1), "DejaVuSans"),
+                ("FONTSIZE", (0, 0), (-1, 0), 11),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+            ]))
+            
+            elements.append(table)
+        doc.build(elements)
+
+        pdf = buffer.getvalue()
+        buffer.close()
+
+        response = send_file(
+                        BytesIO(pdf),
+                        as_attachment=True,
+                        mimetype='application/pdf',
+                        download_name=f"report_{auctionName.replace(' ', '_')}.pdf"
+                        )
+        return response, 200
+
+
+    except Exception as e:
+        logger.exception('PDF generation failed')
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax08'}), 500
+
 @bp.route('/generateSoldReport', methods=('GET',))
 @limiter.limit("2 per minute")
 @verify_token
@@ -870,6 +1006,39 @@ def format_iso_date(iso_str):
         return dt.strftime('%d.%m.%Y')
     except (ValueError, TypeError):
         return str(iso_str)
+
+
+def parse_date_to_iso(value):
+    """Parse any date string and return canonical ISO 8601 (YYYY-MM-DDTHH:MM:SSZ).
+
+    Tries datetime.fromisoformat(), then strptime('%Y-%m-%d'), then
+    dateutil.parser.parse(dayfirst=True). Raises ValueError if all fail.
+    """
+    if not value:
+        raise ValueError('Empty date value')
+
+    try:
+        dt = datetime.datetime.fromisoformat(value)
+        return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        dt = datetime.datetime.strptime(value, '%Y-%m-%d')
+        return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        dt = dateutil_parser.parse(value, dayfirst=True)
+        return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    except (ValueError, TypeError, OverflowError):
+        pass
+
+    raise ValueError(
+        f'Invalid date format: {value!r}. '
+        'Expected ISO 8601, YYYY-MM-DD, or dd-mm-yyyy.'
+    )
 
 
 def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
@@ -1140,9 +1309,7 @@ def createBuyReport(month, year, db):
             bought['Cena'].append(Decimal(row['auction_price']))
         except:
             bought['Cena'].append('Error')
-        date = datetime.datetime.strptime( row['date_created'].split('T')[0], '%Y-%m-%d')
-        formatedDate = date.strftime('%d.%m.%Y')
-        bought['Datum'].append(formatedDate)
+        bought['Datum'].append(format_iso_date(row['date_created']))
         if row['payment_method'] != None:
             payments = json.loads(row['payment_method'])
             bought['Payment type'].append(', '.join(payment['type'] for payment in payments))
@@ -1193,6 +1360,7 @@ def addToCollection():
         )
         db.commit()
     return jsonify({'status': 'success'}), 201
+
 
 @bp.route('/loadCollection', methods=('GET',))
 @verify_token
@@ -1273,6 +1441,13 @@ def updateAuction(auction_id):
         logger.warning('Invalid field | auction_id : %s', auction_id)
         return jsonify({'status': 'error', 'message': 'Invalid field'})
     column = ALLOWED_FIELDS[field]
+
+    if column == 'date_created':
+        try:
+            value = parse_date_to_iso(value)
+        except ValueError as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 400
+
     db.execute(f'UPDATE auctions SET {column} = ? WHERE id = ?', (value, auction_id))
     db.commit()
     return jsonify({'status': 'success'}), 200
@@ -1320,14 +1495,15 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
             if item['marketValue'] is not None and item['marketValue'] > 0:
                 discount = (item['marketValue'] / newTotal) * priceDiff
                 new_price = round(item['marketValue'] - discount, 2)
-                cur.execute('INSERT INTO sealed (name, normalized_name, price, market_value, date, auction_id, cardmarketId)'
-                           ' VALUES (?, ?, ?, ?, ?, ?, ?)',
+                cur.execute('INSERT INTO sealed (name,normalized_name, quantity, price, market_value, date, auction_id, cardmarketId)'
+                           ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                             (
                                 item.get('cardName'),
                                 normalize(item.get('cardName')),
+                                1,
                                 new_price,
                                 item.get('marketValue'),
-                                datetime.datetime.now(datetime.timezone.utc),
+                                datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                                 auction_id,
                                 item.get('cardmarketId')
                              ))
@@ -1359,10 +1535,11 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
     return None
 
 def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
+    auctionId = None
     if cards != []:
         try:
             cur.execute("INSERT into auctions (auction_name, auction_price, date_created, payment_method) VALUES (?, ?, ?, ?)",
-                        ("Opened sealed", 0, datetime.datetime.now(datetime.timezone.utc), "[]"))
+                        ("Opened sealed", 0, datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"), "[]"))
             auctionId = cur.lastrowid
             for card in cards:
                 if card['marketValue'] is not None and card['marketValue'] > 0:
@@ -1394,17 +1571,18 @@ def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
             if item['marketValue'] is not None and item['marketValue'] > 0:
                 discount = (item['marketValue'] / newTotal) * priceDiff
                 new_price = round(item['marketValue'] - discount, 2)
-                cur.execute('INSERT INTO sealed (name,normalized_name, price, market_value, date, cardmarketId)'
-                           ' VALUES (?, ?, ?, ?, ?, ?)',
+                cur.execute('INSERT INTO sealed (name,normalized_name, quantity, price, market_value, date, auction_id, cardmarketId)'
+                           ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                             (
                                 item.get('cardName'),
                                 normalize(item.get('cardName')),
+                                1,
                                 new_price,
                                 item.get('marketValue'),
-                                datetime.datetime.now(datetime.timezone.utc),
+                                datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                                auction_id,
                                 item.get('cardmarketId')
                              ))
-
     except Exception as e:
         logger.exception(
             'Database error while adjusting sealed from seal open | error: %s',
@@ -1619,7 +1797,7 @@ def updateOneCard(db, name, num, condition, sellPrice):
         "WHERE c.card_name = ? AND c.card_num LIKE ? AND c.condition = ? AND si.card_id IS NULL "
         "LIMIT 1", (name, f'%{num}', condition)).fetchone()
     if cardId:
-        date = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
+        date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         card = db.execute("SELECT auction_id, card_price FROM cards WHERE id = ?", (cardId['id'],)).fetchone()
         
         # Create a sale for this card
@@ -1723,7 +1901,7 @@ def _process_inventory_csv(file):
             'buy_price': round(float(row['price']) * 0.8, 2),
             'market_value': row['price'],
             'quantity': row['quantity'],
-            'date': row['listedAt'],
+            'date': datetime.datetime.strptime(row['listedAt'], "%d-%m-%Y %H:%M:%S").strftime("%Y-%m-%dT%H:%M:%SZ"),
             'cardmarketId': row['cardmarketId'],
         }
         dataList.append(item)
@@ -1735,7 +1913,7 @@ def _create_inventory(db, dataList=None):
     if dataList is None:
         raise ValueError('dataList is required')
 
-    dateCreted = dataList[0]['date'][:10]
+    dateCreted = dataList[0]['date']
     buyPrice = sum(float(item['buy_price']) for item in dataList)
     try:
         cursor = db.execute(
