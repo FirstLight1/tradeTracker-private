@@ -62,7 +62,6 @@ class SaleService:
         shippingPrice = None
         if sale_input.shipping is not  None:
             shippingPrice = sale_input.shipping.get("shippingPrice", None)
-            print(shippingPrice)
 
         recieverInfoJson = json.dumps(sale_input.reciever).encode("utf-8")
         key = base64.b64decode(os.environ['KEY'])

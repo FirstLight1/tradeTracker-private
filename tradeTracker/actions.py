@@ -2308,7 +2308,6 @@ def invoice(kind):
     if request.method == 'POST':
         #TODO add asymetric decryption
         cartContent = request.get_json()
-        print(cartContent)
 
         payment_data, valid, err = None, False, None
         payment_methods_input = cartContent.get('paymentMethods') or []

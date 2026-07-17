@@ -75,7 +75,6 @@ class EPHService:
             headers=self._headers(),
         )
         r.raise_for_status()
-        print(r.json())
         return r.json()["parcel"]["id"]
 
     def download_label(self, parcel_id, sheet_id, filename):
