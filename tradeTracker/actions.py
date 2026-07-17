@@ -1303,10 +1303,11 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
             if card['marketValue'] is not None and card['marketValue'] > 0:
                 discount = (card['marketValue'] / newTotal) * priceDiff
                 new_price = round(card['marketValue'] - discount, 2)
-                cur.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
-                ' VALUES (?, ?, ?, ?, ?, ?, ?)',
+                cur.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
+                ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                 (
                     card.get('cardName'),
+                    normalize(card.get('cardName')),
                     card.get('cardNum'),
                     card.get('condition'),
                     new_price,
@@ -1319,10 +1320,11 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
             if item['marketValue'] is not None and item['marketValue'] > 0:
                 discount = (item['marketValue'] / newTotal) * priceDiff
                 new_price = round(item['marketValue'] - discount, 2)
-                cur.execute('INSERT INTO sealed (name, price, market_value, date, auction_id, cardmarketId)'
-                           ' VALUES (?, ?, ?, ?, ?, ?)',
+                cur.execute('INSERT INTO sealed (name, normalized_name, price, market_value, date, auction_id, cardmarketId)'
+                           ' VALUES (?, ?, ?, ?, ?, ?, ?)',
                             (
                                 item.get('cardName'),
+                                normalize(item.get('cardName')),
                                 new_price,
                                 item.get('marketValue'),
                                 datetime.datetime.now(datetime.timezone.utc),
@@ -1344,8 +1346,8 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
             cur.execute('UPDATE sealed SET opened = 1 WHERE auction_id = ? AND id = ?', (auction_id, openedItem.get('id').replace('s', '')))
         else:
            cur.execute("UPDATE sealed SET quantity = quantity - 1 WHERE id = ?", (openedItem.get('id').replace('s', ''),))
-           cur.execute("INSERT INTO sealed (name, price, market_value, date, auction_id, cardmarketId) VALUES (?, ?, ?, ?, ?, ?)",
-                       (row['name'], row['price'], row['market_value'], row['date'], auction_id, row['cardmarketId']))
+           cur.execute("INSERT INTO sealed (name, normalized_name, price, market_value, date, auction_id, cardmarketId) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       (row['name'],normalize(row['name']) ,row['price'], row['market_value'], row['date'], auction_id, row['cardmarketId']))
            cur.execute("UPDATE sealed SET opened = 1 WHERE auction_id = ? AND id = ?", (auction_id, cur.lastrowid))
     except Exception as e:
         logger.exception(
@@ -1366,10 +1368,11 @@ def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
                 if card['marketValue'] is not None and card['marketValue'] > 0:
                     discount = (card['marketValue'] / newTotal) * priceDiff
                     new_price = round(card['marketValue'] - discount, 2)
-                    cur.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
-                    ' VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    cur.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
+                    ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                     (
                         card.get('cardName'),
+                        normalize(card.get('cardName')),
                         card.get('cardNum'),
                         card.get('condition'),
                         new_price,
@@ -1391,10 +1394,11 @@ def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
             if item['marketValue'] is not None and item['marketValue'] > 0:
                 discount = (item['marketValue'] / newTotal) * priceDiff
                 new_price = round(item['marketValue'] - discount, 2)
-                cur.execute('INSERT INTO sealed (name, price, market_value, date, cardmarketId)'
-                           ' VALUES (?, ?, ?, ?, ?)',
+                cur.execute('INSERT INTO sealed (name,normalized_name, price, market_value, date, cardmarketId)'
+                           ' VALUES (?, ?, ?, ?, ?, ?)',
                             (
                                 item.get('cardName'),
+                                normalize(item.get('cardName')),
                                 new_price,
                                 item.get('marketValue'),
                                 datetime.datetime.now(datetime.timezone.utc),
@@ -1414,8 +1418,8 @@ def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
             cur.execute('UPDATE sealed SET opened = 1 WHERE id = ?', (openedItem.get('id').replace('s', ''),))
         else:
            cur.execute("UPDATE sealed SET quantity = quantity - 1 WHERE id = ?", (openedItem.get('id').replace('s', ''),))
-           cur.execute("INSERT INTO sealed (name, price, market_value, date, cardmarketId) VALUES (?, ?, ?, ?, ?)",
-                       (row['name'], row['price'], row['market_value'], row['date'], row['cardmarketId']))
+           cur.execute("INSERT INTO sealed (name,normalized_name, price, market_value, date, cardmarketId) VALUES (?, ?, ?, ?, ?, ?)",
+                       (row['name'],normalize(row['name']), row['price'], row['market_value'], row['date'], row['cardmarketId']))
            cur.execute("UPDATE sealed SET opened = 1 WHERE id = ?", (cur.lastrowid,))
     except Exception as e:
         logger.exception(
@@ -1897,7 +1901,7 @@ def process_sold_csv(files,db):
             "address": address,
             "city": str(head['shippingAddressCity']),
             "state": str(head['shippingAddressCountry']),
-            "zipCode": str(head['shippingAddressZip']),
+            "zip": str(head['shippingAddressZip']),
             "paybackDate": paybackDate,
             "total": float(_parse_number(head['articleValue'])) + float(_parse_number(head['shippingValue'])),
             "email": head['temporaryEmail'],
@@ -2352,8 +2356,9 @@ def invoice(kind):
                 label = None
                 
                 if delivery is not None and delivery['deliveryMethod'] == 'SK-post':
-                    if cartContent['recieverInfo']['state'] not in CONSTANTS.EUROPE_COUNTRY_CODES:
-                        cartContent['recieverInfo']['state'] = CONSTANTS.EUROPE_COUNTRY_CODES.get(cartContent['recieverInfo']['state'])
+                    state = (cartContent['recieverInfo'].get('state') or '').strip().lower()
+                    if state in CONSTANTS.EUROPE_COUNTRY_CODES:
+                        cartContent['recieverInfo']['state'] = CONSTANTS.EUROPE_COUNTRY_CODES[state]
                     eph = EPHService()
                     sheet_id = eph.createSheet(parcel_category = delivery['parcelCategory'], reception_method = "post")
                     parcel_id = eph.addParcel(order = cartContent['recieverInfo'], sheet_id = sheet_id, insurance_value = delivery['insuranceValue'])
