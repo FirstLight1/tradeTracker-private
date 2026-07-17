@@ -879,6 +879,69 @@ def generate_credit_note(saleId):
         mimetype='application/pdf'
     )
 
+def orderDebit(db, saleId, cards=None, sealed=None):
+    try:
+        if cards:
+            for card in cards:
+                db.execute("INSERT INTO sale_items (sale_id, card_id, sell_price, profit) VALUES (?, ?, ?, ?)",
+                           (saleId, card.get('id'), card.get('marketValue'), 0))
+
+        if sealed:
+            for item in sealed:
+                db.execute("UPDATE sealed SET sale_id = ? WHERE id = ?", (saleId, item.get('id')))
+            return None
+    except Exception as e:
+        return e
+
+@bp.route('/generateDebitNote/<int:saleId>', methods=('POST',))
+def generateDebitNote(saleId):
+    db = get_db()
+    data = request.get_json()
+
+    err = orderDebit(db,saleId,cards=data.get('cards'), sealed=data.get('sealed'))
+    if err:
+        logger.error('Failed to order return | saleId: %s | reason: %s', saleId, err)
+        return jsonify({'status': 'error', 'message': f'{str(err)}, Error code: Ax07'}), 500
+    
+    debitNoteNum = None
+    for attempt in range(3):
+        row = db.execute(
+            "SELECT COALESCE(MAX(record_number), 0) + 1 FROM sales_correction WHERE change_type = 'credit'"
+        ).fetchone()
+        debitNoteNum = row[0]
+        try:
+            db.execute(
+                "INSERT INTO sales_correction (sale_id, record_number, change_type, value_change) VALUES (?, ?, ?, ?)",
+                (saleId, debitNoteNum, 'credit', data.get('total')),
+            )
+            break
+        except sqlite3.IntegrityError as e:
+            if 'UNIQUE constraint' not in str(e):
+                db.rollback()
+                logger.critical('Non-UNIQUE IntegrityError on sales_correction | saleId: %s | e: %s', saleId, e)
+                return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax07'}), 500
+            logger.warning('record_number collision (attempt %d), retrying | saleId: %s', attempt + 1, saleId)
+            if attempt == 2:
+                db.rollback()
+                logger.critical('record_number conflict exhausted retries | saleId: %s', saleId)
+                return jsonify({'status': 'error', 'message': 'Debit note number conflict, Error code: Ax07'}), 500
+            continue
+
+    try:
+        pdf, cn_num = generateInvoice.generate_invoice(
+            reciever=data.get('reciever'),
+            invoice_num=data.get('originalInvoiceNum'),
+            items=data.get('cards') or [],
+            sealed=data.get('sealed') or [],
+            type='debit',
+            dn_num=debitNoteNum
+            )
+    except Exception as e:
+        logger.critical('Debit note generation failed %s', e)
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax06'}), 500
+    db.commit()
+    return jsonify({'status': "success"})
+
 
 @bp.route('/generateSoldReport', methods=('GET',))
 @limiter.limit("2 per minute")

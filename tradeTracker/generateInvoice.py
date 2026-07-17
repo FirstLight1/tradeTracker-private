@@ -31,19 +31,10 @@ def add_bulk_invoice_item(invoice, item, item_type):
     ))
 
 #TODO: move getting the invoice number upstream so I dont need to pass it in
-def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=None, ex=None, payment_methods=None, shipping=None):
+def generate_invoice(reciever, invoice_num, items=None, sealed=None , bulk=None, holo=None, ex=None, payment_methods=None, shipping=None, type="invoice", dn_num=None):
     logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
 
-    # Read or create env.txt with invoice_num
-    try:
-        invoice_num = db.execute('SELECT invoice_number FROM sales WHERE invoice_number NOT LIKE "S%" ORDER BY id DESC LIMIT 1').fetchone()[0]
-        invoice_num = int(invoice_num) + 1
-    except:
-        invoice_num = 936;
-        #raise Exception("Failed to get invoice_number")
-
     invoice_date = date.today()
-    # Set language to Slovak (or English 'en') if supported by your system locale
 
     # 1. Define the Supplier (Dominik Forró - CARD ANVIL)
     provider = Provider(
@@ -77,7 +68,10 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
 
     # 3. Create the Invoicegene
     invoice = Invoice(client, provider, Creator("Dominik Forró"))
-    invoice.number = invoice_num                # Invoice No.
+    if type == "invoice":
+        invoice.number = invoice_num                # Invoice No.
+    else: 
+        invoice.number = f"Tarchopis č.:{dn_num} k faktúre č.:{invoice_num}"
     invoice.variable_symbol = invoice_num       # VS
     invoice.currency = u'€'
     invoice.currency_locale = 'en_US.UTF-8'

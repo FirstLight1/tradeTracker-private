@@ -4,28 +4,6 @@ import { queue } from "./utils/classes.js";
 import { searchCard } from "./utils/searchApi.js";
 import { DebitNoteItem } from "./utils/debitNoteItem.js";
 
-function conditionClass(condition) {
-    if (!condition) return '';
-    const norm = condition.toLowerCase().replace(/[\s_-]+/g, '');
-    const map = {
-        mint: 'mint',
-        mt: 'mint',
-        nearmint: 'near_mint',
-        nm: 'near_mint',
-        excellent: 'excellent',
-        ex: 'excellent',
-        good: 'good',
-        gd: 'good',
-        lightplayed: 'light_played',
-        lp: 'light_played',
-        played: 'played',
-        pl: 'played',
-        poor: 'poor',
-        po: 'poor',
-    };
-    return map[norm] || '';
-}
-
 function renderAddressBlock(container, data) {
     container.innerHTML = `
         <div class="creditnote-address-block">
@@ -208,6 +186,58 @@ async function loadContent() {
     });
 
     searchBar();
+
+    const debitNoteBtn = document.querySelector('.confirm-btn');
+    const shipping = null;
+    debitNoteBtn.addEventListener('click', () => {
+        createDebitNote(saleId, originalInvoiceNum, recieverInfo, shipping);
+    });
+}
+
+async function createDebitNote(saleId, originalInvoiceNum, recieverInfo, shipping) {
+    const itemsContainer = document.querySelector('.creditnote-item-content');
+    const itemRows = itemsContainer.querySelectorAll('.debitnote-item-row');
+
+    const cards = [];
+    const sealed = [];
+    itemRows.forEach(row => {
+        if (row.getAttribute('data-id').includes('s')) {
+            const item = {
+                id: row.getAttribute('data-id').replace('s', ''),
+                quantity: row.querySelector('.item-quantity').textContent,
+                sealedName: row.querySelector('.item-name').textContent,
+                marketValue: row.querySelector('.market-value').textContent.replace('€', '')
+            }
+            sealed.push(item);
+        } else {
+            const item = {
+                id: row.getAttribute('data-id'),
+                cardName: row.querySelector('.item-name').textContent,
+                cardNum: row.querySelector('.item-number').textContent,
+                condition: row.querySelector('.item-condition').textContent,
+                marketValue: row.querySelector('.market-value').textContent.replace('€', '')
+            }
+            cards.push(item);
+        }
+    });
+
+    const saleInput = {
+        reciever: recieverInfo,
+        cards: cards,
+        sealed: sealed,
+        shipping: shipping,
+        originalInvoiceNum: originalInvoiceNum,
+        total: document.querySelector('.total-amount').textContent
+    }
+
+    const res = await csrfFetch(`/generateDebitNote/${saleId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(saleInput)
+    });
+
+    const data = await res.json();
+
 }
 
 loadContent();

@@ -47,7 +47,7 @@ export class DebitNoteItem {
         } else {
             const row = document.createElement('div');
             row.classList.add('sealed-item', 'creditnote-item-row', 'debitnote-item-row');
-            row.setAttribute('data-id', sanitizeNumericId(this.sid));
+            row.setAttribute('data-id', this.sid);
             row.innerHTML = `
                 <p class="item-quantity">${sanitizeNumericId(this.quantity)}</p>
                 <p class="item-name">${escapeHtml(this.cardName || '')}</p>
