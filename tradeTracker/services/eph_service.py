@@ -30,7 +30,7 @@ class EPHService:
         }
 
 
-    def createSheet(self, parcel_category, reception_method, payment_type = "h" ) -> str:
+    def createSheet(self, parcel_category, reception_method = 'post', payment_type = "h" ) -> str:
         payload = {
             "sheet": {
                 "parcel_category": parcel_category,
@@ -53,12 +53,14 @@ class EPHService:
 
         parcel = {
             "recipient": {
-                "name": order["nameAndSurname"],
-                "street": order["address"],
-                "city": order["city"],
-                "zip": order["zipCode"],
+                "name": order.get("nameAndSurname", ""),
+                "street": order.get("address", ""),
+                "city": order.get("city", ""),
+                "zip": order.get("zip", ""),
                 "country": country.lower(),
-            }
+                "phone": order.get("phone", ""),
+                "email": order.get("email", ""),
+            }, 
         }
 
         if insurance_value:
@@ -73,7 +75,7 @@ class EPHService:
             headers=self._headers(),
         )
         r.raise_for_status()
-        return r.json()["parcel"]
+        return r.json()["parcel"]["id"]
 
     def download_label(self, parcel_id, sheet_id, filename):
         r = requests.post(

@@ -60,8 +60,9 @@ class SaleService:
 
     def _insert_sale_header(self, sale_input, receipt):
         shippingPrice = None
-        if sale_input.shipping:
-            shippingPrice = sale_input.shipping.get("shippingPrice")
+        if sale_input.shipping is not  None:
+            shippingPrice = sale_input.shipping.get("shippingPrice", None)
+
         recieverInfoJson = json.dumps(sale_input.reciever).encode("utf-8")
         key = base64.b64decode(os.environ['KEY'])
         cipher = AES.new(key,AES.MODE_GCM)

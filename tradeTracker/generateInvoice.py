@@ -147,9 +147,8 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
     add_bulk_invoice_item(invoice, bulk, 'bulk')
     add_bulk_invoice_item(invoice, holo, 'holo')
     add_bulk_invoice_item(invoice, ex, 'ex')
-
-    if shipping:
-        shippingPrice = Decimal(str(shipping.get('shippingPrice'))) / Decimal('1.23')
+    if shipping is not None:
+        shippingPrice = Decimal(str(shipping.get('shippingPrice', 0))) / Decimal('1.23')
         invoice.add_item(Item(
             count=1,
             price=shippingPrice,
@@ -317,7 +316,6 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
         output_filename = f"Dobropis_{cn_num}_INV{orig_inv_safe}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
         output_path = os.path.join(invoices_dir, output_filename)
 
-    print(output_filename) 
     pdf.gen(output_path, generate_qr_code=True)
     with open(output_path, "rb") as f:
          pdf_bytes = f.read()

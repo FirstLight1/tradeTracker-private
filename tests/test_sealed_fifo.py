@@ -237,7 +237,7 @@ class SealedFIFOTestCase(unittest.TestCase):
             base_url='https://localhost',
         )
         self.assertEqual(resp.status_code, 200, resp.data[:300])
-        self.assertEqual(resp.mimetype, 'application/pdf')
+        self.assertEqual(resp.mimetype, 'application/zip')
 
         with self.app.app_context():
             db = get_db()

@@ -167,7 +167,6 @@ def cardMarketOrder():
             "cards" : cards,
             "sealed" : sealed
             }
-    print(orderInfo)
     actions.latest = orderInfo
     logger.info('Order succcessfully extracted')
     return jsonify({'status': 'success'}), 200
