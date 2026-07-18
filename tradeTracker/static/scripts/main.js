@@ -3133,7 +3133,7 @@ function openMergeAuctionModal(auctionId, auctionName) {
             return;
         }
         const response = await csrfFetch(`/mergeAuctions/${auctionId}/${targetId}`, {
-            method: 'GET',
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },

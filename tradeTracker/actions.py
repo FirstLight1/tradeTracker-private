@@ -671,13 +671,15 @@ def loadSoldCards(sale_id):
 
     return jsonify(response)
 
-@bp.route('/mergeAuctions/<int:auction_id>/<int:target_id>',methods=('GET',))
+@bp.route('/mergeAuctions/<int:auction_id>/<int:target_id>',methods=('POST',))
 @verify_token
 def mergeAuctions(auction_id, target_id):
     db = get_db()
     try:
         db.execute("UPDATE auctions SET auction_price = auction_price + (SELECT auction_price FROM auctions WHERE id = ?) WHERE id = ?", (auction_id, target_id))
         db.execute("UPDATE cards SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id))
+        db.execute("UPDATE sealed SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id))
+        db.execute("UPDATE bulk_items SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id))
         db.execute("DELETE FROM auctions WHERE id = ?", (auction_id,))
     except Exception as e:
         db.rollback()
@@ -2386,6 +2388,7 @@ def importCSV():
             print(f"Error processing CSV file: {e}")
             return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax19'}), 500
 
+        #TODO: move this to a separate function
         invoices = []
         failed = []
         order = defaultdict(str)
@@ -2423,17 +2426,18 @@ def importCSV():
 
 
                 #PACKETA
-                else:
-                    homeDelivery = "home delivery" in shipping_method
-                    if homeDelivery:
-                        packetId = packeta.create_packet(item, homeDelivery=True)
-                        courierNumber = packeta.packet_courier_number(packetId)
-                        home_res = PacketaHomeDeliveryResult(packetId, courierNumber)
-                        packetsData["homeDeliveryPackets"].append(home_res)
-
+                if False:
                     else:
-                        packetId = packeta.create_packet(item)
-                        packetsData["pickupPointPackets"].append(packetId)
+                        homeDelivery = "home delivery" in shipping_method
+                        if homeDelivery:
+                            packetId = packeta.create_packet(item, homeDelivery=True)
+                            courierNumber = packeta.packet_courier_number(packetId)
+                            home_res = PacketaHomeDeliveryResult(packetId, courierNumber)
+                            packetsData["homeDeliveryPackets"].append(home_res)
+
+                        else:
+                            packetId = packeta.create_packet(item)
+                            packetsData["pickupPointPackets"].append(packetId)
 
 
 
