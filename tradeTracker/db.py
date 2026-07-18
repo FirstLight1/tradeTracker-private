@@ -141,6 +141,8 @@ DROP TABLE IF EXISTS bulk_counter;
 DROP TABLE IF EXISTS bulk_sales;
 DROP TABLE IF EXISTS bulk_items;
 DROP TABLE IF EXISTS sealed;
+DROP TABLE IF EXISTS sales_correction;
+DROP TABLE IF EXISTS barter;
 
 CREATE TABLE auctions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -184,6 +186,19 @@ CREATE TABLE sales (
 
 CREATE INDEX idx_sales_invoice ON sales(invoice_number);
 CREATE INDEX idx_sales_date ON sales(sale_date);
+
+
+CREATE TABLE sales_correction(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_id INTEGER NOT NULL,
+    value_change REAL,
+    change_type TEXT NOT NULL,
+    record_number INTEGER NOT NULL,
+    FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_sales_correction_sale_id ON sales_correction(sale_id);
+CREATE UNIQUE INDEX idx_sales_correction_record_unique ON sales_correction(record_number, change_type);
 
 CREATE TABLE sale_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

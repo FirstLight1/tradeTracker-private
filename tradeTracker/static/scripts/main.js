@@ -1,6 +1,7 @@
 import { renderField, renderAlert, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign, downloadFile, createNewItem } from "./utils/renderUtil.js";
 import { CardStruct, queue, CartLine } from "./utils/classes.js";
 import { escapeHtml, sanitizePlainText, sanitizeAttrValue, sanitizeNumericId, sanitizeClassToken, csrfFetch } from "./utils/sanitizers.js";
+import { searchCard } from "./utils/searchApi.js";
 
 
 function paymentTypeSelect(className, defaultValue = '') {
@@ -1962,7 +1963,7 @@ function searchBar() {
                 searchContainer.innerHTML = ''; // Clear previous results
                 return;
             }
-            results = await search(searchInput.value.toUpperCase());
+            results = await searchCard(searchInput.value, [...existingIDs]);
             const resultsQueue = new queue(results.length + 1) //if no results it thows error;
             resultsQueue.enqueue(searchInput)
             displaySearchResults(results, resultsQueue, searchInput);
@@ -1975,33 +1976,13 @@ function searchBar() {
             const searchContainer = document.querySelector('.search-results');
             searchContainer.innerHTML = ''; // Clear previous results
         }
-        results = await search(searchInput.value.toUpperCase().trim());
+        results = await searchCard(searchInput.value.trim(), [...existingIDs]);
         const resultsQueue = new queue(results.length + 1);
         resultsQueue.enqueue(searchInput)
         displaySearchResults(results, resultsQueue);
         searchInput.focus();
         addResultScrollingWithArrows(searchInput, resultsQueue);
     });
-}
-
-async function search(searchPrompt) {
-
-    const jsonbody = JSON.stringify({ query: searchPrompt, cartIds: [...existingIDs] });
-    const response = await csrfFetch('/searchCard',
-        {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: jsonbody,
-        }
-    )
-    const data = await response.json();
-    if (data.status == "success") {
-        return data.value;
-    } else {
-        renderAlert('Search failed', 'error');
-    }
 }
 
 function displaySearchResults(results, resultsQueue, searchInput) {

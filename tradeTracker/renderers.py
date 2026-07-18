@@ -40,3 +40,12 @@ def sold():
 @verify_token
 def purchases():
     return render_template("purchases.html")
+@bp.route('/createCreditNote/')
+@verify_token
+def createCreditNote():
+    return render_template("createCreditNote.html")
+
+@bp.route('/createDebitNote/')
+@verify_token
+def createDebitNote():
+    return render_template("createDebitNote.html")

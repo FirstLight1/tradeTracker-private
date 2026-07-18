@@ -5,6 +5,7 @@ from reportlab.platypus import SimpleDocTemplate
 from tradeTracker.db import get_db
 from io import BytesIO, TextIOWrapper, StringIO
 import re
+import sqlite3
 import uuid
 import time
 import csv
@@ -703,14 +704,55 @@ def linkAuctionToSale(auction_id):
 
     return jsonify({'status': 'success'})
 
-@bp.route('/orderReturn/<int:saleId>', methods=('POST',))
-@verify_token
-def orderReturn(saleId):
-    # TODO: SEALED NOT HERE FOR SOME REASON
-    db = get_db()
+def _orderReturn(saleId, itemIds, db, shipping_value=0):
+    cardIds = itemIds.get('cards') or []
+    sealedEntries = itemIds.get('sealed') or []
+
+    returned_value = 0.0
 
     try:
-        db.execute('UPDATE cards SET sold_date = NULL WHERE id IN (SELECT card_id FROM sale_items WHERE sale_id = ?)',(saleId, ))
+        sealedPlan = []
+        for entry in sealedEntries:
+            sealed_id = entry.get('id')
+            returnQuantity = entry.get('returnQuantity')
+            if not sealed_id or not returnQuantity or returnQuantity <= 0:
+                continue
+            row = db.execute(
+                'SELECT quantity, market_value FROM sealed WHERE id = ?', (sealed_id,)
+            ).fetchone()
+            if row is None:
+                db.rollback()
+                return f'Sealed item {sealed_id} not found', None
+            if returnQuantity > row['quantity']:
+                db.rollback()
+                return f'returnQuantity {returnQuantity} exceeds available {row["quantity"]} for sealed item {sealed_id}', None
+            sealedPlan.append((sealed_id, returnQuantity, row['quantity'], row['market_value'] or 0))
+
+        if cardIds:
+            cardPlaceholder = ','.join('?' for _ in cardIds)
+            cards_sum = db.execute(
+                f'SELECT COALESCE(SUM(sell_price), 0) FROM sale_items WHERE card_id IN ({cardPlaceholder})',
+                cardIds
+            ).fetchone()[0]
+            returned_value += cards_sum or 0
+            db.execute(f'UPDATE cards SET sold_date = NULL WHERE id IN ({cardPlaceholder})', cardIds)
+            db.execute(f'DELETE FROM sale_items WHERE card_id IN ({cardPlaceholder})', cardIds)
+
+        for sealed_id, returnQuantity, orig_quantity, mv in sealedPlan:
+            returned_value += mv * returnQuantity
+            if returnQuantity == orig_quantity:
+                db.execute('UPDATE sealed SET sale_id = NULL WHERE id = ?', (sealed_id,))
+            else:
+                db.execute('UPDATE sealed SET quantity = quantity - ? WHERE id = ?', (returnQuantity, sealed_id))
+                db.execute(
+                    """INSERT INTO sealed (name, normalized_name, quantity, price, market_value,
+                                           date, sale_id, auction_id, opened, cardMarketID)
+                       SELECT name, normalized_name, ?, price, market_value,
+                              date, NULL, auction_id, opened, cardMarketID
+                       FROM sealed WHERE id = ?""",
+                    (returnQuantity, sealed_id)
+                )
+
         bulk_sales_rows = db.execute(
             'SELECT item_type, quantity FROM bulk_sales WHERE sale_id = ?', (saleId,)
         ).fetchall()
@@ -724,28 +766,31 @@ def orderReturn(saleId):
                     'UPDATE bulk_items SET quantity = quantity + ? WHERE id = ?',
                     (bs_row['quantity'], target['id'])
                 )
-        db.execute('DELETE FROM sales WHERE id = ?', (saleId, ))
-    except:
+
+        if shipping_value:
+                db.execute('UPDATE sales SET shipping_info = shipping_info - ? WHERE id = ?', (shipping_value, saleId))
+        returned_value += float(shipping_value)
+        if returned_value:
+            db.execute(
+                'UPDATE sales SET total_amount = total_amount - ? WHERE id = ?',
+                (returned_value, saleId)
+            )
+
+    except Exception:
          db.rollback()
          logger.exception('Return creation failed | saleId: %s', saleId)
-         return jsonify({'status': 'error', 'message': 'There was an error while creating a return, Error code: Ax04'}), 400 
-    
-    db.commit()
-    return jsonify({'status': 'success'}),200
+         return 'There was an error while creating a return, Error code: Ax04', None
 
+    return None, returned_value
 
-@bp.route('/generateCreditNote/<int:saleId>', methods=('POST',))
+@bp.route('/partyInfo/<int:saleId>', methods=('GET',))
 @verify_token
-def generate_credit_note(saleId):
-    # TODO: add quantity, also to invoice
-    db = get_db()
+def partyInfo(saleId):
 
-    # Load the sale record (contains receiver info in notes and invoice_number)
+    db = get_db()
     sale = db.execute('SELECT * FROM sales WHERE id = ?', (saleId,)).fetchone()
     if sale is None:
         return jsonify({'status': 'error', 'message': 'Sale not found, Error code: Ax05'}), 404
-
-    # Parse receiver info stored as JSON in the notes column
     try:
         crypt = json.loads(sale['notes'])
         nonce = base64.b64decode(crypt['nonce'])
@@ -757,73 +802,186 @@ def generate_credit_note(saleId):
         reciever = json.loads(decrypted.decode("utf-8"))
     except (json.JSONDecodeError, TypeError):
         reciever = {}
+     
+    sale = dict(sale)
+    sale.pop('notes', None)
+    #TODO: change this to values from env
+    provider = {
+        'summary': 'Dominik Forró - CARD ANVIL',
+        'address': 'Vahovce 94',
+        'city': 'Váhovce',
+        'zip_code': '92562',
+        'country': 'Slovakia',
+        'phone': '0949 759 023',
+        'email': 'dominikforro95@gmail.com',
+        'ico': '57310041',
+        'dic': '1130287664',
+        'ic_dph': 'SK1130287664',
+    }
+    return jsonify({'providerInfo': provider, 'recieverInfo': reciever, 'sale':sale}), 200
 
-    original_invoice_num = sale['invoice_number']
+@bp.route('/loadSale/<int:saleId>', methods=('GET',))
+@verify_token
+def load_sale(saleId):
+    db = get_db()
+    cards = db.execute("SELECT c.card_name, c.card_num, c.condition, c.id, si.sell_price FROM cards c "
+                       "JOIN sale_items si ON c.id = si.card_id "
+                       "WHERE si.sale_id = ? ",(saleId,)).fetchall()
 
-    # Load cards
-    cards_rows = db.execute(
-        'SELECT c.card_name, c.card_num, si.sell_price as marketValue,  '
-        'FROM cards c '
-        'JOIN sale_items si ON c.id = si.card_id '
-        'WHERE si.sale_id = ?',
-        (saleId,)
-    ).fetchall()
-    items = [{'cardName': r['card_name'], 'cardNum': r['card_num'], 'marketValue': r['marketValue']} for r in cards_rows]
+    sealed = db.execute("SELECT s.name, s.price, s.market_value, s.date, s.id, s.auction_id, s.quantity FROM sealed s "
+                        "WHERE s.sale_id = ? ",(saleId,)).fetchall()
 
-    # Load sealed items
-    sealed_rows = db.execute('SELECT * FROM sealed WHERE sale_id = ?', (saleId,)).fetchall()
-    sealed = [{'sealedName': r['name'], 'marketValue': r['market_value'], 'auctionId': r['auction_id']} for r in sealed_rows]
+    data = {
+            'items': [dict(c) for c in cards] + [dict(s) for s in sealed],
+           }
+    return jsonify({'status': 'success', 'data': data}),200
 
-    # Load bulk/holo/ex sales
-    bulk_rows = db.execute('SELECT * FROM bulk_sales WHERE sale_id = ?', (saleId,)).fetchall()
-    bulk = None
-    holo = None
-    ex = None
-    for b in bulk_rows:
-        if b['item_type'] == 'bulk':
-            bulk = {'quantity': b['quantity'], 'unit_price': b['unit_price']}
-        elif b['item_type'] == 'holo':
-            holo = {'quantity': b['quantity'], 'unit_price': b['unit_price']}
-        elif b['item_type'] == 'ex':
-            ex = {'quantity': b['quantity'], 'unit_price': b['unit_price']}
 
-    # Load shipping info
-    shipping = None
-    if sale['shipping_info'] and float(sale['shipping_info']) > 0:
-        shipping = {
-            'shippingWay': 'Doprava / Poštovné – samostatná služba',
-            'shippingPrice': sale['shipping_info']
-        }
+@bp.route('/generateCreditNote/<int:saleId>', methods=('POST',))
+@verify_token
+def generate_credit_note(saleId):
+    db = get_db()
+    data = request.get_json()
+    original_invoice_num = data.get('originalInvoiceNum')
 
-    # Reconstruct payment methods from receiver info if available
-    payment_methods = reciever.get('paymentMethods') or []
-    if not payment_methods and reciever.get('paymentMethod'):
-        payment_methods = [{'type': reciever.get('paymentMethod'), 'amount': 0}]
+    itemIds = {
+            'cards' : [c['id'] for c in data.get('items') or []],
+            'sealed' : data.get('sealed') or [],
+            }
+    shipping_value = (data.get('shipping') or {}).get('shippingPrice', 0) or 0
+
+    if not getattr(db, 'in_transaction', False):
+        db.execute("BEGIN IMMEDIATE")
+
+    err, returned_value = _orderReturn(saleId, itemIds, db, shipping_value)
+    if err:
+        db.rollback()
+        status_code = 400 if 'exceeds available' in err else 500
+        logger.warning('Failed to order return | saleId: %s | reason: %s', saleId, err)
+        return jsonify({'status': 'error', 'message': f'{str(err)}, Error code: Ax08'}), status_code
+
+    creditNoteNum = None
+    for attempt in range(3):
+        row = db.execute(
+            "SELECT COALESCE(MAX(record_number), 0) + 1 FROM sales_correction WHERE change_type = 'credit'"
+        ).fetchone()
+        creditNoteNum = row[0]
+        try:
+            db.execute(
+                "INSERT INTO sales_correction (sale_id, record_number, change_type, value_change) VALUES (?, ?, ?, ?)",
+                (saleId, creditNoteNum, 'credit', returned_value)
+            )
+            break
+        except sqlite3.IntegrityError as e:
+            if 'UNIQUE constraint' not in str(e):
+                db.rollback()
+                logger.critical('Non-UNIQUE IntegrityError on sales_correction | saleId: %s | e: %s', saleId, e)
+                return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax07'}), 500
+            logger.warning('record_number collision (attempt %d), retrying | saleId: %s', attempt + 1, saleId)
+            if attempt == 2:
+                db.rollback()
+                logger.critical('record_number conflict exhausted retries | saleId: %s', saleId)
+                return jsonify({'status': 'error', 'message': 'Credit note number conflict, Error code: Ax07'}), 500
+            continue
 
     try:
         pdf, cn_num = generateInvoice.generateCreditNote(
-            reciever,
-            items if items else None,
-            sealed if sealed else None,
-            bulk,
-            holo,
-            ex,
-            payment_methods if payment_methods else None,
-            shipping,
-            original_invoice_num
+            data.get('reciever'),
+            data.get('items') if data.get('items') else None,
+            data.get('sealed') if data.get('sealed') else None,
+            data.get('bulk'),
+            data.get('holo'),
+            data.get('ex'),
+            None,
+            data.get('shipping'),
+            original_invoice_num,
+            creditNoteNum
         )
-        response = send_file(
-                        BytesIO(pdf['bytes']),
-                        download_name=pdf['filename'],
-                        as_attachment=True,
-                        mimetype='application/pdf'
-                        )
-
     except Exception as e:
+        db.rollback()
         logger.critical('Credit note generation failed %s', e)
         return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax06'}), 500
+
+    db.commit()
     logger.info('Credit note generated succesfully | original invoice num: %s', original_invoice_num)
-    return response 
+
+    return send_file(
+        BytesIO(pdf['bytes']),
+        download_name=pdf['filename'],
+        as_attachment=True,
+        mimetype='application/pdf'
+    )
+
+def orderDebit(db, saleId, cards=None, sealed=None):
+    valueChange = 0.0
+    try:
+        if cards:
+            for card in cards:
+                db.execute("INSERT INTO sale_items (sale_id, card_id, sell_price, profit) VALUES (?, ?, ?, (SELECT market_value - card_price FROM cards WHERE id = ?))",
+                           (saleId, card.get('id'), card.get('marketValue'), card.get('id')))
+                valueChange += float(card.get('marketValue'))
+
+        if sealed:
+            for item in sealed:
+                db.execute("UPDATE sealed SET sale_id = ? WHERE id = ?", (saleId, item.get('id')))
+                valueChange += float(item.get('marketValue'))
+        db.execute("UPDATE sales SET total_amount = total_amount + ? WHERE id = ?", (valueChange, saleId))
+        return None
+    except Exception as e:
+        return e
+
+@bp.route('/generateDebitNote/<int:saleId>', methods=('POST',))
+def generateDebitNote(saleId):
+    db = get_db()
+    data = request.get_json()
+
+    err = orderDebit(db,saleId,cards=data.get('cards'), sealed=data.get('sealed'))
+    if err:
+        logger.error('Failed to order return | saleId: %s | reason: %s', saleId, err)
+        return jsonify({'status': 'error', 'message': f'{str(err)}, Error code: Ax07'}), 500
+    
+    debitNoteNum = None
+    for attempt in range(3):
+        row = db.execute(
+            "SELECT COALESCE(MAX(record_number), 0) + 1 FROM sales_correction WHERE change_type = 'credit'"
+        ).fetchone()
+        debitNoteNum = row[0]
+        try:
+            db.execute(
+                "INSERT INTO sales_correction (sale_id, record_number, change_type, value_change) VALUES (?, ?, ?, ?)",
+                (saleId, debitNoteNum, 'credit', data.get('total')),
+            )
+            break
+        except sqlite3.IntegrityError as e:
+            if 'UNIQUE constraint' not in str(e):
+                db.rollback()
+                logger.critical('Non-UNIQUE IntegrityError on sales_correction | saleId: %s | e: %s', saleId, e)
+                return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax07'}), 500
+            logger.warning('record_number collision (attempt %d), retrying | saleId: %s', attempt + 1, saleId)
+            if attempt == 2:
+                db.rollback()
+                logger.critical('record_number conflict exhausted retries | saleId: %s', saleId)
+                return jsonify({'status': 'error', 'message': 'Debit note number conflict, Error code: Ax07'}), 500
+            continue
+
+    try:
+        pdf, cn_num = generateInvoice.generate_invoice(
+            reciever=data.get('reciever'),
+            invoice_num=data.get('originalInvoiceNum'),
+            items=data.get('cards') or [],
+            sealed=data.get('sealed') or [],
+            type='debit',
+            dn_num=debitNoteNum
+            )
+    except Exception as e:
+        logger.critical('Debit note generation failed %s', e)
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax06'}), 500
+    db.commit()
+    response = send_file(BytesIO(pdf['bytes']), 
+                         mimetype='application/pdf', 
+                         as_attachment=True, 
+                         download_name=pdf['filename'])
+    return response
 
 
 @bp.route('/generateBuyReport', methods=('GET',))

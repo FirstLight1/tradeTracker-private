@@ -131,7 +131,16 @@ async function loadHistory() {
             <p>Marža: ${sale.total_profit ? DOMPurify.sanitize(sale.total_profit.toFixed(2)) : '0.00'}€</p>
             <p>${DOMPurify.sanitize(name)}</p>
             <button class="view-auction" data-id="${safeSaleId}">View</button>
-            <button class="return" data-id="${safeSaleId}" >Return</button>
+            <div class="auction-options">
+                <div class="auction-options-list">
+                    <div claa="auction-options">
+                        <button class="return" data-id="${safeSaleId}" >Return</button>
+                    </div>
+                    <div class="auction-options">
+                        <button class="debit" data-id="${safeSaleId}" >Tarchopis</button>
+                    </div>
+                </div>
+            </div>
             ${sale.auction_id === null ?
                 `<p></p>`
                 : `<span class='auction-link-hint'><a href='/#${safeAuctionId}'><img class='link-img' src="/static/images/logo.png" alt="Show auction"></a></span>`
@@ -159,45 +168,10 @@ async function loadHistory() {
             if (returnButton.textContent === 'Confirm') {
                 returnButton.disabled = true;
                 returnButton.textContent = 'Processing...';
-                try {
-
-                    console.log('here0');
-                    const cnResponse = await csrfFetch(`/generateCreditNote/${saleId}`,
-                        { method: 'POST' });
-
-                    const contentType = cnResponse.headers.get('content-type') || '';
-                    if (!cnResponse.ok || contentType.includes('application/json')) {
-                        const err = await response.json();
-                        renderAlert('Error: ' + (err.message || 'Unknown error'), 'error');
-                        returnButton.disabled = false;
-                        returnButton.textContent = 'Return';
-                        return;
-                    }
-                    try {
-                        downloadFile(cnResponse)
-                    } catch (e) {
-                        renderAlert('Error: ' + e, 'error');
-                    }
-                    const returnResponse = await csrfFetch(`/orderReturn/${saleId}`, {
-                        method: 'POST'
-                    });
-                    const returnData = await returnResponse.json();
-                    if (returnData.status !== 'success') {
-                        renderAlert('Error processing return: ' + returnData.message, 'error');
-                        returnButton.disabled = false;
-                        returnButton.textContent = 'Return';
-                        return;
-                    }
-
-
-                    const saleDiv = returnButton.closest(`.sold-tab`);
-                    saleDiv.remove();
-
-                } catch (e) {
-                    renderAlert('Error processing return: ' + e, 'error');
-                    returnButton.disabled = false;
-                    returnButton.textContent = 'Return';
-                }
+                const queryParams = new URLSearchParams({
+                    saleId: saleId
+                });
+                window.location.href = `/createCreditNote/?${queryParams}`;
             } else {
                 returnButton.textContent = 'Confirm';
                 const timerID = setTimeout(() => {
@@ -212,6 +186,33 @@ async function loadHistory() {
                 });
             }
         });
+
+        const debitButton = saleElement.querySelector('.debit');
+        debitButton.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            const saleId = debitButton.getAttribute('data-id');
+            if (debitButton.textContent === 'Confirm') {
+                debitButton.textContent = 'Processing...';
+                const queryParams = new URLSearchParams({
+                    saleId: saleId
+                });
+                window.location.href = `/createDebitNote/?${queryParams}`;
+            } else {
+                debitButton.textContent = 'Confirm';
+                const timerID = setTimeout(() => {
+                    debitButton.textContent = 'Return';
+                }, 3000);
+                document.addEventListener('click', function handler(e) {
+                    if (e.target !== debitButton) {
+                        debitButton.textContent = 'Return';
+                        document.removeEventListener('click', handler);
+                        clearTimeout(timerID);
+                    }
+                });
+            }
+        });
+
+
     });
 }
 
