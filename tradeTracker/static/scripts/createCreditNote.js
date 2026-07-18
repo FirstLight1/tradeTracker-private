@@ -202,7 +202,6 @@ async function loadContent() {
             body: body,
         });
         const contentType = response.headers.get('content-type') || '';
-        console.log(response.headers);
         if (!response.ok || contentType.includes('application/json')) {
             renderAlert('Error: ' + (await response.json()).message, 'error');
             return;
