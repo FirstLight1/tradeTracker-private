@@ -131,7 +131,16 @@ async function loadHistory() {
             <p>Marža: ${sale.total_profit ? DOMPurify.sanitize(sale.total_profit.toFixed(2)) : '0.00'}€</p>
             <p>${DOMPurify.sanitize(name)}</p>
             <button class="view-auction" data-id="${safeSaleId}">View</button>
-            <button class="return" data-id="${safeSaleId}" >Return</button>
+            <div class="auction-options">
+                <div class="auction-options-list">
+                    <div claa="auction-options">
+                        <button class="return" data-id="${safeSaleId}" >Return</button>
+                    </div>
+                    <div class="auction-options">
+                        <button class="debit" data-id="${safeSaleId}" >Tarchopis</button>
+                    </div>
+                </div>
+            </div>
             ${sale.auction_id === null ?
                 `<p></p>`
                 : `<span class='auction-link-hint'><a href='/#${safeAuctionId}'><img class='link-img' src="/static/images/logo.png" alt="Show auction"></a></span>`
@@ -177,6 +186,33 @@ async function loadHistory() {
                 });
             }
         });
+
+        const debitButton = saleElement.querySelector('.debit');
+        debitButton.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            const saleId = debitButton.getAttribute('data-id');
+            if (debitButton.textContent === 'Confirm') {
+                debitButton.textContent = 'Processing...';
+                const queryParams = new URLSearchParams({
+                    saleId: saleId
+                });
+                window.location.href = `/createDebitNote/?${queryParams}`;
+            } else {
+                debitButton.textContent = 'Confirm';
+                const timerID = setTimeout(() => {
+                    debitButton.textContent = 'Return';
+                }, 3000);
+                document.addEventListener('click', function handler(e) {
+                    if (e.target !== debitButton) {
+                        debitButton.textContent = 'Return';
+                        document.removeEventListener('click', handler);
+                        clearTimeout(timerID);
+                    }
+                });
+            }
+        });
+
+
     });
 }
 
