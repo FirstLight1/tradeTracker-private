@@ -230,13 +230,19 @@ async function createDebitNote(saleId, originalInvoiceNum, recieverInfo, shippin
         total: document.querySelector('.total-amount').textContent
     }
 
-    const res = await csrfFetch(`/generateDebitNote/${saleId}`, {
+    const response = await csrfFetch(`/generateDebitNote/${saleId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(saleInput)
     });
 
-    const data = await res.json();
+    const contentType = response.headers.get('content-type') || '';
+    if (!response.ok || contentType.includes('application/json')) {
+        renderAlert('Error: ' + (await response.json()).message, 'error');
+        return;
+    };
+    await downloadFile(response)
+    window.location.href = `/sold`;
 
 }
 

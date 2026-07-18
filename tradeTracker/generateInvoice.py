@@ -158,7 +158,10 @@ def generate_invoice(reciever, invoice_num, items=None, sealed=None , bulk=None,
     
     # Build a filesystem-safe client component (names may contain '/', etc.)
     safe_name = re.sub(r'[^\w.-]+', '_', reciever.get('nameAndSurname', 'client') or 'client').strip('_') or 'client'
-    output_filename = f"{invoice_num}_Invoice_{invoice_date.strftime('%Y%m%d')}_{safe_name}.pdf"
+    if type == "invoice":
+        output_filename = f"{invoice_num}_Invoice_{invoice_date.strftime('%Y%m%d')}_{safe_name}.pdf"
+    else:
+        output_filename = f"{invoice_num}_Tarchopis_c_{dn_num} _{invoice_date.strftime('%Y%m%d')}_{safe_name}.pdf"
 
     # Determine the save path based on environment
     if os.getenv("FLASK_ENV") == "prod":

@@ -891,7 +891,7 @@ def orderDebit(db, saleId, cards=None, sealed=None):
         if sealed:
             for item in sealed:
                 db.execute("UPDATE sealed SET sale_id = ? WHERE id = ?", (saleId, item.get('id')))
-                valueChange += float(item.get('market_value'))
+                valueChange += float(item.get('marketValue'))
         db.execute("UPDATE sales SET total_amount = total_amount + ? WHERE id = ?", (valueChange, saleId))
         return None
     except Exception as e:
@@ -944,7 +944,11 @@ def generateDebitNote(saleId):
         logger.critical('Debit note generation failed %s', e)
         return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax06'}), 500
     db.commit()
-    return jsonify({'status': "success"})
+    response = send_file(BytesIO(pdf['bytes']), 
+                         mimetype='application/pdf', 
+                         as_attachment=True, 
+                         download_name=pdf['filename'])
+    return response
 
 
 @bp.route('/generateSoldReport', methods=('GET',))
