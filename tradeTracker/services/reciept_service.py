@@ -10,6 +10,7 @@ class RecieptService(ABC):
 
 class InvoiceReceiptService(RecieptService):
     def issue(self, sale_input, db) -> models.ReceiptResult:
+        invoice_num = 1
         try:
             invoice_num = db.execute('SELECT invoice_number FROM sales WHERE invoice_number NOT LIKE "S%" ORDER BY id DESC LIMIT 1').fetchone()[0]
             invoice_num = int(invoice_num) + 1
