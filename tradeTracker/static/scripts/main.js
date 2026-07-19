@@ -2181,6 +2181,7 @@ let box = null;
 function spawnItemsContextMenu(cardId, e, itemLine) {
     box?.remove();
 
+    const isSealed = cardId.includes('s');
     box = document.createElement('div');
     box.classList.add("context-menu");
     //TODO: move styles to css
@@ -2188,6 +2189,9 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
     box.style.top = (e.pageY - 25) + "px";
     box.innerHTML = `<div class="">
                             <div class="">
+                                ${isSealed ? `<div class="">
+                                    <button class="open-sealed-item">Open</button>
+                                </div>` : ''}
                                 <div class="">
                                     <button class="add-to-cart">Add to cart</button>
                                 </div>
@@ -2200,9 +2204,21 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
                             `;
     document.body.appendChild(box);
 
+    if (isSealed) {
+        const openButton = box.querySelector('.open-sealed-item');
+        openButton.addEventListener('click', () => {
+            const auctionDiv = itemLine.closest('.auction-tab');
+            const auctionId = auctionDiv?.getAttribute('data-id');
+            const initialValue = itemLine.querySelector('.sealed-market-value').textContent.replace('€', '');
+            createSealedModal(cardId, auctionId, initialValue);
+            box?.remove();
+            box = null;
+        });
+    }
+
     const button = box.querySelector('.add-to-cart');
     //sealed add
-    if (cardId.includes('s')) {
+    if (isSealed) {
         button.addEventListener('click', () => {
             const auctionDiv = itemLine.closest('.auction-tab');
             const auctionId = auctionDiv.getAttribute('data-id');
@@ -2352,7 +2368,7 @@ async function loadAuctionContent(button) {
                         clearTimeout(timer);
                         if (event.target.closest('.card') && !(event.target.tagName === "DIV")) {
                             const cardDiv = event.target.closest('.card');
-                            const cardId = cardDiv.querySelector('.card-id').textContent;
+                            const cardId = cardDiv.getAttribute('data-id');
                             if (event.target.classList.contains('condition')) {
                                 const value = event.target.textContent.trim();
                                 const select = document.createElement('select');
@@ -2415,7 +2431,7 @@ async function loadAuctionContent(button) {
                     const inputFields = cardsContainer.querySelectorAll('input[type="text"]');
                     inputFields.forEach((input) => {
                         input.addEventListener('blur', async (event) => {
-                            const cardId = event.target.closest('.card').querySelector('.card-id').textContent;
+                            const cardId = event.target.closest('.card').getAttribute('data-id');
                             const value = event.target.value.replace(',', '.');
                             const dataset = event.target.dataset;
                             getInputValueAndPatch(value, input, dataset.field, cardId);
@@ -2524,17 +2540,7 @@ async function loadAuctionContent(button) {
                         cardsContainer.insertBefore(sealedDiv, cardsContainer.querySelector('.button-container'));
                     });
 
-                    const openSealedButtons = cardsContainer.querySelectorAll('.open-sealed-item');
-                    openSealedButtons.forEach((button) => {
-                        button.addEventListener('click', () => {
-                            const sealedDiv = button.closest('.sealed-item');
-                            const sid = sealedDiv.getAttribute('sid');
-                            const auctionId = auctionDiv.getAttribute('data-id');
-                            const initialValue = sealedDiv.querySelector('.sealed-market-value').textContent.replace('€', '');
-                            createSealedModal(sid, auctionId, initialValue);
-                        });
-                    });
-
+                    // Sealed "Open" lives in the items context menu (spawnItemsContextMenu)
 
                     // Add event listeners for "Add to cart" buttons
                     const addToCartButtons = cardsContainer.querySelectorAll('.add-to-cart-sealed');

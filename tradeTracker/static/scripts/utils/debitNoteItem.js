@@ -2,7 +2,7 @@ import { csrfFetch, escapeHtml, sanitizeNumericId, sanitizeClassToken } from "./
 import { renderAlert } from "./renderUtil.js";
 
 export class DebitNoteItem {
-    constructor({ type, cardName, cardNum, condition, marketValue, sid, cardIds, quantity, addedIds }) {
+    constructor({ type, cardName, cardNum, condition, marketValue, sid, cardIds, quantity, auctionId, addedIds }) {
         this.type = type;
         this.cardName = cardName;
         this.cardNum = cardNum;
@@ -11,6 +11,7 @@ export class DebitNoteItem {
         this.sid = sid;
         this.cardIds = cardIds;
         this.quantity = quantity;
+        this.auctionId = auctionId ?? null;
         this.addedIds = addedIds;
         this.elements = [];
     }
@@ -48,6 +49,9 @@ export class DebitNoteItem {
             const row = document.createElement('div');
             row.classList.add('sealed-item', 'creditnote-item-row', 'debitnote-item-row');
             row.setAttribute('data-id', this.sid);
+            if (this.auctionId != null) {
+                row.setAttribute('data-auction-id', this.auctionId);
+            }
             row.innerHTML = `
                 <p class="item-quantity">${sanitizeNumericId(this.quantity)}</p>
                 <p class="item-name">${escapeHtml(this.cardName || '')}</p>
@@ -79,6 +83,7 @@ export class DebitNoteItem {
                 cardName: result.name,
                 marketValue: result.market_value,
                 quantity: pendingQty,
+                auctionId: result.auction_id ?? null,
                 addedIds,
             });
         }

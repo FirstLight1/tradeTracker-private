@@ -40,7 +40,9 @@ from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaReceiptService
 from tradeTracker.services.cfAuth import verify_token, require_api_token
 from tradeTracker.services.eph_service import EPHService
-from tradeTracker.services.packeta_service import PacketaService
+# Packeta integration disabled — service hits the network (WSDL fetch) at construction
+# and requires the `postal` native dep. Re-enable together with the blocks in importCSV.
+# from tradeTracker.services.packeta_service import PacketaService
 
 if os.environ.get("FLASK_ENV") != "production":
     from dotenv import load_dotenv
@@ -921,12 +923,31 @@ def orderDebit(db, saleId, cards=None, sealed=None):
             for card in cards:
                 db.execute("INSERT INTO sale_items (sale_id, card_id, sell_price, profit) VALUES (?, ?, ?, (SELECT market_value - card_price FROM cards WHERE id = ?))",
                            (saleId, card.get('id'), card.get('marketValue'), card.get('id')))
+                db.execute("UPDATE cards SET sold_date = ? WHERE id = ?", (datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"), card.get('id')))
                 valueChange += float(card.get('marketValue'))
 
         if sealed:
             for item in sealed:
-                db.execute("UPDATE sealed SET sale_id = ? WHERE id = ?", (saleId, item.get('id')))
-                valueChange += float(item.get('marketValue'))
+                qty = int(item.get('quantity') or 1)
+                if qty <= 0:
+                    continue
+                sealed_id = item.get('id')
+                row = db.execute('SELECT quantity FROM sealed WHERE id = ?', (sealed_id,)).fetchone()
+                if row is None:
+                    raise Exception(f'Sealed item {sealed_id} not found')
+                if qty >= row['quantity']:
+                    db.execute("UPDATE sealed SET sale_id = ? WHERE id = ?", (saleId, sealed_id))
+                else:
+                    db.execute("UPDATE sealed SET quantity = quantity - ? WHERE id = ?", (qty, sealed_id))
+                    db.execute(
+                        """INSERT INTO sealed (name, normalized_name, quantity, price, market_value,
+                                               date, sale_id, auction_id, opened, cardMarketID)
+                           SELECT name, normalized_name, ?, price, market_value,
+                                  date, ?, auction_id, opened, cardMarketID
+                           FROM sealed WHERE id = ?""",
+                        (qty, saleId, sealed_id)
+                    )
+                valueChange += float(item.get('marketValue')) * qty
         db.execute("UPDATE sales SET total_amount = total_amount + ? WHERE id = ?", (valueChange, saleId))
         return None
     except Exception as e:
@@ -2396,12 +2417,14 @@ def importCSV():
         eph = EPHService()
         EPHSheets = []
         EPHlabels = []
-        packeta = PacketaService()
-        packetsData = {
-                    "pickupPointPackets": [],
-                    "homeDeliveryPackets": [],
-                }
-        packetaLabels = []
+        # Packeta disabled — PacketaService() fetches the WSDL over the network on
+        # construction, on every CSV import, even though all Packeta code is dead.
+        # packeta = PacketaService()
+        # packetsData = {
+        #             "pickupPointPackets": [],
+        #             "homeDeliveryPackets": [],
+        #         }
+        # packetaLabels = []
 
         for item in completed:
             try:
@@ -2468,19 +2491,19 @@ def importCSV():
             except Exception as e:
                 logger.warning('Failed to register EPH sheet %s: %s', sheet_id, e)
 
-        #PACKETA LABELS
-        if packetsData["pickupPointPackets"]:
-            try:
-                labels = packeta.packets_labels_pdf(packetsData["pickupPointPackets"])
-                packetaLabels.append(LabelResult(filename="packeta_pickup_labels.pdf", bytes=labels))
-            except Exception as e:
-                logger.warning('Failed to generate Packeta pickup labels: %s', e)
-        if packetsData["homeDeliveryPackets"]:
-            try:
-                labels = packeta.packet_courier_labels_pdf(packetsData["homeDeliveryPackets"])
-                packetaLabels.append(LabelResult(filename="packeta_home_labels.pdf", bytes=labels))
-            except Exception as e:
-                logger.warning('Failed to generate Packeta home-delivery labels: %s', e)
+        #PACKETA LABELS — disabled together with PacketaService above
+        # if packetsData["pickupPointPackets"]:
+        #     try:
+        #         labels = packeta.packets_labels_pdf(packetsData["pickupPointPackets"])
+        #         packetaLabels.append(LabelResult(filename="packeta_pickup_labels.pdf", bytes=labels))
+        #     except Exception as e:
+        #         logger.warning('Failed to generate Packeta pickup labels: %s', e)
+        # if packetsData["homeDeliveryPackets"]:
+        #     try:
+        #         labels = packeta.packet_courier_labels_pdf(packetsData["homeDeliveryPackets"])
+        #         packetaLabels.append(LabelResult(filename="packeta_home_labels.pdf", bytes=labels))
+        #     except Exception as e:
+        #         logger.warning('Failed to generate Packeta home-delivery labels: %s', e)
 
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
@@ -2489,8 +2512,9 @@ def importCSV():
                 #write labels to zip
             for label in EPHlabels:
                 zip_file.writestr(label.filename, label.bytes)
-            for label in packetaLabels:
-                zip_file.writestr(label.filename, label.bytes)
+            # Packeta disabled
+            # for label in packetaLabels:
+            #     zip_file.writestr(label.filename, label.bytes)
 
         token = uuid.uuid4().hex
         d = _downloads_dir()
@@ -2516,8 +2540,9 @@ def search():
         card = request.get_json()
         query = card.get("query", "").strip()
         cart_ids = card.get('cartIds', [])
-        # Split search query into individual words
-        search_terms = query.split()
+        # Split search query into individual words; normalize so diacritics
+        # match the accent-stripped normalized_name column (e.g. "Poké" -> "POKE")
+        search_terms = [normalize(term) for term in query.split()]
         
         # Separate cart IDs into cards and sealed items
         card_cart_ids = []

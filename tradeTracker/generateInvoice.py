@@ -143,7 +143,7 @@ def generate_invoice(reciever, invoice_num, items=None, sealed=None , bulk=None,
     add_bulk_invoice_item(invoice, holo, 'holo')
     add_bulk_invoice_item(invoice, ex, 'ex')
     if shipping is not None:
-        shippingPrice = Decimal(str(shipping.get('shippingPrice', 0))) / Decimal('1.23')
+        shippingPrice = Decimal(str(shipping.get('shippingPrice') or 0)) / Decimal('1.23')
         invoice.add_item(Item(
             count=1,
             price=shippingPrice,
@@ -266,7 +266,7 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
                 count=1,
                 price=Decimal(str(mv)),
                 unit="ks",
-                description=item.get("card_name", "") + " " + item.get("card_num", ""),
+                description=(item.get("card_name") or "") + " " + (item.get("card_num") or ""),
                 tax=Decimal("0")
             ))
 
@@ -295,7 +295,8 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
     add_bulk_invoice_item(invoice, ex, 'ex')
 
     if shipping:
-        shippingPrice = Decimal(str(shipping.get('shippingPrice'))) / Decimal('1.23')
+        # Legacy sales may have NULL shipping_info -> shippingPrice None
+        shippingPrice = Decimal(str(shipping.get('shippingPrice') or 0)) / Decimal('1.23')
         invoice.add_item(Item(
             count=1,
             price=shippingPrice,

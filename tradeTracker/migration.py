@@ -2,6 +2,7 @@ import sqlite3
 import os
 import re
 import sys
+import unicodedata
 # Import the sales history migration logic
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
@@ -735,8 +736,15 @@ def addOpenedFlagToSealedTable(db_path):
         else:
             raise e
 
+def _normalize_name(s):
+    # Keep in sync with actions.normalize — NFD decomposes é → e + combining accent,
+    # then encode/decode drops the accent
+    if s is None:
+        return None
+    return unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode("ascii").upper()
+
 def addNormalizedNameToCardsTable(db_path):
-    try: 
+    try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
@@ -749,6 +757,17 @@ def addNormalizedNameToCardsTable(db_path):
             cursor.execute("CREATE INDEX idx_cards_normalized_name ON cards(normalized_name)")
         else:
             print("'normalized_name' column already exists in 'cards' table.")
+
+        # Backfill rows that predate the column (idempotent)
+        cursor.execute("SELECT id, card_name FROM cards WHERE normalized_name IS NULL")
+        rows = cursor.fetchall()
+        if rows:
+            print(f"Backfilling 'normalized_name' for {len(rows)} card rows...")
+            for row_id, card_name in rows:
+                cursor.execute("UPDATE cards SET normalized_name = ? WHERE id = ?", (_normalize_name(card_name), row_id))
+            conn.commit()
+            print("'normalized_name' backfill for 'cards' complete.")
+        conn.close()
 
     except sqlite3.Error as e:
         if "no such table: cards" in str(e):
@@ -771,8 +790,19 @@ def addNormalizedNameToSealedTable(db_path):
         else:
             print("'normalized_name' column already exists in 'sealed' table.")
 
+        # Backfill rows that predate the column (idempotent)
+        cursor.execute("SELECT id, name FROM sealed WHERE normalized_name IS NULL")
+        rows = cursor.fetchall()
+        if rows:
+            print(f"Backfilling 'normalized_name' for {len(rows)} sealed rows...")
+            for row_id, name in rows:
+                cursor.execute("UPDATE sealed SET normalized_name = ? WHERE id = ?", (_normalize_name(name), row_id))
+            conn.commit()
+            print("'normalized_name' backfill for 'sealed' complete.")
+        conn.close()
+
     except sqlite3.Error as e:
-        if "no such table: cards" in str(e):
+        if "no such table: sealed" in str(e):
             print("'sealed' table not found, skipping 'normalized_name' column migration.")
         else:
             raise e

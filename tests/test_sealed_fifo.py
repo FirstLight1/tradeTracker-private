@@ -146,6 +146,55 @@ class SealedFIFOTestCase(unittest.TestCase):
             except ValueError:
                 self.fail("_check_inventory raised on exactly-available quantity")
 
+    def test_open_sealed_in_auction(self):
+        """/openSealed/<auction_id>: contents land in the auction, one unit marked opened."""
+        import json
+
+        client = self.app.test_client()
+        resp = client.post(
+            '/openSealed/2',
+            data=json.dumps({
+                'openedItem': {'id': 's10', 'initialValue': 100.0},
+                'cards': [{
+                    'cardName': 'Pikachu',
+                    'cardNum': '25',
+                    'condition': 'NM',
+                    'marketValue': 120.0,
+                    'cardmarketId': '900100',
+                }],
+                'sealed': [],
+            }),
+            content_type='application/json',
+            base_url='https://localhost',
+        )
+        self.assertEqual(resp.status_code, 200, resp.data[:300])
+
+        with self.app.app_context():
+            db = get_db()
+            # newTotal=120, initialValue=100 -> priceDiff=20 -> discounted price 100
+            card = db.execute(
+                'SELECT card_name, card_price, market_value, auction_id FROM cards '
+                'WHERE auction_id = 2'
+            ).fetchone()
+            self.assertIsNotNone(card)
+            self.assertEqual(card['card_name'], 'Pikachu')
+            self.assertEqual(card['card_price'], 100.0)
+            self.assertEqual(card['market_value'], 120.0)
+
+            # Original row decremented 5 -> 4, still unopened
+            original = db.execute('SELECT quantity, opened FROM sealed WHERE id = 10').fetchone()
+            self.assertEqual(original['quantity'], 4)
+            self.assertEqual(original['opened'], 0)
+
+            # The opened unit is its own row: quantity 1 (default), opened, same auction
+            opened = db.execute(
+                'SELECT quantity, opened, auction_id, price FROM sealed WHERE opened = 1'
+            ).fetchone()
+            self.assertIsNotNone(opened)
+            self.assertEqual(opened['quantity'], 1)
+            self.assertEqual(opened['auction_id'], 2)
+            self.assertEqual(opened['price'], 80.0)
+
     def test_cardmarketorder_allocates_quantity(self):
         """/cardMarketOrder emits one match with quantity=min(count, available)."""
         import json

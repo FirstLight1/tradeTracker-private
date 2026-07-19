@@ -202,11 +202,13 @@ async function createDebitNote(saleId, originalInvoiceNum, recieverInfo, shippin
     const sealed = [];
     itemRows.forEach(row => {
         if (row.getAttribute('data-id').includes('s')) {
+            const auctionIdAttr = row.getAttribute('data-auction-id');
             const item = {
                 id: row.getAttribute('data-id').replace('s', ''),
                 quantity: row.querySelector('.item-quantity').textContent,
                 sealedName: row.querySelector('.item-name').textContent,
-                marketValue: row.querySelector('.market-value').textContent.replace('€', '')
+                marketValue: row.querySelector('.market-value').textContent.replace('€', ''),
+                auctionId: auctionIdAttr === null ? null : Number(auctionIdAttr)
             }
             sealed.push(item);
         } else {

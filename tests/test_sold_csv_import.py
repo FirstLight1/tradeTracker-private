@@ -155,9 +155,10 @@ class SoldCSVImportTestCase(unittest.TestCase):
             base_url='https://localhost',
         )
 
-    @patch('tradeTracker.actions.PacketaService')
+    # PacketaService is disabled in actions.py (commented out), so there is
+    # nothing left to patch for it here.
     @patch('tradeTracker.actions.EPHService')
-    def test_sold_import_end_to_end(self, mock_eph_service, mock_packeta_service):
+    def test_sold_import_end_to_end(self, mock_eph_service):
         # Stub the carrier services so the test does not hit live APIs.
         mock_eph = MagicMock()
         mock_eph.createSheet.return_value = 'sheet-1'
@@ -168,7 +169,6 @@ class SoldCSVImportTestCase(unittest.TestCase):
 
         mock_eph.download_label.side_effect = _fake_download_label
         mock_eph_service.return_value = mock_eph
-        mock_packeta_service.return_value = MagicMock()
 
         resp = self._post()
         body = resp.get_json()
