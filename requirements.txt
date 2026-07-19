@@ -21,7 +21,7 @@ fpdf2==2.8.5
 ftfy==6.3.1
 idna==3.10
 iniconfig==2.3.0
-InvoiceGenerator @ git+https://github.com/FirstLight1/InvoiceGenerator.git@05e4a3e9cf41ab7f08b1132959b6ee738c641c42
+InvoiceGenerator @ git+https://github.com/FirstLight1/InvoiceGenerator.git@ce8a47457c1319549d57df405c03a12ef3b7ad74
 isodate==0.7.2
 itsdangerous==2.2.0
 Jinja2==3.1.6
