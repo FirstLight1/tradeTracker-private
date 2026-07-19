@@ -933,6 +933,7 @@ def orderDebit(db, saleId, cards=None, sealed=None):
         return e
 
 @bp.route('/generateDebitNote/<int:saleId>', methods=('POST',))
+@verify_token
 def generateDebitNote(saleId):
     db = get_db()
     data = request.get_json()
@@ -945,13 +946,13 @@ def generateDebitNote(saleId):
     debitNoteNum = None
     for attempt in range(3):
         row = db.execute(
-            "SELECT COALESCE(MAX(record_number), 0) + 1 FROM sales_correction WHERE change_type = 'credit'"
+            "SELECT COALESCE(MAX(record_number), 0) + 1 FROM sales_correction WHERE change_type = 'debit'"
         ).fetchone()
         debitNoteNum = row[0]
         try:
             db.execute(
                 "INSERT INTO sales_correction (sale_id, record_number, change_type, value_change) VALUES (?, ?, ?, ?)",
-                (saleId, debitNoteNum, 'credit', data.get('total')),
+                (saleId, debitNoteNum, 'debit', data.get('total')),
             )
             break
         except sqlite3.IntegrityError as e:
@@ -2427,7 +2428,7 @@ def importCSV():
 
                 #PACKETA
                 if False:
-                    else:
+            #    else:
                         homeDelivery = "home delivery" in shipping_method
                         if homeDelivery:
                             packetId = packeta.create_packet(item, homeDelivery=True)
