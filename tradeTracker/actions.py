@@ -1741,7 +1741,7 @@ def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
                                 new_price,
                                 item.get('marketValue'),
                                 datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-                                auction_id,
+                                auctionId,
                                 item.get('cardmarketId')
                              ))
     except Exception as e:

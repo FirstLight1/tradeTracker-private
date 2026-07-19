@@ -2200,7 +2200,7 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
                             `;
     document.body.appendChild(box);
 
-    const button = document.querySelector('.add-to-cart');
+    const button = box.querySelector('.add-to-cart');
     //sealed add
     if (cardId.includes('s')) {
         button.addEventListener('click', () => {
@@ -2927,7 +2927,7 @@ async function loadSealed(viewButton) {
                         <p class='sealed-quantity'>${DOMPurify.sanitize(sealedData.quantity)}</p>
                         <p class='sealed-name'>${DOMPurify.sanitize(sealedData.name)}</p>
                         <p class='unit-price'>${DOMPurify.sanitize(sealedData.price)}</p>
-                        <p class='VAT-sealed sealed-market-value'>${(DOMPurify.sanitize(sealedData.price) / 1.23).toFixed(2)}</p>
+                        <p class='VAT-sealed sealed-market-VAT-value'>${(DOMPurify.sanitize(sealedData.price) / 1.23).toFixed(2)}</p>
                         <p class='market-value-sealed'>${DOMPurify.sanitize(sealedData.market_value)}</p>
                         <p class='margin'>${margin}</p>
                         <p class='add-date'>${formatedDate}</p>
