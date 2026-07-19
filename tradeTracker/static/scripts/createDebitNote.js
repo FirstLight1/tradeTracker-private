@@ -207,7 +207,7 @@ async function createDebitNote(saleId, originalInvoiceNum, recieverInfo, shippin
                 id: row.getAttribute('data-id').replace('s', ''),
                 quantity: row.querySelector('.item-quantity').textContent,
                 sealedName: row.querySelector('.item-name').textContent,
-                marketValue: row.querySelector('.market-value').textContent.replace('€', ''),
+                marketValue: row.querySelector('.market-value-input').value,
                 auctionId: auctionIdAttr === null ? null : Number(auctionIdAttr)
             }
             sealed.push(item);
@@ -217,7 +217,7 @@ async function createDebitNote(saleId, originalInvoiceNum, recieverInfo, shippin
                 cardName: row.querySelector('.item-name').textContent,
                 cardNum: row.querySelector('.item-number').textContent,
                 condition: row.querySelector('.item-condition').textContent,
-                marketValue: row.querySelector('.market-value').textContent.replace('€', '')
+                marketValue: row.querySelector('.market-value-input').value
             }
             cards.push(item);
         }

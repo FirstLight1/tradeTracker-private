@@ -20,6 +20,18 @@ export class DebitNoteItem {
         return this.type === 'card' ? [...this.cardIds] : [this.sid];
     }
 
+    _syncTotalOnPriceChange(input, multiplier) {
+        input.dataset.prev = input.value;
+        input.addEventListener('input', () => {
+            const totalEl = document.querySelector('.creditnote-total .total-amount');
+            if (!totalEl) return;
+            const newValue = Number(input.value) || 0;
+            const oldValue = Number(input.dataset.prev) || 0;
+            totalEl.textContent = (Number(totalEl.textContent) + (newValue - oldValue) * multiplier).toFixed(2);
+            input.dataset.prev = input.value;
+        });
+    }
+
     render() {
         this.elements = [];
         if (this.type === 'card') {
@@ -34,14 +46,19 @@ export class DebitNoteItem {
                         <p class="item-number">${escapeHtml(this.cardNum || '')}</p>
                     </div>
                     <p class="item-condition ${condClass}">${escapeHtml(this.condition || '')}</p>
-                    <p class="market-value">${escapeHtml(String(this.marketValue ?? ''))}<span class="currency">€</span></p>
+                    <div class="market-value">
+                        <input class="market-value-input" type="number" min="0" step="0.01" value="${escapeHtml(String(this.marketValue ?? ''))}">
+                        <span class="currency">€</span>
+                    </div>
                     <button class="item-remove-btn" type="button">X</button>
                 `;
+                const priceInput = row.querySelector('.market-value-input');
+                this._syncTotalOnPriceChange(priceInput, 1);
                 row.querySelector('.item-remove-btn').addEventListener('click', () => {
                     row.remove();
                     this.addedIds.delete(id);
                     this.elements = this.elements.filter(el => el !== row);
-                    document.querySelector('.creditnote-total .total-amount').textContent = (Number(document.querySelector('.creditnote-total .total-amount').textContent) - Number(this.marketValue)).toFixed(2);
+                    document.querySelector('.creditnote-total .total-amount').textContent = (Number(document.querySelector('.creditnote-total .total-amount').textContent) - (Number(priceInput.value) || 0)).toFixed(2);
                 });
                 this.elements.push(row);
             });
@@ -55,14 +72,19 @@ export class DebitNoteItem {
             row.innerHTML = `
                 <p class="item-quantity">${sanitizeNumericId(this.quantity)}</p>
                 <p class="item-name">${escapeHtml(this.cardName || '')}</p>
-                <p class="market-value">${escapeHtml(String(this.marketValue ?? ''))}<span class="currency">€</span></p>
+                <div class="market-value">
+                    <input class="market-value-input" type="number" min="0" step="0.01" value="${escapeHtml(String(this.marketValue ?? ''))}">
+                    <span class="currency">€</span>
+                </div>
                 <button class="item-remove-btn" type="button">X</button>
             `;
+            const priceInput = row.querySelector('.market-value-input');
+            this._syncTotalOnPriceChange(priceInput, this.quantity);
             row.querySelector('.item-remove-btn').addEventListener('click', () => {
                 row.remove();
                 this.addedIds.delete(this.sid);
                 this.elements = this.elements.filter(el => el !== row);
-                document.querySelector('.creditnote-total .total-amount').textContent = (Number(document.querySelector('.creditnote-total .total-amount').textContent) - Number(this.marketValue * this.quantity)).toFixed(2);
+                document.querySelector('.creditnote-total .total-amount').textContent = (Number(document.querySelector('.creditnote-total .total-amount').textContent) - (Number(priceInput.value) || 0) * this.quantity).toFixed(2);
             });
             this.elements.push(row);
         }
