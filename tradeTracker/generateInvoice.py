@@ -33,7 +33,6 @@ def add_bulk_invoice_item(invoice, item, item_type):
 #TODO: move getting the invoice number upstream so I dont need to pass it in
 def generate_invoice(reciever, invoice_num, items=None, sealed=None , bulk=None, holo=None, ex=None, payment_methods=None, shipping=None, type="invoice", dn_num=None):
     logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
-
     invoice_date = date.today()
 
     # 1. Define the Supplier (Dominik Forró - CARD ANVIL)
@@ -68,10 +67,9 @@ def generate_invoice(reciever, invoice_num, items=None, sealed=None , bulk=None,
 
     # 3. Create the Invoicegene
     invoice = Invoice(client, provider, Creator("Dominik Forró"))
-    if type == "invoice":
-        invoice.number = invoice_num                # Invoice No.
-    else: 
-        invoice.number = f"Tarchopis č.:{dn_num} k faktúre č.:{invoice_num}"
+    invoice.number = invoice_num                # Invoice No.
+    if type == "debit":
+        invoice.number_label = f"Tarchopis č.:{dn_num} k faktúre č.:"
     invoice.variable_symbol = invoice_num       # VS
     invoice.currency = u'€'
     invoice.currency_locale = 'en_US.UTF-8'

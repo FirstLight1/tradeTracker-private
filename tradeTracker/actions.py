@@ -987,9 +987,9 @@ def generateDebitNote(saleId):
                 logger.critical('record_number conflict exhausted retries | saleId: %s', saleId)
                 return jsonify({'status': 'error', 'message': 'Debit note number conflict, Error code: Ax07'}), 500
             continue
-
+    
     try:
-        pdf, cn_num = generateInvoice.generate_invoice(
+        pdf, dn_num = generateInvoice.generate_invoice(
             reciever=data.get('reciever'),
             invoice_num=data.get('originalInvoiceNum'),
             items=data.get('cards') or [],
