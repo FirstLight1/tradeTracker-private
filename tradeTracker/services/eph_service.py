@@ -46,10 +46,11 @@ class EPHService:
         return r.json()["sheet"]["id"]
 
     #TODO: add service categories
-    def addParcel(self, order, sheet_id, insurance_value = None):
+    def addParcel(self, order, sheet_id, insurance_value = None, weight = 0.5):
         country = order.get("state", "") or ""
         if country == "D":
             country = "DE"
+
 
         parcel = {
             "recipient": {
@@ -61,6 +62,7 @@ class EPHService:
                 "phone": order.get("phone", ""),
                 "email": order.get("email", ""),
             }, 
+            "weight": weight,
         }
 
         if insurance_value:
