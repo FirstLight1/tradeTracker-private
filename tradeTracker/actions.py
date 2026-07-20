@@ -2444,7 +2444,14 @@ def importCSV():
                         sheet_id = eph.createSheet(parcel_category,  "post")
                         order[parcel_category] =  sheet_id
 
-                    label = eph.addParcel(item.reciever, order[parcel_category], insurance)
+                    weight = 0.5
+                    if item.sealed:
+                        totalItems = sum(item.get("quantity", 0) for item in item.sealed)
+                        if totalItems >= 5:
+                            weight = 2.99
+                        else:
+                            weight = 1.99
+                    label = eph.addParcel(item.reciever, order[parcel_category], insurance, weight)
                     label_filename = f"label_{reciept['filename']}"
                     EPHSheets.append(EPHSheetInfo(sheetId=order[parcel_category], state=None, parcelId=label, filename=label_filename, label=None))
 
@@ -2724,7 +2731,7 @@ def invoice(kind):
                 if sealed:
                     totalQuantity = 0
                     totalQuantity = sum(item.get("quantity", 0) for item in sealed)
-                    if totalQuantity > 5:
+                    if totalQuantity >= 5:
                         weight = 2.99
                     else:
                         weight = 1.99
