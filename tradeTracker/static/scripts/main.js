@@ -2537,7 +2537,7 @@ async function loadAuctionContent(button) {
                             <p class="VAT-sealed">${(Number(DOMPurify.sanitize(sealedItem.price)) / 1.23).toFixed(2)}</p>
                             <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
-                            <p class="sealed-date">${DOMPurify.sanitize(formatedDate)}</p>
+                            <p></p>
                             `;
 
                         cardsContainer.insertBefore(sealedDiv, cardsContainer.querySelector('.button-container'));
