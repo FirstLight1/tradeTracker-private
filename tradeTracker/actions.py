@@ -2719,30 +2719,45 @@ def invoice(kind):
                 #EPHSERVICE create sheet
                 delivery = cartContent.get('delivery')
                 label = None
-                
+                sealed = saleInput.sealed
+                weight = 0.5
+                if sealed:
+                    totalQuantity = 0
+                    totalQuantity = sum(item.get("quantity", 0) for item in sealed)
+                    if totalQuantity > 5:
+                        weight = 2.99
+                    else:
+                        weight = 1.99
                 if delivery is not None and delivery['deliveryMethod'] == 'SK-post':
                     state = (cartContent['recieverInfo'].get('state') or '').strip().lower()
                     if state in CONSTANTS.EUROPE_COUNTRY_CODES:
                         cartContent['recieverInfo']['state'] = CONSTANTS.EUROPE_COUNTRY_CODES[state]
                     eph = EPHService()
-                    sheet_id = eph.createSheet(parcel_category = delivery['parcelCategory'], reception_method = "post")
-                    parcel_id = eph.addParcel(order = cartContent['recieverInfo'], sheet_id = sheet_id, insurance_value = delivery['insuranceValue'])
+                    sheet_id = eph.createSheet(parcel_category = delivery['parcelCategory'], reception_method = "post", payment_type = "ol")
+                    parcel_id = eph.addParcel(order = cartContent['recieverInfo'], sheet_id = sheet_id, insurance_value = delivery['insuranceValue'], weight = weight)
                     label = eph.download_label(parcel_id = parcel_id, sheet_id = sheet_id, filename = f"label_{receipt['filename']}")
                     eph.register_sheet(sheet_id)
                     
                                 
-                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                    zip_file.writestr(receipt['filename'], receipt['bytes'])
-                    if label:
-                        zip_file.writestr(label.filename, label.bytes)
-                zip_buffer.seek(0)
-                        
-                response = send_file(
-                        zip_buffer,
-                        as_attachment=True,
-                        download_name=f"Invoice_{saleResult.sale_id}.zip",
-                        mimetype="application/zip"
-                        )
+                    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                        zip_file.writestr(receipt['filename'], receipt['bytes'])
+                        if label:
+                            zip_file.writestr(label.filename, label.bytes)
+                    zip_buffer.seek(0)
+                            
+                    response = send_file(
+                            zip_buffer,
+                            as_attachment=True,
+                            download_name=f"Invoice_{saleResult.sale_id}.zip",
+                            mimetype="application/zip"
+                            )
+                else:
+                    response = send_file(
+                            BytesIO(receipt['bytes']),
+                            download_name=receipt['filename'],
+                            as_attachment=True,
+                            mimetype='application/pdf'
+                            )
 
                 logger.info('Invoice created succesfully | %s ', saleResult.sale_id)
                 return response 
