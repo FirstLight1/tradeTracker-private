@@ -2519,13 +2519,6 @@ async function loadAuctionContent(button) {
                         }
 
                         const margin = (Number(sealedItem.market_value) - Number(sealedItem.price)).toFixed(2);
-                        const timeStamp = sealedItem.date?.replace('Z', '');
-                        const date = new Date(timeStamp);
-                        let formatedDate = date.toLocaleDateString('sk-SK', {
-                            year: 'numeric',
-                            month: '2-digit',
-                            day: '2-digit'
-                        });
 
                         sealedDiv.innerHTML = `
                             <p class='sealed-quantity'>${DOMPurify.sanitize(sealedItem.quantity)}</p>
@@ -2534,7 +2527,7 @@ async function loadAuctionContent(button) {
                             <p class="VAT-sealed">${(Number(DOMPurify.sanitize(sealedItem.price)) / 1.23).toFixed(2)}</p>
                             <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
-                            <p class="sealed-date">${DOMPurify.sanitize(formatedDate)}</p>
+                            <p></p>
                             `;
 
                         cardsContainer.insertBefore(sealedDiv, cardsContainer.querySelector('.button-container'));
