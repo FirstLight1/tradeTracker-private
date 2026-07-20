@@ -23,11 +23,13 @@ import sys
 import json
 import tempfile
 import unittest
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from tradeTracker import create_app
 from tradeTracker.db import get_db, init_db
+from tradeTracker.actions import normalize
 
 
 ORDERS_HEADER = (
@@ -35,7 +37,8 @@ ORDERS_HEADER = (
     "shippingMethod,trackingNumber,temporaryEmail,isPresale,shippingAddressName,"
     "shippingAddressExtra,shippingAddressStreet,shippingAddressCity,"
     "shippingAddressZip,shippingAddressCountry,phone,buyerVAT,updatedAt,"
-    "articleCategories,articles,articleValue,totalValue,currencyCode,note,PID,issues"
+    "articleCategories,articles,articleValue,shippingValue,totalValue,"
+    "currencyCode,note,PID,issues"
 )
 
 ARTICLES_HEADER = (
@@ -49,13 +52,14 @@ ARTICLES_HEADER = (
 LOC = '"{"locationName":"Many more cards available!","locationQuantity":0}"'
 
 
-def _order_row(idOrder, name, article_value, total_value):
+def _order_row(idOrder, name, article_value, shipping_value):
+    total_value = float(article_value) + float(shipping_value)
     return (
         f'"{idOrder}","Buyer ({name})","sent","2026-05-31T07:44:55.000Z",'
         f'"2026-05-31T07:45:02.000Z","2026-06-03T21:07:25.000Z","","Letter","","",'
         f'"false","{name}","","Hlavna 1","Bratislava","85104","SK","","",'
-        f'"03.06.2026 23:07","Pokemon Single","1","{article_value}","{total_value}",'
-        f'"EUR","","",""'
+        f'"03.06.2026 23:07","Pokemon Single","1","{article_value}","{shipping_value}",'
+        f'"{total_value:.2f}","EUR","","",""'
     )
 
 
@@ -70,9 +74,9 @@ def _article_row(idOrder, name, pos, items, price, cmid):
 def _orders_csv():
     rows = [
         ORDERS_HEADER,
-        _order_row(1001, "Alice Smith", "10.00", "12.80"),
-        _order_row(1002, "Bob Jones", "3.00", "5.80"),
-        _order_row(1003, "Cara Diaz", "4.00", "6.80"),
+        _order_row(1001, "Alice Smith", "10.00", "2.80"),
+        _order_row(1002, "Bob Jones", "3.00", "2.80"),
+        _order_row(1003, "Cara Diaz", "4.00", "2.80"),
     ]
     return "\n".join(rows).encode("utf-8")
 
@@ -118,9 +122,9 @@ class SoldCSVImportTestCase(unittest.TestCase):
 
         def add_card(cmid, name, num, price, mv):
             db.execute(
-                'INSERT INTO cards (auction_id, card_name, card_num, condition, '
-                'card_price, market_value, cardMarketID) VALUES (2,?,?,?,?,?,?)',
-                (name, num, 'NM', price, mv, str(cmid)),
+                'INSERT INTO cards (auction_id, card_name, normalized_name, card_num, condition, '
+                'card_price, market_value, cardMarketID) VALUES (2,?,?,?,?,?,?,?)',
+                (name, normalize(name), num, 'NM', price, mv, str(cmid)),
             )
 
         add_card(900001, 'Cetoddle', '1', 1.0, 1.5)
@@ -131,9 +135,9 @@ class SoldCSVImportTestCase(unittest.TestCase):
 
         # Sealed product matched by cardMarketID; FIFO/inventory check is by name.
         db.execute(
-            'INSERT INTO sealed (name, quantity, price, market_value, date, '
-            'auction_id, cardMarketID) VALUES ("Booster Bundle", 3, 4.0, 5.0, '
-            '"2026-01-01", 2, "900003")'
+            'INSERT INTO sealed (name, normalized_name, quantity, price, market_value, date, '
+            'auction_id, cardMarketID) VALUES (?, ?, 3, 4.0, 5.0, "2026-01-01", 2, "900003")',
+            ('Booster Bundle', normalize('Booster Bundle')),
         )
         db.commit()
 
@@ -151,7 +155,21 @@ class SoldCSVImportTestCase(unittest.TestCase):
             base_url='https://localhost',
         )
 
-    def test_sold_import_end_to_end(self):
+    # PacketaService is disabled in actions.py (commented out), so there is
+    # nothing left to patch for it here.
+    @patch('tradeTracker.actions.EPHService')
+    def test_sold_import_end_to_end(self, mock_eph_service):
+        # Stub the carrier services so the test does not hit live APIs.
+        mock_eph = MagicMock()
+        mock_eph.createSheet.return_value = 'sheet-1'
+        mock_eph.addParcel.return_value = {'id': 'parcel-1'}
+
+        def _fake_download_label(parcel_id, sheet_id, filename):
+            return MagicMock(filename=f'label_{filename}', bytes=b'%PDF-fake')
+
+        mock_eph.download_label.side_effect = _fake_download_label
+        mock_eph_service.return_value = mock_eph
+
         resp = self._post()
         body = resp.get_json()
         print("\nRESPONSE", resp.status_code, json.dumps(body, indent=2, default=str))

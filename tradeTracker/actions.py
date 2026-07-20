@@ -1,16 +1,32 @@
 import base64
 from decimal import Decimal
 from flask import request, Blueprint, jsonify, current_app, send_file, abort
+from reportlab.platypus import SimpleDocTemplate
 from tradeTracker.db import get_db
 from io import BytesIO, TextIOWrapper, StringIO
 import re
+import sqlite3
 import uuid
 import time
 import csv
 import datetime
+import unicodedata
+from dateutil import parser as dateutil_parser
 from Crypto.Cipher import AES
 import os
 import fpdf
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Table,
+    TableStyle,
+    Paragraph,
+    Spacer
+)
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 import json
 import zipfile
 from collections import defaultdict
@@ -19,11 +35,14 @@ import logging
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from . import generateInvoice, CONSTANTS, csrf
-from tradeTracker.services.models import SaleInput
+from tradeTracker.services.models import EPHSheetInfo, SaleInput, ReceiptResult, SaleResult, LabelResult, PacketaHomeDeliveryResult
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaReceiptService
 from tradeTracker.services.cfAuth import verify_token, require_api_token
 from tradeTracker.services.eph_service import EPHService
+# Packeta integration disabled — service hits the network (WSDL fetch) at construction
+# and requires the `postal` native dep. Re-enable together with the blocks in importCSV.
+# from tradeTracker.services.packeta_service import PacketaService
 
 if os.environ.get("FLASK_ENV") != "production":
     from dotenv import load_dotenv
@@ -38,6 +57,12 @@ dictKeys = ['Product ID', 'Name', 'Condition', 'Price', 'Card Number']
 li = []
 dataList = []
 latest = None
+
+def normalize(s: str | None) -> str | None:
+    if s is None:
+        return None
+    # NFD decomposes é → e + combining accent, then encode/decode drops the accent
+    return unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode("ascii").upper()
 
 def get_bulk_item_unit_price(item_type):
     return CONSTANTS.BULK_ITEM_UNIT_PRICES.get(item_type, 0)
@@ -180,8 +205,8 @@ def add():
             'payments': cardsArr[0]['payments'] if 'payments' in cardsArr[0] else None
         }
         
+        # Validate and sanitize payments if provided
         try:
-            # Validate and sanitize payments if provided
             payment_method_json = None
             if auction['payments']:
                 is_valid, sanitized_payments, error_msg = validate_and_sanitize_payments(auction['payments'])
@@ -196,10 +221,11 @@ def add():
             auction_id = cursor.lastrowid
             for card in cardsArr[1:]:
                 db.execute(
-                    'INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id) '
-                    'VALUES (?, ?, ?, ?, ?, ?)',
+                    'INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id) '
+                    'VALUES (?, ?, ?, ?, ?, ?, ?)',
                     (
                         card.get('cardName'),
+                        normalize(card.get('cardName')),
                         card.get('cardNum'),
                         card.get('condition'),
                         card.get('buyPrice'),
@@ -207,8 +233,8 @@ def add():
                         auction_id
                     )
                 )
-            db.commit()
-            return jsonify({'status': 'success', 'auction_id': auction_id}), 201
+                db.commit()
+                return jsonify({'status': 'success', 'auction_id': auction_id}), 201
         except Exception as e:
             db.rollback()
             logger.exception('DB error, auction creation failed | %s', e)
@@ -382,7 +408,7 @@ def loadAuctions():
 def loadSealed():
     db = get_db()
 
-    sealed_products =  db.execute("SELECT 's' || id as sid, name, quantity, price, market_value, date FROM sealed WHERE sale_id is NULL AND auction_id is NULL").fetchall()
+    sealed_products =  db.execute("SELECT 's' || id as sid, name, quantity, price, market_value, date FROM sealed WHERE sale_id is NULL AND auction_id is NULL AND opened = 0").fetchall()
     return jsonify({'status':'success', 'data' : [dict(product) for product in sealed_products]})
 
 @bp.route('/addSealed', methods=('POST',))
@@ -394,8 +420,10 @@ def addSealed():
         for sealed in data:
             marketValue = float(sealed.get("market_value").replace(',','.')) if sealed.get("market_value") is not None else 0
             price = float(sealed.get("price").replace(',','.')) if sealed.get("price") is not None else marketValue * 0.80;
-            date = sealed.get('dateAdded') if sealed.get('dateAdded') is not None else datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
-            db.execute("INSERT INTO sealed(name, price, market_value, date) VALUES (?, ?, ?, ?)",(sealed.get("name"), price, marketValue, date))
+            date = sealed.get('dateAdded') if sealed.get('dateAdded') else datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            if date and len(date) == 10:
+                date = date + 'T00:00:00Z'
+            db.execute("INSERT INTO sealed(name, normalized_name, price, market_value, date) VALUES (?, ?, ?, ?, ?)",(sealed.get("name"), normalize(sealed.get("name")), price, marketValue, date))
         db.commit()
         return jsonify({'status':'success'}),200
     except Exception as e:
@@ -430,10 +458,18 @@ def loadSealedByAuction(auction_id):
     db = get_db()
     sealed_items = db.execute(
         "SELECT 's' || id as sid, name, price, market_value, date, quantity FROM sealed "
-        "WHERE auction_id = ? AND sale_id is NULL", 
+        "WHERE auction_id = ? AND sale_id is NULL AND opened = 0", 
         (auction_id,)
     ).fetchall()
     return jsonify([dict(item) for item in sealed_items]), 200
+
+@bp.route('/loadPurchases', methods=('GET',))
+@verify_token
+def loadPurchases():
+    db = get_db()
+    purchases = db.execute(
+        'SELECT * FROM auctions ORDER BY id DESC').fetchall()
+    return jsonify([dict(auction) for auction in purchases]),200
 
 @bp.route('/loadAllCards/<int:auction_id>', methods=('GET',))
 @verify_token
@@ -441,6 +477,13 @@ def loadAllCards(auction_id):
     db = get_db()
     cards = db.execute('SELECT * FROM cards WHERE auction_id = ?', (auction_id,)).fetchall()
     return jsonify([dict(card) for card in cards]),200
+#TODO: merge into one, add to existiog SELECT endpoints but with filter query
+@bp.route('/loadAllSealed/<int:auction_id>', methods=('GET',))
+@verify_token
+def loadAllSealed(auction_id):
+    db = get_db()
+    sealed = db.execute('SELECT * FROM sealed WHERE auction_id = ?', (auction_id,)).fetchall()
+    return jsonify([dict(sealed) for sealed in sealed]),200
 
 @bp.route('/inventoryValue', methods=('GET',))
 @verify_token
@@ -449,7 +492,7 @@ def invertoryValue():
     cur = db.cursor()
     cardMarketValue = cur.execute('SELECT SUM(market_value) FROM cards c LEFT JOIN sale_items si ON c.id = si.card_id WHERE si.card_id IS NULL').fetchone()[0]
     bulkValue = cur.execute('SELECT SUM(total_price) FROM bulk_items').fetchone()[0]
-    sealedValue = cur.execute('SELECT SUM(market_value * quantity) FROM sealed WHERE sale_id IS NULL').fetchone()[0]
+    sealedValue = cur.execute('SELECT SUM(market_value * quantity) FROM sealed WHERE sale_id IS NULL AND opened = 0').fetchone()[0]
     value = (cardMarketValue if cardMarketValue is not None else 0) + (bulkValue if bulkValue is not None else 0) + (sealedValue if sealedValue is not None else 0)
 
     return jsonify({'status': 'success','value': value}),200
@@ -519,10 +562,11 @@ def addToExistingAuction(auction_id):
         db = get_db()
         try:
             for card in cards:
-                db.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id)'
-                ' VALUES (?, ?, ?, ?, ?, ?)',
+                db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id)'
+                ' VALUES (?, ?, ?, ?, ?, ?, ?)',
                 (
                     card.get('cardName'),
+                    normalize(card.get('cardName')),
                     card.get('cardNum'),
                     card.get('condition'),
                     card.get('buyPrice'),
@@ -537,10 +581,12 @@ def addToExistingAuction(auction_id):
                 for item in sealed:
                     marketValue = float(item.get("market_value").replace(',','.')) if item.get("market_value") is not None else 0
                     price = float(item.get("price").replace(',','.')) if item.get("price") is not None else marketValue * 0.80
-                    date = item.get('date') if item.get('date') is not None else datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
+                    date = item.get('date') if item.get('date') is not None else datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                    if date and len(date) == 10:
+                        date = date + 'T00:00:00Z'
                     db.execute(
-                        "INSERT INTO sealed(name, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?)",
-                        (item.get("name"),item.get("quantity"), price, marketValue, date, auction_id)
+                        "INSERT INTO sealed(name, normalized_name, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (item.get("name"), normalize(item.get("name")),item.get("quantity"), price, marketValue, date, auction_id)
                     )
 
             bulk = data.get('bulk')
@@ -636,6 +682,23 @@ def loadSoldCards(sale_id):
 
     return jsonify(response)
 
+@bp.route('/mergeAuctions/<int:auction_id>/<int:target_id>',methods=('POST',))
+@verify_token
+def mergeAuctions(auction_id, target_id):
+    db = get_db()
+    try:
+        db.execute("UPDATE auctions SET auction_price = auction_price + (SELECT auction_price FROM auctions WHERE id = ?) WHERE id = ?", (auction_id, target_id))
+        db.execute("UPDATE cards SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id))
+        db.execute("UPDATE sealed SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id))
+        db.execute("UPDATE bulk_items SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id))
+        db.execute("DELETE FROM auctions WHERE id = ?", (auction_id,))
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Error merging auctions | {e}")
+        return jsonify({'status': 'error', 'message': f'There was an error {e}, Error code: Ax30'}), 400
+    db.commit()
+    return jsonify({'status': 'success'}), 200
+
 @bp.route('/unlinkedBarterIds',methods=('GET',))
 @verify_token
 def unlinkedBarterIds():
@@ -654,14 +717,55 @@ def linkAuctionToSale(auction_id):
 
     return jsonify({'status': 'success'})
 
-@bp.route('/orderReturn/<int:saleId>', methods=('POST',))
-@verify_token
-def orderReturn(saleId):
-    # TODO: SEALED NOT HERE FOR SOME REASON
-    db = get_db()
+def _orderReturn(saleId, itemIds, db, shipping_value=0):
+    cardIds = itemIds.get('cards') or []
+    sealedEntries = itemIds.get('sealed') or []
+
+    returned_value = 0.0
 
     try:
-        db.execute('UPDATE cards SET sold_date = NULL WHERE id IN (SELECT card_id FROM sale_items WHERE sale_id = ?)',(saleId, ))
+        sealedPlan = []
+        for entry in sealedEntries:
+            sealed_id = entry.get('id')
+            returnQuantity = entry.get('returnQuantity')
+            if not sealed_id or not returnQuantity or returnQuantity <= 0:
+                continue
+            row = db.execute(
+                'SELECT quantity, market_value FROM sealed WHERE id = ?', (sealed_id,)
+            ).fetchone()
+            if row is None:
+                db.rollback()
+                return f'Sealed item {sealed_id} not found', None
+            if returnQuantity > row['quantity']:
+                db.rollback()
+                return f'returnQuantity {returnQuantity} exceeds available {row["quantity"]} for sealed item {sealed_id}', None
+            sealedPlan.append((sealed_id, returnQuantity, row['quantity'], row['market_value'] or 0))
+
+        if cardIds:
+            cardPlaceholder = ','.join('?' for _ in cardIds)
+            cards_sum = db.execute(
+                f'SELECT COALESCE(SUM(sell_price), 0) FROM sale_items WHERE card_id IN ({cardPlaceholder})',
+                cardIds
+            ).fetchone()[0]
+            returned_value += cards_sum or 0
+            db.execute(f'UPDATE cards SET sold_date = NULL WHERE id IN ({cardPlaceholder})', cardIds)
+            db.execute(f'DELETE FROM sale_items WHERE card_id IN ({cardPlaceholder})', cardIds)
+
+        for sealed_id, returnQuantity, orig_quantity, mv in sealedPlan:
+            returned_value += mv * returnQuantity
+            if returnQuantity == orig_quantity:
+                db.execute('UPDATE sealed SET sale_id = NULL WHERE id = ?', (sealed_id,))
+            else:
+                db.execute('UPDATE sealed SET quantity = quantity - ? WHERE id = ?', (returnQuantity, sealed_id))
+                db.execute(
+                    """INSERT INTO sealed (name, normalized_name, quantity, price, market_value,
+                                           date, sale_id, auction_id, opened, cardMarketID)
+                       SELECT name, normalized_name, ?, price, market_value,
+                              date, NULL, auction_id, opened, cardMarketID
+                       FROM sealed WHERE id = ?""",
+                    (returnQuantity, sealed_id)
+                )
+
         bulk_sales_rows = db.execute(
             'SELECT item_type, quantity FROM bulk_sales WHERE sale_id = ?', (saleId,)
         ).fetchall()
@@ -675,28 +779,31 @@ def orderReturn(saleId):
                     'UPDATE bulk_items SET quantity = quantity + ? WHERE id = ?',
                     (bs_row['quantity'], target['id'])
                 )
-        db.execute('DELETE FROM sales WHERE id = ?', (saleId, ))
-    except:
+
+        if shipping_value:
+                db.execute('UPDATE sales SET shipping_info = shipping_info - ? WHERE id = ?', (shipping_value, saleId))
+        returned_value += float(shipping_value)
+        if returned_value:
+            db.execute(
+                'UPDATE sales SET total_amount = total_amount - ? WHERE id = ?',
+                (returned_value, saleId)
+            )
+
+    except Exception:
          db.rollback()
          logger.exception('Return creation failed | saleId: %s', saleId)
-         return jsonify({'status': 'error', 'message': 'There was an error while creating a return, Error code: Ax04'}), 400 
-    
-    db.commit()
-    return jsonify({'status': 'success'}),200
+         return 'There was an error while creating a return, Error code: Ax04', None
 
+    return None, returned_value
 
-@bp.route('/generateCreditNote/<int:saleId>', methods=('POST',))
+@bp.route('/partyInfo/<int:saleId>', methods=('GET',))
 @verify_token
-def generate_credit_note(saleId):
-    # TODO: add quantity, also to invoice
-    db = get_db()
+def partyInfo(saleId):
 
-    # Load the sale record (contains receiver info in notes and invoice_number)
+    db = get_db()
     sale = db.execute('SELECT * FROM sales WHERE id = ?', (saleId,)).fetchone()
     if sale is None:
         return jsonify({'status': 'error', 'message': 'Sale not found, Error code: Ax05'}), 404
-
-    # Parse receiver info stored as JSON in the notes column
     try:
         crypt = json.loads(sale['notes'])
         nonce = base64.b64decode(crypt['nonce'])
@@ -708,74 +815,309 @@ def generate_credit_note(saleId):
         reciever = json.loads(decrypted.decode("utf-8"))
     except (json.JSONDecodeError, TypeError):
         reciever = {}
+     
+    sale = dict(sale)
+    sale.pop('notes', None)
+    #TODO: change this to values from env
+    provider = {
+        'summary': 'Dominik Forró - CARD ANVIL',
+        'address': 'Vahovce 94',
+        'city': 'Váhovce',
+        'zip_code': '92562',
+        'country': 'Slovakia',
+        'phone': '0949 759 023',
+        'email': 'dominikforro95@gmail.com',
+        'ico': '57310041',
+        'dic': '1130287664',
+        'ic_dph': 'SK1130287664',
+    }
+    return jsonify({'providerInfo': provider, 'recieverInfo': reciever, 'sale':sale}), 200
 
-    original_invoice_num = sale['invoice_number']
+@bp.route('/loadSale/<int:saleId>', methods=('GET',))
+@verify_token
+def load_sale(saleId):
+    db = get_db()
+    cards = db.execute("SELECT c.card_name, c.card_num, c.condition, c.id, si.sell_price FROM cards c "
+                       "JOIN sale_items si ON c.id = si.card_id "
+                       "WHERE si.sale_id = ? ",(saleId,)).fetchall()
 
-    # Load cards
-    cards_rows = db.execute(
-        'SELECT c.card_name, c.card_num, si.sell_price as marketValue '
-        'FROM cards c '
-        'JOIN sale_items si ON c.id = si.card_id '
-        'WHERE si.sale_id = ?',
-        (saleId,)
-    ).fetchall()
-    items = [{'cardName': r['card_name'], 'cardNum': r['card_num'], 'marketValue': r['marketValue']} for r in cards_rows]
+    sealed = db.execute("SELECT s.name, s.price, s.market_value, s.date, s.id, s.auction_id, s.quantity FROM sealed s "
+                        "WHERE s.sale_id = ? ",(saleId,)).fetchall()
+    data = {
+            'items': [dict(c) for c in cards] + [dict(s) for s in sealed],
+           }
+    return jsonify({'status': 'success', 'data': data}),200
 
-    # Load sealed items
-    sealed_rows = db.execute('SELECT * FROM sealed WHERE sale_id = ?', (saleId,)).fetchall()
-    sealed = [{'sealedName': r['name'], 'marketValue': r['market_value'], 'auctionId': r['auction_id']} for r in sealed_rows]
 
-    # Load bulk/holo/ex sales
-    bulk_rows = db.execute('SELECT * FROM bulk_sales WHERE sale_id = ?', (saleId,)).fetchall()
-    bulk = None
-    holo = None
-    ex = None
-    for b in bulk_rows:
-        if b['item_type'] == 'bulk':
-            bulk = {'quantity': b['quantity'], 'unit_price': b['unit_price']}
-        elif b['item_type'] == 'holo':
-            holo = {'quantity': b['quantity'], 'unit_price': b['unit_price']}
-        elif b['item_type'] == 'ex':
-            ex = {'quantity': b['quantity'], 'unit_price': b['unit_price']}
+@bp.route('/generateCreditNote/<int:saleId>', methods=('POST',))
+@verify_token
+def generate_credit_note(saleId):
+    db = get_db()
+    data = request.get_json()
+    original_invoice_num = data.get('originalInvoiceNum')
 
-    # Load shipping info
-    shipping = None
-    if sale['shipping_info'] and float(sale['shipping_info']) > 0:
-        shipping = {
-            'shippingWay': 'Doprava / Poštovné – samostatná služba',
-            'shippingPrice': sale['shipping_info']
-        }
+    itemIds = {
+            'cards' : [c['id'] for c in data.get('items') or []],
+            'sealed' : data.get('sealed') or [],
+            }
+    shipping_value = (data.get('shipping') or {}).get('shippingPrice', 0) or 0
 
-    # Reconstruct payment methods from receiver info if available
-    payment_methods = reciever.get('paymentMethods') or []
-    if not payment_methods and reciever.get('paymentMethod'):
-        payment_methods = [{'type': reciever.get('paymentMethod'), 'amount': 0}]
+    if not getattr(db, 'in_transaction', False):
+        db.execute("BEGIN IMMEDIATE")
+
+    err, returned_value = _orderReturn(saleId, itemIds, db, shipping_value)
+    if err:
+        db.rollback()
+        status_code = 400 if 'exceeds available' in err else 500
+        logger.warning('Failed to order return | saleId: %s | reason: %s', saleId, err)
+        return jsonify({'status': 'error', 'message': f'{str(err)}, Error code: Ax08'}), status_code
+
+    creditNoteNum = None
+    for attempt in range(3):
+        row = db.execute(
+            "SELECT COALESCE(MAX(record_number), 0) + 1 FROM sales_correction WHERE change_type = 'credit'"
+        ).fetchone()
+        creditNoteNum = row[0]
+        try:
+            db.execute(
+                "INSERT INTO sales_correction (sale_id, record_number, change_type, value_change) VALUES (?, ?, ?, ?)",
+                (saleId, creditNoteNum, 'credit', returned_value)
+            )
+            break
+        except sqlite3.IntegrityError as e:
+            if 'UNIQUE constraint' not in str(e):
+                db.rollback()
+                logger.critical('Non-UNIQUE IntegrityError on sales_correction | saleId: %s | e: %s', saleId, e)
+                return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax07'}), 500
+            logger.warning('record_number collision (attempt %d), retrying | saleId: %s', attempt + 1, saleId)
+            if attempt == 2:
+                db.rollback()
+                logger.critical('record_number conflict exhausted retries | saleId: %s', saleId)
+                return jsonify({'status': 'error', 'message': 'Credit note number conflict, Error code: Ax07'}), 500
+            continue
 
     try:
         pdf, cn_num = generateInvoice.generateCreditNote(
-            reciever,
-            items if items else None,
-            sealed if sealed else None,
-            bulk,
-            holo,
-            ex,
-            payment_methods if payment_methods else None,
-            shipping,
-            original_invoice_num
+            data.get('reciever'),
+            data.get('items') if data.get('items') else None,
+            data.get('sealed') if data.get('sealed') else None,
+            data.get('bulk'),
+            data.get('holo'),
+            data.get('ex'),
+            None,
+            data.get('shipping'),
+            original_invoice_num,
+            creditNoteNum
         )
-        response = send_file(
-                        BytesIO(pdf['bytes']),
-                        download_name=pdf['filename'],
-                        as_attachment=True,
-                        mimetype='application/pdf'
-                        )
-
     except Exception as e:
+        db.rollback()
         logger.critical('Credit note generation failed %s', e)
         return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax06'}), 500
-    logger.info('Credit note generated succesfully | original invoice num: %s', original_invoice_num)
-    return response 
 
+    db.commit()
+    logger.info('Credit note generated succesfully | original invoice num: %s', original_invoice_num)
+
+    return send_file(
+        BytesIO(pdf['bytes']),
+        download_name=pdf['filename'],
+        as_attachment=True,
+        mimetype='application/pdf'
+    )
+
+def orderDebit(db, saleId, cards=None, sealed=None):
+    valueChange = 0.0
+    try:
+        if cards:
+            for card in cards:
+                db.execute("INSERT INTO sale_items (sale_id, card_id, sell_price, profit) VALUES (?, ?, ?, (SELECT market_value - card_price FROM cards WHERE id = ?))",
+                           (saleId, card.get('id'), card.get('marketValue'), card.get('id')))
+                db.execute("UPDATE cards SET sold_date = ? WHERE id = ?", (datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"), card.get('id')))
+                valueChange += float(card.get('marketValue'))
+
+        if sealed:
+            for item in sealed:
+                qty = int(item.get('quantity') or 1)
+                if qty <= 0:
+                    continue
+                sealed_id = item.get('id')
+                row = db.execute('SELECT quantity FROM sealed WHERE id = ?', (sealed_id,)).fetchone()
+                if row is None:
+                    raise Exception(f'Sealed item {sealed_id} not found')
+                if qty >= row['quantity']:
+                    db.execute("UPDATE sealed SET sale_id = ? WHERE id = ?", (saleId, sealed_id))
+                else:
+                    db.execute("UPDATE sealed SET quantity = quantity - ? WHERE id = ?", (qty, sealed_id))
+                    db.execute(
+                        """INSERT INTO sealed (name, normalized_name, quantity, price, market_value,
+                                               date, sale_id, auction_id, opened, cardMarketID)
+                           SELECT name, normalized_name, ?, price, market_value,
+                                  date, ?, auction_id, opened, cardMarketID
+                           FROM sealed WHERE id = ?""",
+                        (qty, saleId, sealed_id)
+                    )
+                valueChange += float(item.get('marketValue')) * qty
+        db.execute("UPDATE sales SET total_amount = total_amount + ? WHERE id = ?", (valueChange, saleId))
+        return None
+    except Exception as e:
+        return e
+
+@bp.route('/generateDebitNote/<int:saleId>', methods=('POST',))
+@verify_token
+def generateDebitNote(saleId):
+    db = get_db()
+    data = request.get_json()
+
+    err = orderDebit(db,saleId,cards=data.get('cards'), sealed=data.get('sealed'))
+    if err:
+        logger.error('Failed to order return | saleId: %s | reason: %s', saleId, err)
+        return jsonify({'status': 'error', 'message': f'{str(err)}, Error code: Ax07'}), 500
+    
+    debitNoteNum = None
+    for attempt in range(3):
+        row = db.execute(
+            "SELECT COALESCE(MAX(record_number), 0) + 1 FROM sales_correction WHERE change_type = 'debit'"
+        ).fetchone()
+        debitNoteNum = row[0]
+        try:
+            db.execute(
+                "INSERT INTO sales_correction (sale_id, record_number, change_type, value_change) VALUES (?, ?, ?, ?)",
+                (saleId, debitNoteNum, 'debit', data.get('total')),
+            )
+            break
+        except sqlite3.IntegrityError as e:
+            if 'UNIQUE constraint' not in str(e):
+                db.rollback()
+                logger.critical('Non-UNIQUE IntegrityError on sales_correction | saleId: %s | e: %s', saleId, e)
+                return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax07'}), 500
+            logger.warning('record_number collision (attempt %d), retrying | saleId: %s', attempt + 1, saleId)
+            if attempt == 2:
+                db.rollback()
+                logger.critical('record_number conflict exhausted retries | saleId: %s', saleId)
+                return jsonify({'status': 'error', 'message': 'Debit note number conflict, Error code: Ax07'}), 500
+            continue
+    
+    try:
+        pdf, dn_num = generateInvoice.generate_invoice(
+            reciever=data.get('reciever'),
+            invoice_num=data.get('originalInvoiceNum'),
+            items=data.get('cards') or [],
+            sealed=data.get('sealed') or [],
+            type='debit',
+            dn_num=debitNoteNum
+            )
+    except Exception as e:
+        logger.critical('Debit note generation failed %s', e)
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax06'}), 500
+    db.commit()
+    response = send_file(BytesIO(pdf['bytes']), 
+                         mimetype='application/pdf', 
+                         as_attachment=True, 
+                         download_name=pdf['filename'])
+    return response
+
+
+@bp.route('/generateBuyReport', methods=('GET',))
+@limiter.limit("2 per minute")
+@verify_token
+def generateBuyReport():
+    #TODO: add bulk
+    db = get_db()
+    curr = db.cursor()
+    auctionId = request.args.get('auctionId')
+    if not auctionId:
+        return jsonify({'status': 'error', 'message': 'Missing auctionId'}), 400
+    auctionId = int(auctionId)
+    buffer = BytesIO()
+
+    try:
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        
+        # Add custom font
+        font_dir = os.path.join(os.path.dirname(__file__), 'fonts')
+        pdfmetrics.registerFont(TTFont('DejaVuSans', os.path.join(font_dir, 'DejaVuSans.ttf')))
+        pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', os.path.join(font_dir, 'DejaVuSans-Bold.ttf')))
+        pdfmetrics.registerFontFamily('DejaVuSans', normal='DejaVuSans', bold='DejaVuSans-Bold')
+        print(pdfmetrics.getRegisteredFontNames())
+
+        elements = []
+        auctionInfo =  curr.execute("SELECT id, auction_name, date_created FROM auctions WHERE id = ?",(auctionId,)).fetchone()
+        auctionName = auctionInfo[1] if auctionInfo[1] is not None else f"auction {int(auctionInfo[0])-1}"
+        dateCreated = format_iso_date(auctionInfo[2])
+
+        styles = getSampleStyleSheet()
+        styles["Heading1"].fontName = "DejaVuSans"
+        styles["Heading2"].fontName = "DejaVuSans"
+
+        elements.append(Paragraph(f"Sales Report - {auctionName} - Added: {dateCreated}", styles["Heading1"]))
+        elements.append(Spacer(1, 12))
+
+        curr.execute("SELECT card_name, card_num, condition, card_price AS 'buy price', market_value as 'market value', sold_date as 'sold' "
+                                "FROM cards WHERE auction_id = ?", (auctionId,))
+
+        cardsDesc = [desc[0] for desc in curr.description]
+        cardRows = [row[:-1] + ('True' if row[-1] is not None else '',) for row in curr.fetchall()]
+        if cardRows:
+
+            elements.append(Paragraph("Cards Sold", styles["Heading2"]))
+            elements.append(Spacer(1, 12))
+
+            cardsData = [cardsDesc] + cardRows
+
+            table = Table(cardsData, repeatRows=1)
+            table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, -1), "DejaVuSans"),
+                ("FONTSIZE", (0, 0), (-1, 0), 11),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+            ]))
+            
+            elements.append(table)
+
+            elements.append(Spacer(1, 12))
+
+
+        curr.execute("SELECT name, quantity, price as 'buy price', market_value as 'market value', sale_id as 'sold', opened "
+                                "FROM sealed WHERE auction_id = ?", (auctionId,))
+        sealedDesc = [desc[0] for desc in curr.description]
+        sealedRows = [row[:-1] + ('True' if row[-1] is not None else '',) for row in curr.fetchall()]
+        if sealedRows:
+            sealedData = [sealedDesc] + sealedRows
+            elements.append(Paragraph("Sealed Items", styles["Heading2"]))
+            elements.append(Spacer(1, 12))
+            table = Table(sealedData, repeatRows=1)
+            table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, -1), "DejaVuSans"),
+                ("FONTSIZE", (0, 0), (-1, 0), 11),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+            ]))
+            
+            elements.append(table)
+        doc.build(elements)
+
+        pdf = buffer.getvalue()
+        buffer.close()
+
+        response = send_file(
+                        BytesIO(pdf),
+                        as_attachment=True,
+                        mimetype='application/pdf',
+                        download_name=f"report_{auctionName.replace(' ', '_')}.pdf"
+                        )
+        return response, 200
+
+
+    except Exception as e:
+        logger.exception('PDF generation failed')
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax08'}), 500
 
 @bp.route('/generateSoldReport', methods=('GET',))
 @limiter.limit("2 per minute")
@@ -854,6 +1196,39 @@ def format_iso_date(iso_str):
         return dt.strftime('%d.%m.%Y')
     except (ValueError, TypeError):
         return str(iso_str)
+
+
+def parse_date_to_iso(value):
+    """Parse any date string and return canonical ISO 8601 (YYYY-MM-DDTHH:MM:SSZ).
+
+    Tries datetime.fromisoformat(), then strptime('%Y-%m-%d'), then
+    dateutil.parser.parse(dayfirst=True). Raises ValueError if all fail.
+    """
+    if not value:
+        raise ValueError('Empty date value')
+
+    try:
+        dt = datetime.datetime.fromisoformat(value)
+        return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        dt = datetime.datetime.strptime(value, '%Y-%m-%d')
+        return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        dt = dateutil_parser.parse(value, dayfirst=True)
+        return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    except (ValueError, TypeError, OverflowError):
+        pass
+
+    raise ValueError(
+        f'Invalid date format: {value!r}. '
+        'Expected ISO 8601, YYYY-MM-DD, or dd-mm-yyyy.'
+    )
 
 
 def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
@@ -1124,9 +1499,7 @@ def createBuyReport(month, year, db):
             bought['Cena'].append(Decimal(row['auction_price']))
         except:
             bought['Cena'].append('Error')
-        date = datetime.datetime.strptime( row['date_created'].split('T')[0], '%Y-%m-%d')
-        formatedDate = date.strftime('%d.%m.%Y')
-        bought['Datum'].append(formatedDate)
+        bought['Datum'].append(format_iso_date(row['date_created']))
         if row['payment_method'] != None:
             payments = json.loads(row['payment_method'])
             bought['Payment type'].append(', '.join(payment['type'] for payment in payments))
@@ -1178,6 +1551,7 @@ def addToCollection():
         db.commit()
     return jsonify({'status': 'success'}), 201
 
+
 @bp.route('/loadCollection', methods=('GET',))
 @verify_token
 def loadCollection():
@@ -1224,10 +1598,11 @@ def addToSingles():
         data = request.get_json()
 
         for card in data[1:]:
-            db.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id)'
-                    'VALUES (?, ?, ?, ?, ?, ?)',
+            db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id)'
+                    'VALUES (?, ?, ?, ?, ?, ?, ?)',
                     (
                         card.get('cardName'),
+                        normalize(card.get('cardName')),
                         card.get('cardNum'),
                         card.get('condition'),
                         card.get('buyPrice'),
@@ -1256,6 +1631,13 @@ def updateAuction(auction_id):
         logger.warning('Invalid field | auction_id : %s', auction_id)
         return jsonify({'status': 'error', 'message': 'Invalid field'})
     column = ALLOWED_FIELDS[field]
+
+    if column == 'date_created':
+        try:
+            value = parse_date_to_iso(value)
+        except ValueError as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 400
+
     db.execute(f'UPDATE auctions SET {column} = ? WHERE id = ?', (value, auction_id))
     db.commit()
     return jsonify({'status': 'success'}), 200
@@ -1279,14 +1661,182 @@ def updatePaymentMethod(auction_id):
 
     return jsonify({'status': 'success'}), 200
 
+#TODO: refactor the recalculation of prices so I dont need to reuse it
+def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDiff):
+    try:
+        for card in cards:
+            if card['marketValue'] is not None and card['marketValue'] > 0:
+                discount = (card['marketValue'] / newTotal) * priceDiff
+                new_price = round(card['marketValue'] - discount, 2)
+                cur.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
+                ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                (
+                    card.get('cardName'),
+                    normalize(card.get('cardName')),
+                    card.get('cardNum'),
+                    card.get('condition'),
+                    new_price,
+                    card.get('marketValue'),
+                    auction_id,
+                    card.get('cardmarketId')
+                ))
+
+        for item in sealed:
+            if item['marketValue'] is not None and item['marketValue'] > 0:
+                discount = (item['marketValue'] / newTotal) * priceDiff
+                new_price = round(item['marketValue'] - discount, 2)
+                cur.execute('INSERT INTO sealed (name,normalized_name, quantity, price, market_value, date, auction_id, cardmarketId)'
+                           ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                            (
+                                item.get('cardName'),
+                                normalize(item.get('cardName')),
+                                1,
+                                new_price,
+                                item.get('marketValue'),
+                                datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                                auction_id,
+                                item.get('cardmarketId')
+                             ))
+
+    except Exception as e:
+        logger.exception(
+            'Database error while adjusting cards | auction_id: %s | error: %s',
+            auction_id,
+            e,
+        )
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax29'}), 400
+
+    try:
+        row = cur.execute("SELECT * FROM sealed WHERE id = ?", (openedItem.get('id').replace('s', ''),)).fetchone()
+        if row['quantity'] == 1:
+            cur.execute('UPDATE sealed SET opened = 1 WHERE auction_id = ? AND id = ?', (auction_id, openedItem.get('id').replace('s', '')))
+        else:
+           cur.execute("UPDATE sealed SET quantity = quantity - 1 WHERE id = ?", (openedItem.get('id').replace('s', ''),))
+           cur.execute("INSERT INTO sealed (name, normalized_name, price, market_value, date, auction_id, cardmarketId) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       (row['name'],normalize(row['name']) ,row['price'], row['market_value'], row['date'], auction_id, row['cardmarketId']))
+           cur.execute("UPDATE sealed SET opened = 1 WHERE auction_id = ? AND id = ?", (auction_id, cur.lastrowid))
+    except Exception as e:
+        logger.exception(
+            'Database error while adjusting cards | auction_id: %s | error: %s',
+            auction_id,
+            e,
+        )
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax29'}), 400
+    return None
+
+def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
+    auctionId = None
+    if cards != []:
+        try:
+            cur.execute("INSERT into auctions (auction_name, auction_price, date_created, payment_method) VALUES (?, ?, ?, ?)",
+                        ("Opened sealed", 0, datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"), "[]"))
+            auctionId = cur.lastrowid
+            for card in cards:
+                if card['marketValue'] is not None and card['marketValue'] > 0:
+                    discount = (card['marketValue'] / newTotal) * priceDiff
+                    new_price = round(card['marketValue'] - discount, 2)
+                    cur.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
+                    ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    (
+                        card.get('cardName'),
+                        normalize(card.get('cardName')),
+                        card.get('cardNum'),
+                        card.get('condition'),
+                        new_price,
+                        card.get('marketValue'),
+                        auctionId,
+                        card.get('cardmarketId')
+                    ))
+        except Exception as e:
+            logger.exception(
+                'Database error while adjusting cards from seal open | error: %s',
+                e,
+            )
+            return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax29'}), 400
 
 
+
+    try:
+        for item in sealed:
+            if item['marketValue'] is not None and item['marketValue'] > 0:
+                discount = (item['marketValue'] / newTotal) * priceDiff
+                new_price = round(item['marketValue'] - discount, 2)
+                cur.execute('INSERT INTO sealed (name,normalized_name, quantity, price, market_value, date, auction_id, cardmarketId)'
+                           ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                            (
+                                item.get('cardName'),
+                                normalize(item.get('cardName')),
+                                1,
+                                new_price,
+                                item.get('marketValue'),
+                                datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                                auctionId,
+                                item.get('cardmarketId')
+                             ))
+    except Exception as e:
+        logger.exception(
+            'Database error while adjusting sealed from seal open | error: %s',
+            e,
+        )
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax29'}), 400
+
+    try:
+        row = cur.execute("SELECT * FROM sealed WHERE id = ?", (openedItem.get('id').replace('s', ''),)).fetchone()
+        if row['quantity'] == 1:
+            cur.execute('UPDATE sealed SET opened = 1 WHERE id = ?', (openedItem.get('id').replace('s', ''),))
+        else:
+           cur.execute("UPDATE sealed SET quantity = quantity - 1 WHERE id = ?", (openedItem.get('id').replace('s', ''),))
+           cur.execute("INSERT INTO sealed (name,normalized_name, price, market_value, date, cardmarketId) VALUES (?, ?, ?, ?, ?, ?)",
+                       (row['name'],normalize(row['name']), row['price'], row['market_value'], row['date'], row['cardmarketId']))
+           cur.execute("UPDATE sealed SET opened = 1 WHERE id = ?", (cur.lastrowid,))
+    except Exception as e:
+        logger.exception(
+            'Database error while changing sealed quantity | error: %s',
+            e,
+        )
+        return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax29'}), 400
+    return None
+    
+@bp.route('/openSealed/<int:auction_id>', methods=('POST',))
+@verify_token
+def openSealed(auction_id):
+    db = get_db()
+    cur = db.cursor()
+    data = request.get_json()
+    openedItem = data.get('openedItem')
+    sealed = data.get('sealed')
+    cards = data.get('cards')
+
+    # marketValue may be None — if so, the user needs therapy, but we tolerate it as 0.
+    newTotal = sum(float(c.get('marketValue')) or 0.0 for c in cards) + sum(float(s.get('marketValue')) or 0.0 for s in sealed)
+    if newTotal == 0:
+        return jsonify({'status': 'error', 'message': 'Opened items need to have market value, Error code: Ax26'}), 400
+
+    priceDiff = newTotal - float(openedItem.get('initialValue'))
+    
+    if auction_id != 0:
+        err = openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal,priceDiff)
+        if err:
+            db.rollback()
+            return err
+    else:
+        err = openSingleSealed(cur, openedItem, sealed, cards, newTotal, priceDiff)
+        if err:
+            db.rollback()
+            return err
+
+    db.commit()
+
+    return jsonify({'status': 'success'}), 200
+
+
+# TODO: these two routes do basically the same thing, could be merged at some point
 @bp.route('/recalculateCardPrices/<int:auction_id>/<string:new_auction_price>', methods=('POST',))
 @verify_token
 def recalculateCardPrices(auction_id, new_auction_price):
     # TODO: Switch to decimal
     db = get_db()
-    new_auction_price = float(new_auction_price)
+    new_auction_price = float(_parse_number(new_auction_price))
 
     for item_type, unit_price in CONSTANTS.BULK_ITEM_UNIT_PRICES.items():
         quantity = db.execute(
@@ -1308,7 +1858,7 @@ def recalculateCardPrices(auction_id, new_auction_price):
     sealed_items = db.execute(
         'SELECT s.id, s.market_value, s.sale_id,s.quantity '
         'FROM sealed s '
-        'WHERE s.auction_id = ?',
+        'WHERE s.auction_id = ? AND s.opened = 0',
         (auction_id,)
     ).fetchall()
 
@@ -1437,7 +1987,7 @@ def updateOneCard(db, name, num, condition, sellPrice):
         "WHERE c.card_name = ? AND c.card_num LIKE ? AND c.condition = ? AND si.card_id IS NULL "
         "LIMIT 1", (name, f'%{num}', condition)).fetchone()
     if cardId:
-        date = datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
+        date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         card = db.execute("SELECT auction_id, card_price FROM cards WHERE id = ?", (cardId['id'],)).fetchone()
         
         # Create a sale for this card
@@ -1531,7 +2081,7 @@ def _process_inventory_csv(file):
     missing_header = expected_header - actual_header
     if missing_header:
         raise ValueError(f'Missing header(s): {missing_header}')
-    
+
     dataList = []
     for row in reader:
         item = {
@@ -1541,7 +2091,7 @@ def _process_inventory_csv(file):
             'buy_price': round(float(row['price']) * 0.8, 2),
             'market_value': row['price'],
             'quantity': row['quantity'],
-            'date': datetime.datetime.now().isoformat() + "Z",
+            'date': datetime.datetime.strptime(row['listedAt'], "%d-%m-%Y %H:%M:%S").strftime("%Y-%m-%dT%H:%M:%SZ"),
             'cardmarketId': row['cardmarketId'],
         }
         dataList.append(item)
@@ -1567,14 +2117,15 @@ def _create_inventory(db, dataList=None):
     auctionId = cursor.lastrowid
 
     for item in dataList:
-        isSealed = item.get('card_num') == ''
+        isSealed = item.get('card_num') == ""
 
         if isSealed:
             try:
-                db.execute('INSERT INTO sealed (name, quantity, price, market_value, date, auction_id, cardmarketId)'
-                    'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                db.execute('INSERT INTO sealed (name, normalized_name, quantity, price, market_value, date, auction_id, cardmarketId)'
+                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                     (
                         item.get('card_name'),
+                        normalize(item.get('card_name')),
                         item.get('quantity'),
                         item.get('buy_price'),
                         item.get('market_value'),
@@ -1593,10 +2144,11 @@ def _create_inventory(db, dataList=None):
             for i in range(quantity):
                 try:
                     buyPrice = round(float(item.get('market_value')) * 0.8, 2)
-                    db.execute('INSERT INTO cards (card_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
-                        'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
+                        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                         (
                             item.get('card_name'),
+                            normalize(item.get('card_name')),
                             item.get('card_num'),
                             item.get('condition'),
                             buyPrice,
@@ -1614,8 +2166,14 @@ def _fixArticlesUpload(file):
     raw = re.sub(r'"\{"locationName".*?locationQuantity":\d+\}"', '""', file)
     return pd.read_csv(StringIO(raw))
 
-#def createPostEph():
-    
+def _parse_number(s):
+    s = str(s)
+    if s.count(".") <= 1:
+        return s
+    else:
+        parts = s.split(".")
+        return str("".join(parts[:-1]) + "." + parts[-1])
+
 def checkIdOrder(db, orders):
     """Drop orders that were already imported (idOrder already present in sales)."""
     ids = orders['idOrder'].dropna().astype(str).tolist()
@@ -1635,8 +2193,10 @@ def process_sold_csv(files,db):
     articles = articlesUpload.stream.read().decode('utf-8')
     
     articles = _fixArticlesUpload(articles)
+    articles = articles.drop_duplicates(subset=['idOrder', 'pos'])
     articlesExpanded = articles.loc[articles.index.repeat(articles['items'])].reset_index(drop=True)
     articlesExpanded['items'] = 1
+
     orders = pd.read_csv(StringIO(orders))
     orders = checkIdOrder(db, orders)
     merged = articlesExpanded.merge(orders, on='idOrder', how='left', suffixes=('_art', '_ord'), validate='many_to_one')
@@ -1648,21 +2208,25 @@ def process_sold_csv(files,db):
     ids = merged['cardmarketId'].dropna().tolist()
     placehoders = ','.join(['?'] * len(ids))
 
-    cur = db.execute("SELECT id, name as itemName, NULL as card_num, quantity, market_value, auction_id, 'sealed' as item_type, cardMarketID as cardmarketId "
+    cur = db.execute("SELECT id, name as itemName, NULL as card_num, quantity, market_value, auction_id, 'sealed' as item_type, 'NM' as condition, cardMarketID as cardmarketId "
                'FROM sealed '
-              f'WHERE sale_id IS NULL AND cardMarketID IN ({placehoders}) '
+              f'WHERE sale_id IS NULL AND opened = 0 AND cardMarketID IN ({placehoders}) '
                'UNION ALL '
-               "SELECT c.id as id, card_name as itemName, card_num, NULL as quantity, market_value, auction_id, 'card' as item_type, cardMarketID as cardmarketId "
+               "SELECT c.id as id, card_name as itemName, card_num, 1 as quantity, market_value, auction_id, 'card' as item_type, c.condition as condition, cardMarketID as cardmarketId "
                'FROM cards c '
                'LEFT JOIN sale_items si ON si.card_id = c.id '
               f'WHERE si.card_id IS NULL AND cardMarketID IN ({placehoders}) '
                'ORDER BY id ASC ', ids + ids)
     allItems = pd.DataFrame(cur.fetchall(), columns=[c[0] for c in cur.description])
+    allItemsExpanded = allItems.loc[allItems.index.repeat(allItems['quantity'])].reset_index(drop=True)
+    allItemsExpanded['quantity'] = 1
 
     merged['_match_seq'] = merged.groupby('cardmarketId').cumcount()
-    allItems['_match_seq'] = allItems.groupby('cardmarketId').cumcount()
+    allItemsExpanded['_match_seq'] = allItemsExpanded.groupby('cardmarketId').cumcount()
+    merged['condition'] = merged['condition'].replace(CONSTANTS.CONDITION_DICT)
+    allItemsExpanded['condition'] = allItemsExpanded['condition'].replace(CONSTANTS.CONDITION_DICT)
 
-    wantedItems = merged.merge(allItems, on=['cardmarketId', '_match_seq'], how='left', suffixes=('_mer', '_db'), validate='one_to_one')
+    wantedItems = merged.merge(allItemsExpanded, on=['cardmarketId', 'condition' ,'_match_seq'], how='left', suffixes=('_mer', '_db'), validate='one_to_one')
     wantedItems = wantedItems.drop(columns='_match_seq')
     wantedItems['matched'] = wantedItems['item_type'].notna()
 
@@ -1680,15 +2244,15 @@ def process_sold_csv(files,db):
                 sealed.append({
                     'sealedName': row['itemName'],
                     'quantity': 1,     
-                    'marketValue': str(sale_price),
-                    'auctionId': row['auction_id'],
+                    'marketValue': _parse_number(sale_price),
+                    'auctionId': int(row['auction_id']),
                 })
             elif row['item_type'] == 'card':
                 cards.append({
-                    'cardId': row['id'],
+                    'cardId': int(row['id']),
                     'cardName': row['itemName'],
                     'cardNum': '' if pd.isna(row['card_num']) else str(row['card_num']),
-                    'marketValue': sale_price,
+                    'marketValue': _parse_number(sale_price),
                 })
 
         head = group.iloc[0]
@@ -1705,18 +2269,24 @@ def process_sold_csv(files,db):
             "address": address,
             "city": str(head['shippingAddressCity']),
             "state": str(head['shippingAddressCountry']),
-            "zipCode": str(head['shippingAddressZip']),
+            "zip": str(head['shippingAddressZip']),
             "paybackDate": paybackDate,
-            "total": float(head['articleValue']),
+            "total": float(_parse_number(head['articleValue'])) + float(_parse_number(head['shippingValue'])),
+            "email": head['temporaryEmail'],
+            "phone": head['phone'],
+            "articleInfo" : {
+                "articleCategory": head['articleCategories'],
+                "articles": int(head['articles'])
+                }
             }
 
         shipping = {
                 "shippingWay": "Doprava / Poštovné – samostatná služba",
-                "shippingPrice": round(float(head['totalValue']) - float(head['articleValue']), 2),
-                "shippinghMethod": str(head['shippingMethod']),
+                "shippingPrice": round(float(_parse_number(head['totalValue'])) - float(_parse_number(head['articleValue'])), 2),
+                "shippingMethod": str(head['shippingMethod']),
                 }
 
-        saleInuput = SaleInput(
+        saleInput = SaleInput(
                 reciever=reviecerInfo,
                 cards=cards,
                 sealed=sealed,
@@ -1728,7 +2298,7 @@ def process_sold_csv(files,db):
                 idOrder=orderId
                 )
 
-        ordersArr.append(saleInuput)
+        ordersArr.append(saleInput)
 
     rejectedArr = []
     for orderId , group in rejectedItems:
@@ -1740,11 +2310,8 @@ def process_sold_csv(files,db):
         
     return ordersArr, rejectedArr
     
-# Processed-invoice zips are handed off to the client via a one-shot /download/<token>
-# link. They are written to disk (not an in-memory dict) so the download survives across
-# Gunicorn workers, and a TTL sweep stops never-fetched zips from accumulating.
-_DOWNLOAD_TTL_SECONDS = 1800           # 30 min; downloads are fetched immediately in practice
-_TOKEN_RE = re.compile(r"\A[0-9a-f]{32}\Z")   # uuid4().hex shape; blocks path traversal
+_DOWNLOAD_TTL_SECONDS = 1800         
+_TOKEN_RE = re.compile(r"\A[0-9a-f]{32}\Z")
 
 
 def _downloads_dir():
@@ -1781,7 +2348,7 @@ def download(token):
     with open(path, "rb") as fh:
         data = fh.read()
     try:
-        os.remove(path)   # one-shot download, mirrors the old dict .pop()
+        os.remove(path)   
     except OSError:
         pass
     return send_file(
@@ -1792,10 +2359,9 @@ def download(token):
     )
 
 def _parse_shipping_method(method):
-    method: str = method.split('(')[0].strip()
+    base = method.split('(')[0].strip()
     match = re.search(r'(\d+)', method)
-    if match:
-        return method, match.group(1)
+    return base, match.group(1) if match else None
 
 @bp.route('/importCSV', methods=('POST',))
 @verify_token
@@ -1852,39 +2418,61 @@ def importCSV():
             print(f"Error processing CSV file: {e}")
             return jsonify({'status': 'error', 'message': f'{str(e)}, Error code: Ax19'}), 500
 
+        #TODO: move this to a separate function
         invoices = []
         failed = []
-        order = defaultdict(dict)
-        #labels = []
-        #eph = EPHService()
+        order = defaultdict(str)
+        eph = EPHService()
+        EPHSheets = []
+        EPHlabels = []
+        # Packeta disabled — PacketaService() fetches the WSDL over the network on
+        # construction, on every CSV import, even though all Packeta code is dead.
+        # packeta = PacketaService()
+        # packetsData = {
+        #             "pickupPointPackets": [],
+        #             "homeDeliveryPackets": [],
+        #         }
+        # packetaLabels = []
+
         for item in completed:
             try:
                 saleResult = SaleService(db, InvoiceReceiptService()).process_sale(item)
                 db.commit()
          
                 reciept = saleResult.receipt.raw
-                """
-                item.shipping.shippingMethod = item.shipping.shippingMethod.lower()
-                method, insurance = _parse_shipping_method(item.shipping.shippingMethod)
+
+                shipping_method = item.shipping["shippingMethod"].lower()
+                method, insurance = _parse_shipping_method(shipping_method)
                 # POSTA API
                 if method in CONSTANTS.PARCEL_CATEGORIES:
                     parcel_category = CONSTANTS.PARCEL_CATEGORIES[method]
+
                     if parcel_category not in order:
                         #EPHSERVIE creates sheet
                         sheet_id = eph.createSheet(parcel_category,  "post")
-                        order[parcel_category]['sheetId'] = sheet_id
-                        order[parcel_category]['values'] = [item]
-                    else:
-                        order[parcel_category]['values'].append(item)
-                    label = eph.addParcel(item.reciver, order[parcel_category]['sheetId'], insurance) 
+                        order[parcel_category] =  sheet_id
+
+                    label = eph.addParcel(item.reciever, order[parcel_category], insurance)
+                    label_filename = f"label_{reciept['filename']}"
+                    EPHSheets.append(EPHSheetInfo(sheetId=order[parcel_category], state=None, parcelId=label, filename=label_filename, label=None))
+
+
                 #PACKETA
-                else:
-                    pass
+                if False:
+            #    else:
+                        homeDelivery = "home delivery" in shipping_method
+                        if homeDelivery:
+                            packetId = packeta.create_packet(item, homeDelivery=True)
+                            courierNumber = packeta.packet_courier_number(packetId)
+                            home_res = PacketaHomeDeliveryResult(packetId, courierNumber)
+                            packetsData["homeDeliveryPackets"].append(home_res)
+
+                        else:
+                            packetId = packeta.create_packet(item)
+                            packetsData["pickupPointPackets"].append(packetId)
 
 
-                #EPHSERVICE download labels(reciept['filename'])
-                labels.append(label)
-                    """
+
             except Exception as e:
                 db.rollback()
                 logger.exception('Sold order %s failed | %s', item.idOrder, e)
@@ -1895,16 +2483,46 @@ def importCSV():
                 })
                 continue
             invoices.append((reciept['filename'], reciept['bytes']))
-        # download labels
+
+
+        #EPHSERVICE download labels(reciept['filename'])
+        for sheet in EPHSheets:
+            try:
+                EPHlabels.append(eph.download_label(sheet.parcelId, sheet.sheetId, sheet.filename))
+            except Exception as e:
+                logger.warning('Failed to download EPH label for sheet %s parcel %s: %s', sheet.sheetId, sheet.parcelId, e)
+
         # EPHSERVICE register sheets
+        for sheet_id in order.values():
+            try:
+                eph.register_sheet(sheet_id)
+            except Exception as e:
+                logger.warning('Failed to register EPH sheet %s: %s', sheet_id, e)
+
+        #PACKETA LABELS — disabled together with PacketaService above
+        # if packetsData["pickupPointPackets"]:
+        #     try:
+        #         labels = packeta.packets_labels_pdf(packetsData["pickupPointPackets"])
+        #         packetaLabels.append(LabelResult(filename="packeta_pickup_labels.pdf", bytes=labels))
+        #     except Exception as e:
+        #         logger.warning('Failed to generate Packeta pickup labels: %s', e)
+        # if packetsData["homeDeliveryPackets"]:
+        #     try:
+        #         labels = packeta.packet_courier_labels_pdf(packetsData["homeDeliveryPackets"])
+        #         packetaLabels.append(LabelResult(filename="packeta_home_labels.pdf", bytes=labels))
+        #     except Exception as e:
+        #         logger.warning('Failed to generate Packeta home-delivery labels: %s', e)
 
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
             for filename, bytes in invoices:
                 zip_file.writestr(filename, bytes)
                 #write labels to zip
-            #for label in labels:
-            #    zip_file.writestr(label.filename, label.bytes)
+            for label in EPHlabels:
+                zip_file.writestr(label.filename, label.bytes)
+            # Packeta disabled
+            # for label in packetaLabels:
+            #     zip_file.writestr(label.filename, label.bytes)
 
         token = uuid.uuid4().hex
         d = _downloads_dir()
@@ -1913,7 +2531,7 @@ def importCSV():
         tmp = final + ".tmp"
         with open(tmp, "wb") as fh:
             fh.write(zip_buffer.getvalue())
-        os.replace(tmp, final)   # atomic publish; reader never sees a half-written file
+        os.replace(tmp, final)   
 
         return jsonify({
             'status': 'success',
@@ -1930,8 +2548,9 @@ def search():
         card = request.get_json()
         query = card.get("query", "").strip()
         cart_ids = card.get('cartIds', [])
-        # Split search query into individual words
-        search_terms = query.split()
+        # Split search query into individual words; normalize so diacritics
+        # match the accent-stripped normalized_name column (e.g. "Poké" -> "POKE")
+        search_terms = [normalize(term) for term in query.split()]
         
         # Separate cart IDs into cards and sealed items
         card_cart_ids = []
@@ -1944,11 +2563,12 @@ def search():
                 card_cart_ids.append(cart_id)
         
         # Build WHERE clause for CARDS (alias 'c')
+        # # TODO: remove upper from like
         card_where_conditions = []
         card_params = []
         for term in search_terms:
             card_where_conditions.append(
-                "UPPER(COALESCE(c.card_name, '') || ' ' || COALESCE(c.card_num, '')) LIKE UPPER(?)"
+                "UPPER(COALESCE(c.normalized_name, '') || ' ' || COALESCE(c.card_num, '')) LIKE UPPER(?)"
             )
             card_params.append(f'%{term}%')
         
@@ -1965,7 +2585,7 @@ def search():
         sealed_where_conditions = []
         sealed_params = []
         for term in search_terms:
-            sealed_where_conditions.append("UPPER(COALESCE(s.name, '')) LIKE UPPER(?)")
+            sealed_where_conditions.append("UPPER(COALESCE(s.normalized_name, '')) LIKE UPPER(?)")
             sealed_params.append(f'%{term}%')
         
         sealed_where_clause = " AND ".join(sealed_where_conditions) if sealed_where_conditions else "1=1"
@@ -1992,7 +2612,7 @@ def search():
         sealed_matches = db.execute(
             f"SELECT 's' || s.id as sid, s.name, s.market_value, s.auction_id,SUM(s.quantity) as available_count, a.auction_name FROM sealed s "
             "LEFT JOIN auctions a ON s.auction_id = a.id "
-            f"WHERE ({sealed_where_clause}) AND s.sale_id IS NULL "
+            f"WHERE ({sealed_where_clause}) AND s.sale_id IS NULL AND s.opened = 0 "
             f"GROUP BY UPPER(s.name) ORDER BY s.id ASC LIMIT 8",
             sealed_params
         ).fetchall()
@@ -2098,13 +2718,39 @@ def invoice(kind):
             try:
                 saleResult = SaleService(db,InvoiceReceiptService()).process_sale(saleInput)
                 receipt = saleResult.receipt.raw
-                response = send_file(
-                        BytesIO(receipt['bytes']),
-                        download_name=receipt['filename'],
-                        as_attachment=True,
-                        mimetype='application/pdf'
-                        )
+
+                zip_buffer = BytesIO()
+
                 db.commit()
+                  
+                #EPHSERVICE create sheet
+                delivery = cartContent.get('delivery')
+                label = None
+                
+                if delivery is not None and delivery['deliveryMethod'] == 'SK-post':
+                    state = (cartContent['recieverInfo'].get('state') or '').strip().lower()
+                    if state in CONSTANTS.EUROPE_COUNTRY_CODES:
+                        cartContent['recieverInfo']['state'] = CONSTANTS.EUROPE_COUNTRY_CODES[state]
+                    eph = EPHService()
+                    sheet_id = eph.createSheet(parcel_category = delivery['parcelCategory'], reception_method = "post")
+                    parcel_id = eph.addParcel(order = cartContent['recieverInfo'], sheet_id = sheet_id, insurance_value = delivery['insuranceValue'])
+                    label = eph.download_label(parcel_id = parcel_id, sheet_id = sheet_id, filename = f"label_{receipt['filename']}")
+                    eph.register_sheet(sheet_id)
+                    
+                                
+                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                    zip_file.writestr(receipt['filename'], receipt['bytes'])
+                    if label:
+                        zip_file.writestr(label.filename, label.bytes)
+                zip_buffer.seek(0)
+                        
+                response = send_file(
+                        zip_buffer,
+                        as_attachment=True,
+                        download_name=f"Invoice_{saleResult.sale_id}.zip",
+                        mimetype="application/zip"
+                        )
+
                 logger.info('Invoice created succesfully | %s ', saleResult.sale_id)
                 return response 
                 

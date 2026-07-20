@@ -1,0 +1,378 @@
+:root {
+    --condition-colors-mint: #17A2B8;
+    --condition-colors-near-mint: #3CAF56;
+    --condition-colors-excellent: #82891E;
+    --condition-colors-good: #FFC107;
+    --condition-colors-light-played: #FD8B2B;
+    --condition-colors-played: #E56874;
+    --condition-colors-poor: #DC3545;
+}
+
+.creditnote-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 30px;
+    width: 1530px;
+    margin: 0 auto;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.creditnote-box {
+    background: linear-gradient(135deg,
+            rgba(26, 31, 46, 0.9) 0%,
+            rgba(13, 17, 23, 0.9) 100%);
+    border: 1px solid rgba(127, 255, 212, 0.1);
+    border-radius: 15px;
+    box-shadow:
+        0 10px 30px rgba(0, 0, 0, 0.4),
+        0 0 50px rgba(147, 112, 219, 0.1);
+    backdrop-filter: blur(10px);
+    padding: 25px;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.creditnote-box:hover {
+    border-color: rgba(127, 255, 212, 0.55);
+    box-shadow:
+        0 0 24px var(--glow-color),
+        0 0 12px var(--mist-color),
+        0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.creditnote-items {
+    grid-column: 1 / -1;
+    min-height: 350px;
+}
+
+.creditnote-box-title {
+    color: var(--accent-cyan);
+    letter-spacing: 0.08em;
+    text-shadow:
+        0 0 10px var(--glow-color),
+        0 0 20px rgba(127, 255, 212, 0.1);
+    font-family: var(--primary-font), serif;
+    font-size: 1.3rem;
+    margin: 0 0 20px 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(127, 255, 212, 0.15);
+}
+
+.creditnote-box-content,
+.creditnote-reciver-content {
+    color: var(--text-color);
+    font-family: var(--primary-font), serif;
+    letter-spacing: 0.03em;
+}
+
+.creditnote-address-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.creditnote-address-block p {
+    margin: 0;
+    line-height: 1.4;
+}
+
+.creditnote-address-block .address-name {
+    font-size: 1.15rem;
+    color: var(--accent-cyan);
+    text-shadow: 0 0 10px var(--glow-color), 0 0 20px rgba(127, 255, 212, 0.1);
+    margin-bottom: 4px;
+}
+
+.creditnote-address-block .address-line {
+    color: var(--text-color);
+}
+
+.creditnote-address-block .address-contact,
+.creditnote-address-block .address-id {
+    font-size: 0.95rem;
+    color: rgba(201, 209, 217, 0.85);
+}
+
+.back-btn-container {
+    width: 1530px;
+    margin: 0 auto;
+    padding-bottom: 25px;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+}
+
+.back-arrow-img {
+    width: 24px;
+    height: 24px;
+    margin-right: 10px;
+    opacity: 1;
+    vertical-align: middle;
+}
+
+.back-btn {
+    padding: 8px 28px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.creditnote-total {
+    grid-column: 1 / -1;
+    min-height: 0;
+    padding: 15px 25px;
+}
+
+.creditnote-confirm {
+    grid-column: 2;
+    justify-self: end;
+}
+
+.creditnote-total>p {
+    margin: 0 0 8px 0;
+}
+
+.total-price {
+    display: flex;
+    justify-content: flex-end;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: var(--accent-cyan);
+    text-shadow: 0 0 10px var(--glow-color), 0 0 20px rgba(127, 255, 212, 0.1);
+}
+
+.total-price p,
+.total-price span {
+    margin: 0;
+}
+
+.creditnote-item-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    color: var(--text-color);
+    font-family: var(--primary-font), serif;
+    min-height: 0;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.creditnote-item-content .creditnote-item-row {
+    display: grid;
+    align-items: center;
+    gap: 20px;
+    min-height: 36px;
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin: 0;
+}
+
+.creditnote-item-content .creditnote-item-row.card {
+    grid-template-columns: 30px 1fr 110px 90px;
+}
+
+.creditnote-item-content .creditnote-item-row.sealed-item {
+    grid-template-columns: 30px 40px 1fr 90px;
+}
+
+.creditnote-item-content .creditnote-item-row p {
+    margin: 0;
+    text-align: left;
+}
+
+.creditnote-item-content .item-info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.creditnote-item-content .item-info .item-name {
+    word-break: break-word;
+    white-space: normal;
+    line-height: 1.3;
+}
+
+.creditnote-item-content .item-info .item-number {
+    color: rgba(201, 209, 217, 0.8);
+    white-space: nowrap;
+}
+
+.creditnote-item-content .creditnote-item-row .item-quantity {
+    text-align: center;
+}
+
+.creditnote-item-content .creditnote-item-row .item-condition {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.creditnote-item-content .creditnote-item-row .market-value {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.creditnote-item-content .creditnote-item-row .currency {
+    margin-left: 4px;
+}
+
+/* Condition colors */
+.creditnote-item-content .mint {
+    color: var(--condition-colors-mint);
+}
+
+.creditnote-item-content .near_mint {
+    color: var(--condition-colors-near-mint);
+}
+
+.creditnote-item-content .excellent {
+    color: var(--condition-colors-excellent);
+}
+
+.creditnote-item-content .good {
+    color: var(--condition-colors-good);
+}
+
+.creditnote-item-content .light_played {
+    color: var(--condition-colors-light-played);
+}
+
+.creditnote-item-content .played {
+    color: var(--condition-colors-played);
+}
+
+.creditnote-item-content .poor {
+    color: var(--condition-colors-poor);
+}
+
+.creditnote-item-content input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    justify-self: center;
+}
+
+.creditnote-item-content .shipping-info {
+    display: grid;
+    grid-template-columns: 30px 1fr 90px;
+    align-items: center;
+    gap: 20px;
+    margin-top: 8px;
+    padding: 12px;
+    border-top: 1px solid rgba(127, 255, 212, 0.15);
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.creditnote-item-content .shipping-info p {
+    margin: 0;
+    text-align: left;
+}
+
+.creditnote-item-content .shipping-info .shipping-price {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.creditnote-item-content .shipping-info .currency {
+    margin-left: 4px;
+}
+
+/* Debit-note search: thinner result rows, overlay (absolute) so they don't displace items */
+.debit-note-search {
+    position: relative;
+}
+
+.debit-note-search .search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    width: 100%;
+    margin-top: 4px;
+    z-index: 10;
+    background: rgba(13, 17, 23, 0.95);
+    border-radius: 8px;
+}
+
+.debit-note-search .search-results div {
+    grid-template-columns: 1fr 90px 100px 60px 80px;
+    column-gap: 10px;
+    padding: 3px 8px;
+    margin-top: 3px;
+    font-size: 0.82rem;
+    min-height: 0;
+}
+
+.debit-note-search .search-results .result-market-value,
+.debit-note-search .search-results .result-quantity {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.debit-note-search .search-results .result-condition {
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Debit-note added item rows: no checkbox column */
+.creditnote-item-content .creditnote-item-row.debitnote-item-row.card {
+    grid-template-columns: 1fr 110px 90px 20px;
+}
+
+.creditnote-item-content .creditnote-item-row.debitnote-item-row.sealed-item {
+    grid-template-columns: 40px 1fr 90px 20px;
+}
+
+.creditnote-item-content .creditnote-item-row.debitnote-item-row .item-condition {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.creditnote-item-content .creditnote-item-row.debitnote-item-row .market-value {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.creditnote-item-content .creditnote-item-row.debitnote-item-row .market-value-input {
+    width: 70px;
+    padding: 2px 6px;
+    text-align: right;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(127, 255, 212, 0.25);
+    border-radius: 6px;
+    color: var(--text-color);
+    font: inherit;
+    box-sizing: border-box;
+}
+
+.creditnote-item-content .creditnote-item-row.debitnote-item-row .market-value-input:focus {
+    outline: none;
+    border-color: rgba(127, 255, 212, 0.6);
+    box-shadow: 0 0 8px rgba(127, 255, 212, 0.25);
+}
+
+.creditnote-item-content .creditnote-item-row.debitnote-item-row .item-remove-btn {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid rgba(229, 104, 116, 0.4);
+    border-radius: 4px;
+    background: rgba(229, 104, 116, 0.1);
+    color: var(--condition-colors-played, #E56874);
+    font-size: 0.7rem;
+    line-height: 1;
+    cursor: pointer;
+    justify-self: center;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.creditnote-item-content .creditnote-item-row.debitnote-item-row .item-remove-btn:hover {
+    background: rgba(229, 104, 116, 0.3);
+    border-color: var(--condition-colors-played, #E56874);
+}

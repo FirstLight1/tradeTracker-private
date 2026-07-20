@@ -1,6 +1,7 @@
-import { renderField, renderAlert, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign, downloadFile } from "./utils/renderUtil.js";
+import { renderField, renderAlert, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign, downloadFile, createNewItem } from "./utils/renderUtil.js";
 import { CardStruct, queue, CartLine } from "./utils/classes.js";
 import { escapeHtml, sanitizePlainText, sanitizeAttrValue, sanitizeNumericId, sanitizeClassToken, csrfFetch } from "./utils/sanitizers.js";
+import { searchCard } from "./utils/searchApi.js";
 
 
 function paymentTypeSelect(className, defaultValue = '') {
@@ -461,6 +462,122 @@ function hideProcessingSpinner(handle) {
     if (handle.overlay) handle.overlay.remove();
 }
 
+function createSealedItemRow() {
+    const itemDiv = document.createElement('div');
+    itemDiv.classList.add('sealed-item-row');
+    itemDiv.innerHTML = `
+    <input type="text" class="sealed-name-input" placeholder="item name">
+    <input type="text" class="sealed-number-input" placeholder="item number">
+    <select class="sealed-condition-select">
+        <option value="MINT">Mint</option>
+        <option value="NEAR MINT" selected="selected">Near Mint</option>
+        <option value="EXCELLENT">Excellent</option>
+        <option value="GOOD">Good</option>
+        <option value="LIGHT PLAYED">Light Played</option>
+        <option value="PLAYED">Played</option>
+        <option value="POOR">Poor</option>
+    </select>
+    <input type="text" class="sealed-price-input" placeholder="price">
+    <input type="text" class="sealed-market-value-input" placeholder="market value">
+    `;
+    return itemDiv;
+}
+
+function createSealedModal(sid, auctionId, initialValue) {
+    const modal = document.createElement('div');
+    modal.classList.add('reciever-div');
+    const contentDiv = document.createElement('div');
+    contentDiv.classList.add('modal-content', 'sealed-modal');
+    const buttonDiv = document.createElement('div');
+    buttonDiv.classList.add('modal-buttons');
+
+    const closeButton = document.createElement('span');
+    closeButton.classList.add('close-modal');
+    closeButton.innerHTML = '&times;';
+    contentDiv.appendChild(closeButton);
+
+    const rowsContainer = document.createElement('div');
+    rowsContainer.classList.add('sealed-rows-container');
+    contentDiv.appendChild(rowsContainer);
+
+    const firstRow = createSealedItemRow();
+    rowsContainer.append(firstRow);
+    createNewItem(firstRow, {
+        triggerSelector: '.sealed-market-value-input',
+        onTrigger: (el) => window.handleSealedInput(el, rowsContainer)
+    });
+
+    const addLineButton = document.createElement('button');
+    addLineButton.classList.add('sealed-add-line-btn');
+    addLineButton.type = 'button';
+    addLineButton.textContent = 'Add new line';
+    addLineButton.addEventListener('click', () => {
+        const newRow = createSealedItemRow();
+        rowsContainer.appendChild(newRow);
+        createNewItem(newRow, {
+            triggerSelector: '.sealed-market-value-input',
+            onTrigger: (el) => window.handleSealedInput(el, rowsContainer)
+        });
+    });
+
+    const confirmButton = document.createElement('button');
+    confirmButton.classList.add('sealed-confirm-btn');
+    confirmButton.type = 'button';
+    confirmButton.textContent = 'Confirm';
+    confirmButton.addEventListener('click', async () => {
+        const cards = [];
+        const sealed = [];
+        rowsContainer.querySelectorAll('.sealed-item-row').forEach(div => {
+            const item = new CardStruct();
+            item.cardName = DOMPurify.sanitize(div.querySelector('.sealed-name-input').value);
+            item.cardNum = DOMPurify.sanitize(div.querySelector('.sealed-number-input').value);
+            item.condition = DOMPurify.sanitize(div.querySelector('.sealed-condition-select').value);
+            item.buyPrice = Number(DOMPurify.sanitize(div.querySelector('.sealed-price-input').value.replace('€', '')));
+            item.marketValue = Number(DOMPurify.sanitize(div.querySelector('.sealed-market-value-input').value.replace('€', '')));
+            item.soldDate = null;
+            if (item.marketValue == '') return;
+            if (item.cardNum !== '') {
+                cards.push(item);
+            } else {
+                sealed.push(item);
+            }
+        });
+        const response = await csrfFetch(`/openSealed/${auctionId ?? 0}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ openedItem: { id: sid, initialValue: initialValue }, sealed: sealed, cards: cards })
+        });
+        const result = await response.json();
+        if (result.status === 'success') {
+            modal.remove();
+            window.location.reload();
+        } else {
+            renderAlert(result.message, 'error');
+        }
+    });
+
+    buttonDiv.append(addLineButton, confirmButton);
+    contentDiv.appendChild(buttonDiv);
+    modal.appendChild(contentDiv);
+    document.body.appendChild(modal);
+
+    const close = () => modal.remove();
+    closeButton.addEventListener('click', close);
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) close();
+    });
+}
+
+window.handleSealedInput = function(input, container) {
+    window.handleCardInput(input, {
+        itemSelector: '.sealed-item-row',
+        container,
+        triggerSelector: '.sealed-market-value-input'
+    });
+}
+
 function cartValue(cartContent) {
     let sum = 0.0;
     if (cartContent.cards) {
@@ -816,9 +933,13 @@ function saveModalDataToSession() {
         clientAddress: document.querySelector('.client-address')?.value || '',
         clientCity: document.querySelector('.client-city')?.value || '',
         clientCountry: document.querySelector('.client-country')?.value || '',
+        clientZip: document.querySelector('.client-zip')?.value || '',
         paybackDate: document.querySelector('.date-input')?.value || '',
         price: document.querySelector('.price-input')?.value || '',
         shippingPrice: document.querySelector('.shipping-price')?.value || '',
+        deliveryMethod: document.querySelector('.delivery-method-select')?.value || '',
+        parcelCategory: document.querySelector('.parcel-category-select')?.value || '',
+        insuranceValue: document.querySelector('.insurance-value-input')?.value || '',
         paymentMethods: []
     };
 
@@ -845,6 +966,7 @@ function loadModalDataFromSession(recieverDiv) {
         const clientAddress = recieverDiv.querySelector('.client-address');
         const clientCity = recieverDiv.querySelector('.client-city');
         const clientCountry = recieverDiv.querySelector('.client-country');
+        const clientZip = recieverDiv.querySelector('.client-zip');
         const paybackDate = recieverDiv.querySelector('.date-input');
         const priceInput = recieverDiv.querySelector('.price-input');
         const shippingPrice = recieverDiv.querySelector('.shipping-price');
@@ -853,9 +975,44 @@ function loadModalDataFromSession(recieverDiv) {
         if (clientAddress) clientAddress.value = DOMPurify.sanitize(modalData.clientAddress);
         if (clientCity) clientCity.value = DOMPurify.sanitize(modalData.clientCity);
         if (clientCountry) clientCountry.value = DOMPurify.sanitize(modalData.clientCountry);
+        if (clientZip) clientZip.value = DOMPurify.sanitize(modalData.clientZip);
         if (paybackDate && modalData.paybackDate) paybackDate.value = DOMPurify.sanitize(modalData.paybackDate);
         if (priceInput) priceInput.value = DOMPurify.sanitize(modalData.price);
         if (shippingPrice) shippingPrice.value = DOMPurify.sanitize(modalData.shippingPrice);
+
+        // Restore delivery method and conditional parcel/insurance fields
+        const deliveryMethodSelect = recieverDiv.querySelector('.delivery-method-select');
+        if (deliveryMethodSelect && modalData.deliveryMethod) {
+            deliveryMethodSelect.value = DOMPurify.sanitize(modalData.deliveryMethod);
+            if (modalData.deliveryMethod === 'SK-post') {
+                const deliveryMethodInfo = recieverDiv.querySelector('.delivery-method-info');
+                if (deliveryMethodInfo) {
+                    deliveryMethodInfo.innerHTML = `
+                    <select class="parcel-category-select">
+                        <option value=''>Parcel category</option>
+                        <option value='r'>Registered letter</option>
+                        <option value='olz'>Letter</option>
+                        <option value='pl'>Insured letter</option>
+                        <option value='b'>Packet</option>
+                    </select>
+                    <input type='number' placeholder="Insurance value" class="insurance-value-input">
+                    `;
+                    const parcelCategorySelect = deliveryMethodInfo.querySelector('.parcel-category-select');
+                    const insuranceValueInput = deliveryMethodInfo.querySelector('.insurance-value-input');
+                    if (parcelCategorySelect && modalData.parcelCategory) {
+                        parcelCategorySelect.value = DOMPurify.sanitize(modalData.parcelCategory);
+                    }
+                    if (insuranceValueInput && modalData.insuranceValue) {
+                        insuranceValueInput.value = DOMPurify.sanitize(modalData.insuranceValue);
+                    }
+                    const newInputs = deliveryMethodInfo.querySelectorAll('input, select');
+                    newInputs.forEach(input => {
+                        input.addEventListener('input', saveModalDataToSession);
+                        input.addEventListener('change', saveModalDataToSession);
+                    });
+                }
+            }
+        }
 
         // Restore payment methods
         if (modalData.paymentMethods && modalData.paymentMethods.length > 0) {
@@ -944,9 +1101,13 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
     const clientAddress = DOMPurify.sanitize(recieverDiv.querySelector('.client-address')?.value) || '';
     const clientCity = DOMPurify.sanitize(recieverDiv.querySelector('.client-city')?.value) || '';
     const clientCountry = DOMPurify.sanitize(recieverDiv.querySelector('.client-country')?.value) || '';
+    const clientZip = DOMPurify.sanitize(recieverDiv.querySelector('.client-zip')?.value) || '';
     const paybackDate = DOMPurify.sanitize(recieverDiv.querySelector('.date-input')?.value) || '';
     const shippingWay = 'Doprava / Poštovné – samostatná služba';
     const shippingPrice = DOMPurify.sanitize(recieverDiv.querySelector('.shipping-price')?.value.replace(',', '.')) || '';
+    const deliveryMethod = DOMPurify.sanitize(recieverDiv.querySelector('.delivery-method-select')?.value) || '';
+    const parcelCategory = DOMPurify.sanitize(recieverDiv.querySelector('.parcel-category-select')?.value) || '';
+    const insuranceValue = DOMPurify.sanitize(recieverDiv.querySelector('.insurance-value-input')?.value) || '';
 
     // Calculate total payment amount from payment methods
     const paymentTotal = paymentMethods.reduce((sum, payment) => sum + payment.amount, 0);
@@ -968,6 +1129,14 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
         return;
     }
     cartContent.paymentMethods = paymentMethods;
+    // ZIP is only collected/required when the recipient country is Slovakia
+    const isSlovakia = ['slovakia', 'sk', 'slovensko'].includes(clientCountry.trim().toLowerCase());
+    if (isSlovakia) {
+        if (!clientZip.trim()) {
+            renderAlert('ZIP / postal code is required for Slovakia, Error code: Mx07', 'error');
+            return;
+        }
+    }
     // Update or create recieverInfo (always update payment methods)
     const recieverInfo = {
         nameAndSurname: clientName,
@@ -977,6 +1146,9 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
         paybackDate: paybackDate,
         total: null,
     };
+    if (isSlovakia) {
+        recieverInfo.zip = clientZip;
+    }
     cartContent.recieverInfo = recieverInfo;
 
     if (shippingPrice !== "") {
@@ -985,6 +1157,15 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
             shippingPrice: shippingPrice.replace(',', '.'),
         };
         cartContent.shipping = shipping;
+    }
+
+    if (deliveryMethod) {
+        const delivery = {
+            deliveryMethod: deliveryMethod,
+            parcelCategory: parcelCategory,
+            insuranceValue: insuranceValue
+        };
+        cartContent.delivery = delivery;
     }
 
     // Apply price adjustment if cart value was manually changed
@@ -1227,6 +1408,10 @@ function shoppingCart() {
                         <p>Country</p>
                         <input type='text' class='client-country'>
                     </div>
+                    <div class='zip-div'>
+                        <p>ZIP <span class='zip-optional-label'>(Slovakia only)</span></p>
+                        <input type='text' class='client-zip'>
+                    </div>
                     <div>
                         <p>Payback date</p>
                         <input type='date' class='date-input'>
@@ -1239,6 +1424,13 @@ function shoppingCart() {
                     <p class='shipping-way'>Doprava / Poštovné – samostatná služba</p>
                     <input type=text placeholder="Price of shipping" class="shipping-price">
                     </div>
+                    <div>
+                        <select class="delivery-method-select">
+                            <option value="">Delivery method</option>
+                            <option value="SK-post">Slovak post</option>
+                        </select>
+                        <div class="delivery-method-info">
+                    </div>
                     <div class='invoice-buttons'>
                         <button class=sales-invoice>Add sale</button>
                         <button class="generate-invoice">Generate Invoice</button>
@@ -1249,6 +1441,32 @@ function shoppingCart() {
 
             // Load saved data from sessionStorage if exists
             loadModalDataFromSession(recieverDiv);
+
+            const deliveryMethodSelect = recieverDiv.querySelector('.delivery-method-select');
+            deliveryMethodSelect.addEventListener('change', () => {
+                const selected = deliveryMethodSelect.value;
+                const deliveryMethodInfo = recieverDiv.querySelector('.delivery-method-info');
+                if (selected === 'SK-post') {
+                    deliveryMethodInfo.innerHTML = `
+                    <select class="parcel-category-select">
+                        <option value=''>Parcel category</option>
+                        <option value='r'>Registered letter</option>
+                        <option value='olz'>Letter</option>
+                        <option value='pl'>Insured letter</option>
+                        <option value='b'>Packet</option>
+                    </select>
+                    <input type='number' placeholder="Insurance value" class="insurance-value-input">
+                    `;
+                    const newInputs = deliveryMethodInfo.querySelectorAll('input, select');
+                    newInputs.forEach(input => {
+                        input.addEventListener('input', saveModalDataToSession);
+                        input.addEventListener('change', saveModalDataToSession);
+                    });
+                } else {
+                    deliveryMethodInfo.innerHTML = '';
+                }
+                saveModalDataToSession();
+            });
 
             // Add event listeners to save data on input
             const modalInputs = recieverDiv.querySelectorAll('input, select');
@@ -1754,7 +1972,7 @@ function searchBar() {
                 searchContainer.innerHTML = ''; // Clear previous results
                 return;
             }
-            results = await search(searchInput.value.toUpperCase());
+            results = await searchCard(searchInput.value, [...existingIDs]);
             const resultsQueue = new queue(results.length + 1) //if no results it thows error;
             resultsQueue.enqueue(searchInput)
             displaySearchResults(results, resultsQueue, searchInput);
@@ -1767,33 +1985,13 @@ function searchBar() {
             const searchContainer = document.querySelector('.search-results');
             searchContainer.innerHTML = ''; // Clear previous results
         }
-        results = await search(searchInput.value.toUpperCase().trim());
+        results = await searchCard(searchInput.value.trim(), [...existingIDs]);
         const resultsQueue = new queue(results.length + 1);
         resultsQueue.enqueue(searchInput)
         displaySearchResults(results, resultsQueue);
         searchInput.focus();
         addResultScrollingWithArrows(searchInput, resultsQueue);
     });
-}
-
-async function search(searchPrompt) {
-
-    const jsonbody = JSON.stringify({ query: searchPrompt, cartIds: [...existingIDs] });
-    const response = await csrfFetch('/searchCard',
-        {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: jsonbody,
-        }
-    )
-    const data = await response.json();
-    if (data.status == "success") {
-        return data.value;
-    } else {
-        renderAlert('Search failed', 'error');
-    }
 }
 
 function displaySearchResults(results, resultsQueue, searchInput) {
@@ -1987,6 +2185,131 @@ function initializeBulkHolo() {
     loadBulkHoloValues();
 }
 
+let box = null;
+
+function spawnItemsContextMenu(cardId, e, itemLine) {
+    box?.remove();
+
+    const isSealed = cardId.includes('s');
+    box = document.createElement('div');
+    box.classList.add("context-menu");
+    //TODO: move styles to css
+    box.style.left = (e.pageX + 10) + "px";
+    box.style.top = (e.pageY - 25) + "px";
+    box.innerHTML = `<div class="">
+                            <div class="">
+                                ${isSealed ? `<div class="">
+                                    <button class="open-sealed-item">Open</button>
+                                </div>` : ''}
+                                <div class="">
+                                    <button class="add-to-cart">Add to cart</button>
+                                </div>
+                                <div class="">
+                                    <button class="delete-card" data-id="${cardId}">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                        <span hidden class="card-id">${cardId}</span>
+                            `;
+    document.body.appendChild(box);
+
+    if (isSealed) {
+        const openButton = box.querySelector('.open-sealed-item');
+        openButton.addEventListener('click', () => {
+            const auctionDiv = itemLine.closest('.auction-tab');
+            const auctionId = auctionDiv?.getAttribute('data-id');
+            const initialValue = itemLine.querySelector('.sealed-market-value').textContent.replace('€', '');
+            createSealedModal(cardId, auctionId, initialValue);
+            box?.remove();
+            box = null;
+        });
+    }
+
+    const button = box.querySelector('.add-to-cart');
+    //sealed add
+    if (isSealed) {
+        button.addEventListener('click', () => {
+            const auctionDiv = itemLine.closest('.auction-tab');
+            const auctionId = auctionDiv.getAttribute('data-id');
+
+            const sealedData = {
+                name: DOMPurify.sanitize(itemLine.querySelector('.sealed-name').textContent),
+                market_value: DOMPurify.sanitize(itemLine.querySelector('.sealed-market-value').textContent.replace('€', ''))
+            };
+
+            const available = Number(itemLine.getAttribute('data-quantity')) || null;
+            addSealedToCart(sealedData, cardId, auctionId, 1, available);
+        });
+    } else {
+        //cards add
+        button.addEventListener('click', async () => {
+            const auctionDiv = itemLine.closest('.auction-tab');
+            const auctionId = auctionDiv.getAttribute('data-id');
+
+            const card = new CardStruct();
+            card.cardName = itemLine.querySelector('.card-name').textContent;
+            card.cardNum = itemLine.querySelector('.card-num').textContent;
+            card.condition = itemLine.querySelector('.condition').textContent;
+            const marketValueText = itemLine.querySelector('.market-value').textContent;
+            card.marketValue = marketValueText ? marketValueText.replace('€', '') : null;
+            await addToShoppingCart(card, auctionId, cardId);
+        });
+    }
+
+    const deleteButton = box.querySelector('.delete-card');
+    deleteButton.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (deleteButton.textContent !== 'Confirm') {
+            deleteButton.textContent = 'Confirm';
+            const timerID = setTimeout(() => {
+                deleteButton.textContent = 'Delete';
+            }, 3000);
+            return;
+        }
+
+        const cardsContainer = itemLine.closest('.cards-container');
+        const auctionDiv = itemLine.closest('.auction-tab');
+        const auctionId = auctionDiv?.getAttribute('data-id');
+
+        if (cardId.includes('s')) {
+            try {
+                const response = await csrfFetch(`/deleteSealed/${cardId}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (data.status !== 'success') {
+                    renderAlert('Error deleting sealed item: ' + JSON.stringify(data), 'error');
+                    return;
+                }
+            } catch (error) {
+                renderAlert('Error deleting sealed item: ' + error + ' Error code: Mx19', 'error');
+                return;
+            }
+            itemLine.remove();
+            await updateInventoryValueAndTotalProfit();
+        } else {
+            const deleted = await removeCard(cardId, itemLine);
+            if (!deleted) return;
+            await updateInventoryValueAndTotalProfit();
+            if (cardsContainer && cardsContainer.childElementCount < 3) {
+                if (auctionDiv && auctionDiv.classList.contains('singles')) {
+                    const p = document.createElement('p');
+                    p.textContent = 'Empty';
+                    cardsContainer.insertBefore(p, cardsContainer.querySelector('.button-container'));
+                } else if (auctionDiv) {
+                    deleteAuction(auctionId, auctionDiv);
+                }
+            }
+        }
+
+        box?.remove();
+        box = null;
+    });
+};
+
+document.addEventListener('click', (e) => {
+    box?.remove();
+    box = null;
+});
+
 
 async function loadAuctionContent(button) {
     const auctionId = Number(button.getAttribute('data-id'));
@@ -2035,17 +2358,26 @@ async function loadAuctionContent(button) {
                         ${renderField(card.market_value ? DOMPurify.sanitize(card.market_value) + '€' : null, 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
                         ${renderField(card.card_price !== null && card.market_value !== null ? (card.market_value - card.card_price).toFixed(2) + '€' : ' ', 'text', ['card-info', 'profit'], 'profit', true)}
                         <p></p>
-                        <button class="add-to-cart">Add to cart</button>
-                        <span hidden class="card-id">${safeCardId}</span>
-                        <button class=delete-card data-id="${safeCardId}">Delete</button>
-                    `;
+                        `;
                         cardsContainer.appendChild(cardDiv);
                     });
 
+                    let timer;
+                    cardsContainer.addEventListener('click', (e) => {
+                        clearTimeout(timer);
+
+                        timer = setTimeout(() => {
+                            const itemLine = e.target.closest('.card') || e.target.closest('.sealed-item');
+                            const safeCardId = sanitizeNumericId(itemLine?.getAttribute("data-id")) || itemLine.getAttribute("sid");
+                            spawnItemsContextMenu(safeCardId, e, itemLine);
+                        }, 200);
+                    });
+
                     cardsContainer.addEventListener('dblclick', (event) => {
+                        clearTimeout(timer);
                         if (event.target.closest('.card') && !(event.target.tagName === "DIV")) {
                             const cardDiv = event.target.closest('.card');
-                            const cardId = cardDiv.querySelector('.card-id').textContent;
+                            const cardId = cardDiv.getAttribute('data-id');
                             if (event.target.classList.contains('condition')) {
                                 const value = event.target.textContent.trim();
                                 const select = document.createElement('select');
@@ -2108,7 +2440,7 @@ async function loadAuctionContent(button) {
                     const inputFields = cardsContainer.querySelectorAll('input[type="text"]');
                     inputFields.forEach((input) => {
                         input.addEventListener('blur', async (event) => {
-                            const cardId = event.target.closest('.card').querySelector('.card-id').textContent;
+                            const cardId = event.target.closest('.card').getAttribute('data-id');
                             const value = event.target.value.replace(',', '.');
                             const dataset = event.target.dataset;
                             getInputValueAndPatch(value, input, dataset.field, cardId);
@@ -2147,7 +2479,6 @@ async function loadAuctionContent(button) {
                             if (button.textContent === 'Confirm') {
                                 const auctionDiv = cardsContainer.closest('.auction-tab');
                                 const deleted = await removeCard(cardId, cardDiv);
-                                const cards = cardsContainer.querySelectorAll('.card');
                                 if (!deleted) return;
                                 if (auctionDiv.classList.contains('singles')) {
                                     await updateInventoryValueAndTotalProfit()
@@ -2199,19 +2530,20 @@ async function loadAuctionContent(button) {
                         const margin = (Number(sealedItem.market_value) - Number(sealedItem.price)).toFixed(2);
 
                         sealedDiv.innerHTML = `
-                            <p class="quantity">${DOMPurify.sanitize(sealedItem.quantity)}</p>
+                            <p class='sealed-quantity'>${DOMPurify.sanitize(sealedItem.quantity)}</p>
                             <p class="sealed-name">${DOMPurify.sanitize(sealedItem.name)}</p>
                             <p></p>
                             <p class="sealed-price">${DOMPurify.sanitize(sealedItem.price)}€</p>
+                            <p class="VAT-sealed">${(Number(DOMPurify.sanitize(sealedItem.price)) / 1.23).toFixed(2)}</p>
                             <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
-                            <p></p>
-                            <button class="add-to-cart-sealed" data-sid="${sealedItem.sid}">Add to cart</button>
-                            <button class="delete-sealed-item" data-sid="${sealedItem.sid}">Delete</button>
-                        `;
+                            <p class="sealed-date">${DOMPurify.sanitize(formatedDate)}</p>
+                            `;
 
                         cardsContainer.insertBefore(sealedDiv, cardsContainer.querySelector('.button-container'));
                     });
+
+                    // Sealed "Open" lives in the items context menu (spawnItemsContextMenu)
 
                     // Add event listeners for "Add to cart" buttons
                     const addToCartButtons = cardsContainer.querySelectorAll('.add-to-cart-sealed');
@@ -2584,7 +2916,6 @@ async function loadSealed(viewButton) {
     if (sealedTab.hidden || sealedTab.childElementCount === 0) {
         sealedTab.hidden = false;
         viewButton.innerHTML = 'Hide';
-        console.log(sealedTab.childElementCount);
 
         // Only fetch if we don't have items already
         if (contentDiv.childElementCount === 0) {
@@ -2605,15 +2936,27 @@ async function loadSealed(viewButton) {
                     const date = new Date(timeStamp);
                     let formatedDate = date.toLocaleDateString('sk-SK', { year: 'numeric', month: '2-digit', day: '2-digit' });
                     sealedDiv.innerHTML = `
-                        <p class='quantity'>${DOMPurify.sanitize(sealedData.quantity)}</p>
+                        <p class='sealed-quantity'>${DOMPurify.sanitize(sealedData.quantity)}</p>
                         <p class='sealed-name'>${DOMPurify.sanitize(sealedData.name)}</p>
                         <p class='unit-price'>${DOMPurify.sanitize(sealedData.price)}</p>
-                        <p class='VAT-sealed'>${(DOMPurify.sanitize(sealedData.price) / 1.23).toFixed(2)}</p>
+                        <p class='VAT-sealed sealed-market-VAT-value'>${(DOMPurify.sanitize(sealedData.price) / 1.23).toFixed(2)}</p>
                         <p class='market-value-sealed'>${DOMPurify.sanitize(sealedData.market_value)}</p>
                         <p class='margin'>${margin}</p>
                         <p class='add-date'>${formatedDate}</p>
-                        <button class='add-to-cart'>Add to cart</button>
-                        <button class='delete-sealed'>Delete</button>
+                        <div class="item-options">
+                            <span class="item-options-star" title="Show options">&#9733;</span>
+                            <div class="item-options-list">
+                                <div class="item-option">
+                                    <button class='open-sealed'>Open</button>
+                                </div>
+                                <div class="item-option">
+                                    <button class='add-to-cart'>Add to cart</button>
+                                </div>
+                                <div class="item-option">
+                                    <button class='delete-sealed'>Delete</button>
+                                </div>
+                            </div>
+                        </div>
                         `
 
                     const addToCart = sealedDiv.querySelector('.add-to-cart');
@@ -2621,6 +2964,14 @@ async function loadSealed(viewButton) {
                         const available = sealedData.quantity ? Number(sealedData.quantity) : null;
                         addSealedToCart(sealedData, sealedData.sid, null, 1, available)
                     });
+
+                    const openSealedButton = sealedDiv.querySelector('.open-sealed');
+                    openSealedButton.addEventListener('click', () => {
+                        const sid = sealedDiv.getAttribute('sid');
+                        const initialValue = sealedDiv.querySelector('.sealed-market-value').textContent.replace('€', '');
+                        createSealedModal(sid, 0, initialValue);
+                    });
+
 
                     const removeSealed = sealedDiv.querySelector('.delete-sealed');
                     removeSealed.addEventListener('click', async () => {
@@ -2682,7 +3033,7 @@ async function loadSealed(viewButton) {
                         row.name = inputs[0].value || null;
                         row.price = inputs[1].value || null;
                         row.market_value = inputs[2].value || null;
-                        row.dateAdded = inputs[3].value;
+                        row.dateAdded = inputs[3].value || null;
                         if (row.name !== null && row.market_value !== null) {
                             inputValues.push(row);
                         }
@@ -2745,6 +3096,80 @@ async function renderBarterSelect(select) {
     return select
 }
 
+function openMergeAuctionModal(auctionId, auctionName) {
+    const modal = document.createElement('div');
+    modal.classList.add('reciever-div');
+    const contentDiv = document.createElement('div');
+    contentDiv.classList.add('modal-content', 'merge-auction-modal');
+
+    const close = () => modal.remove();
+    contentDiv.innerHTML = `
+        <span class="close-modal">&times;</span>
+        <div>
+            <p>Source auction:</p>
+            <p>${auctionName}</p>
+        </div>
+        <div>
+            <p>Target auction:</p>
+            <select class="merge-auction-target-select"></select>
+        </div>
+        <div>
+            <button class="merge-auction-confirm-btn">Confirm</button>
+        </div>
+    `;
+
+    const targetSelect = contentDiv.querySelector('.merge-auction-target-select');
+    targetSelect.addEventListener('focus', async (event) => {
+        const response = await csrfFetch(`/loadAuctions`);
+        const data = await response.json();
+        data.forEach(auction => {
+            if (auction.id == auctionId) return;
+            const safeAuctionId = sanitizeNumericId(auction.id);
+            const option = document.createElement('option');
+            option.value = safeAuctionId;
+            option.textContent = `${auction.auction_name || 'Auction ' + (auction.id - 1)}`;
+            targetSelect.appendChild(option);
+        });
+    })
+    let targetId = null;
+    targetSelect.addEventListener('change', (event) => {
+        targetId = event.target.value;
+    });
+
+
+    const confirmBtn = contentDiv.querySelector('.merge-auction-confirm-btn');
+    confirmBtn.addEventListener('click', async (event) => {
+        if (!targetId) {
+            renderAlert('Please select target auction', 'error');
+            close();
+            return;
+        }
+        const response = await csrfFetch(`/mergeAuctions/${auctionId}/${targetId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+        });
+        const data = await response.json();
+        if (data.status === 'success') {
+            window.location.reload();
+            close();
+        } else {
+            renderAlert(data.message, 'error');
+            close();
+        };
+    });
+
+    modal.appendChild(contentDiv);
+    document.body.appendChild(modal);
+
+    const closeButton = document.querySelector('.close-modal');
+    closeButton.addEventListener('click', close);
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) close();
+    });
+}
+
 async function loadAuctions() {
     const auctionContainer = document.querySelector('.auction-container');
     try {
@@ -2781,13 +3206,24 @@ async function loadAuctions() {
                     <div class="payment-method">${paymentDisplay}</div>
                     <button class="edit-payments-btn">Edit</button>
                 </div>
-                <button class="view-auction" data-id="${safeAuctionId}">View</button>
-                <button class="delete-auction" data-id="${safeAuctionId}">Delete</button>
-                <div class="auction-link-cell">
-                    ${auction.sale_id == null
+                <div>
+                    <button class="view-auction" data-id="${safeAuctionId}">View</button>
+                </div>
+                <div class="auction-options">
+                    <div class="auction-options-list">
+                        <div class="auction-option">
+                            <button class="delete-auction" data-id="${safeAuctionId}">Delete</button>
+                        </div>
+                        <div class="auction-option">
+                            <button class="merge-button">Merge</button>
+                        </div>
+                        <div class="auction-option auction-link-cell">
+                            ${auction.sale_id == null
                     ? `<select class='barter-id-select'><option value="null">Select Invoice Number to link</option></select>`
                     : `<a class="sale-link" href="/sold#${safeSaleId}">Invoice Number: ${DOMPurify.sanitize(invoiceNumber)}</a>`
                 }
+                        </div>
+                    </div>
                 </div>
                 <div class="cards-container">
                     <!-- Cards will be loaded here -->
@@ -2799,6 +3235,17 @@ async function loadAuctions() {
             auctionDiv.paymentsData = payments;
 
         });
+
+        const mergeAuctions = document.querySelectorAll('.merge-button');
+        mergeAuctions.forEach((button) => {
+            button.addEventListener('click', async (event) => {
+                const auctionDiv = event.target.closest('.auction-tab');
+                const auctionId = auctionDiv.getAttribute('data-id');
+                const auctionName = auctionDiv.querySelector('.auction-name').textContent;
+                openMergeAuctionModal(auctionId, auctionName);
+            });
+        });
+
 
         const barterSelects = document.querySelectorAll('.barter-id-select');
         barterSelects.forEach((select) => {

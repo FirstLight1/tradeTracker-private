@@ -14,7 +14,7 @@ class EPHService:
 
     def _headers(self):
         return {
-                "X-API-Key": f"apikey: {self.user_id}: {self.api_key}",
+            "x-api-auth": f"apikey {self.user_id}:{self.api_key}",
             "Content-Type": "application/json",
         }
 
@@ -30,8 +30,7 @@ class EPHService:
         }
 
 
-#TODO: add service categories
-    def createSheet(self, parcel_category, reception_method, payment_type = "h" ) -> str:
+    def createSheet(self, parcel_category, reception_method = 'post', payment_type = "h" ) -> str:
         payload = {
             "sheet": {
                 "parcel_category": parcel_category,
@@ -46,25 +45,27 @@ class EPHService:
         r.raise_for_status()
         return r.json()["sheet"]["id"]
 
-    #TODO: check with EPH if this is the correct way to do it
     #TODO: add service categories
     def addParcel(self, order, sheet_id, insurance_value = None):
-        if order["shippingAddressCountry"] == "D":
-            order["shippingAddressCountry"] = "DE"
+        country = order.get("state", "") or ""
+        if country == "D":
+            country = "DE"
 
         parcel = {
             "recipient": {
-                "name": order["nameAndSurname"],
-                "street": order["address"],
-                "city": order["city"],
-                "zip": order["zipCode"],
-                "country": order["state"].lower(),
-            }
+                "name": order.get("nameAndSurname", ""),
+                "street": order.get("address", ""),
+                "city": order.get("city", ""),
+                "zip": order.get("zip", ""),
+                "country": country.lower(),
+                "phone": order.get("phone", ""),
+                "email": order.get("email", ""),
+            }, 
         }
 
         if insurance_value:
             parcel["insurance"] = {
-                "value": int(order["insurance_value"]),
+                "value": int(insurance_value),
                 "currency": "eur",
             }
 
@@ -74,20 +75,20 @@ class EPHService:
             headers=self._headers(),
         )
         r.raise_for_status()
-        return r.json()["parcel"]
+        return r.json()["parcel"]["id"]
 
-    #TODO: add filename
     def download_label(self, parcel_id, sheet_id, filename):
-        r = requests.get(
-            f"{self.baseurl}/sheets/{sheet_id}/parcels/{parcel_id}/label",
+        r = requests.post(
+            f"{self.baseurl}/sheets/{sheet_id}/parcels/{parcel_id}/labels",
+            json={"format": "pdf"},
             headers=self._headers(),
         )
         r.raise_for_status()
-        label_url = r.json()["label"]["url"]
+        label_url = r.json()["labels"]["url"]
 
-        pdf = requests.get(label_url, headers=self._headers())
+        pdf = requests.get(label_url)
         pdf.raise_for_status()
-        
+
         return models.LabelResult(filename=filename, bytes=pdf.content)
 
     def register_sheet(self, sheet_id):

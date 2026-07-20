@@ -16,7 +16,7 @@ Data-model facts these suggestions rely on (verified against the code):
 
 ---
 
-## 1. Open / unbox a sealed product → add contents to the same auction tab ⭐ (top priority)
+## 1. Open / unbox a sealed product → add contents to the same auction tab ⭐ (top priority) => DONE
 
 **What.** Add an **"Open"** button to a sealed item. Opening lets the user enter what came out of it —
 **cards and/or other sealed items** — and those contents are inserted into the **same auction tab the
@@ -104,7 +104,7 @@ written off (`disposal_reason` set).
 
 ---
 
-## 3. Quantity for sealed products
+## 3. Quantity for sealed products => DONE
 
 **What.** Sealed products are currently **one row = one unit** (`sealed` has no quantity field),
 unlike `bulk_items`. Add a `quantity` so a sealed product can be stocked, displayed, and **sold
@@ -315,7 +315,7 @@ item 6's reassignment/upsert logic. Keep purchase cost intact; just record no in
 
 ---
 
-## 8. Improve handling of special / Unicode symbols
+## 8. Improve handling of special / Unicode symbols => DONE
 
 **What.** Special characters in card names and buyer text — Pokémon names (`Nidoran♀`, `Flabébé`,
 `Farfetch'd`), `™`, Slovak diacritics (`č š ž á`), smart quotes, en-dashes — get mangled/dropped in a

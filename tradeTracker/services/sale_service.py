@@ -52,7 +52,7 @@ class SaleService:
                 needed = int(item.get("quantity", 1))
                 available = self.db.execute(
                     "SELECT COALESCE(SUM(quantity), 0) FROM sealed "
-                    "WHERE lower(name) = lower(?) AND sale_id IS NULL",
+                    "WHERE lower(name) = lower(?) AND sale_id IS NULL AND opened = 0",
                     (name,),
                 ).fetchone()[0]
                 if available < needed:
@@ -60,8 +60,9 @@ class SaleService:
 
     def _insert_sale_header(self, sale_input, receipt):
         shippingPrice = None
-        if sale_input.shipping:
-            shippingPrice = sale_input.shipping.get("shippingPrice")
+        if sale_input.shipping is not  None:
+            shippingPrice = sale_input.shipping.get("shippingPrice", None)
+
         recieverInfoJson = json.dumps(sale_input.reciever).encode("utf-8")
         key = base64.b64decode(os.environ['KEY'])
         cipher = AES.new(key,AES.MODE_GCM)
@@ -221,11 +222,13 @@ class SaleService:
         same per-unit price/market_value, purchase date and auction) is
         inserted against this sale, so reports stay accurate per source row.
         """
+        from tradeTracker.actions import normalize
+
         remaining = sell_qty
 
         rows = self.db.execute(
             "SELECT id, name, quantity, price, market_value, date, auction_id FROM sealed "
-            "WHERE lower(name) = lower(?) AND sale_id IS NULL ORDER BY id ASC",
+            "WHERE lower(name) = lower(?) AND sale_id IS NULL AND opened = 0 ORDER BY id ASC",
             (name,),
         ).fetchall()
 
@@ -246,10 +249,11 @@ class SaleService:
                     (remaining, row["id"]),
                 )
                 self.db.execute(
-                    "INSERT INTO sealed(name, quantity, price, market_value, date, auction_id, sale_id) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO sealed(name, normalized_name, quantity, price, market_value, date, auction_id, sale_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         row["name"],
+                        normalize(row["name"]),
                         remaining,
                         row["price"],
                         row["market_value"],

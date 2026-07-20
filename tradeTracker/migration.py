@@ -2,6 +2,7 @@ import sqlite3
 import os
 import re
 import sys
+import unicodedata
 # Import the sales history migration logic
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
@@ -62,6 +63,13 @@ def migrate_database(db_path):
         # Migration 13: Add idOrder to sales table
         addIdOrderToSalesTable(db_path)
 
+        addNormalizedNameToCardsTable(db_path)
+        addNormalizedNameToSealedTable(db_path)
+        
+        addOpenedFlagToSealedTable(db_path)
+
+        createSalesCorrectionTable(db_path)
+        addUniqueIndexOnSalesCorrectionRecord(db_path)
         print("Database migration check complete.")
     except sqlite3.Error as e:
         print(f"Database migration failed: {e}")
@@ -708,4 +716,153 @@ def addCardMarketIDToCardsTable(db_path):
             raise e
 
 
+def addOpenedFlagToSealedTable(db_path):
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        # Check if the column already exists
+        cursor.execute("PRAGMA table_info(sealed)")
+        columns = [info[1] for info in cursor.fetchall()]
+        if 'opened' not in columns:
+            print("Applying migration: Adding 'opened' to 'sealed' table...")
+            cursor.execute("ALTER TABLE sealed ADD COLUMN opened INTEGER DEFAULT 0")
+            print("'opened' column added successfully.")
+        else:
+            print("'opened' column already exists in 'sealed' table.")
+    except sqlite3.Error as e:
+        # This can happen if the table doesn't exist yet, which is fine.
+        if "no such table: sealed" in str(e):
+            print("'sealed' table not found, skipping 'quantity' column migration.")
+        else:
+            raise e
+
+def _normalize_name(s):
+    # Keep in sync with actions.normalize — NFD decomposes é → e + combining accent,
+    # then encode/decode drops the accent
+    if s is None:
+        return None
+    return unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode("ascii").upper()
+
+def addNormalizedNameToCardsTable(db_path):
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(cards)")
+        columns = [info[1] for info in cursor.fetchall()]
+        if 'normalized_name' not in columns:
+            print("Applying migration: Adding 'normalized_name' to 'cards' table...")
+            cursor.execute("ALTER TABLE cards ADD COLUMN normalized_name TEXT")
+            print("'normalized_name' column added successfully.")
+            cursor.execute("CREATE INDEX idx_cards_normalized_name ON cards(normalized_name)")
+        else:
+            print("'normalized_name' column already exists in 'cards' table.")
+
+        # Backfill rows that predate the column (idempotent)
+        cursor.execute("SELECT id, card_name FROM cards WHERE normalized_name IS NULL")
+        rows = cursor.fetchall()
+        if rows:
+            print(f"Backfilling 'normalized_name' for {len(rows)} card rows...")
+            for row_id, card_name in rows:
+                cursor.execute("UPDATE cards SET normalized_name = ? WHERE id = ?", (_normalize_name(card_name), row_id))
+            conn.commit()
+            print("'normalized_name' backfill for 'cards' complete.")
+        conn.close()
+
+    except sqlite3.Error as e:
+        if "no such table: cards" in str(e):
+            print("'cards' table not found, skipping 'normalized_name' column migration.")
+        else:
+            raise e
+
+def addNormalizedNameToSealedTable(db_path):
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(sealed)")
+        columns = [info[1] for info in cursor.fetchall()]
+        if 'normalized_name' not in columns:
+            print("Applying migration: Adding 'normalized_name' to 'sealed' table...")
+            cursor.execute("ALTER TABLE sealed ADD COLUMN normalized_name TEXT")
+            print("'normalized_name' column added successfully.")
+            cursor.execute("CREATE INDEX idx_sealed_normalized_name ON sealed(normalized_name)")
+        else:
+            print("'normalized_name' column already exists in 'sealed' table.")
+
+        # Backfill rows that predate the column (idempotent)
+        cursor.execute("SELECT id, name FROM sealed WHERE normalized_name IS NULL")
+        rows = cursor.fetchall()
+        if rows:
+            print(f"Backfilling 'normalized_name' for {len(rows)} sealed rows...")
+            for row_id, name in rows:
+                cursor.execute("UPDATE sealed SET normalized_name = ? WHERE id = ?", (_normalize_name(name), row_id))
+            conn.commit()
+            print("'normalized_name' backfill for 'sealed' complete.")
+        conn.close()
+
+    except sqlite3.Error as e:
+        if "no such table: sealed" in str(e):
+            print("'sealed' table not found, skipping 'normalized_name' column migration.")
+        else:
+            raise e
+
+def createSalesCorrectionTable(db_path):
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sales_correction'")
+        exist = cursor.fetchone() is not None
+
+
+        if not exist:
+            print("Correction table not found, running migration...")
+            cursor.execute("""
+                CREATE TABLE sales_correction(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sale_id INTEGER NOT NULL,
+                    value_change REAL,
+                    change_type TEXT NOT NULL,
+                    record_number INTEGER NOT NULL,
+                    FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
+                    );
+            """)
+            cursor.execute("CREATE INDEX idx_sales_correction_sale_id ON sales_correction(sale_id)")
+            conn.commit()
+        else:
+            print("sales_correction table already exists, skipping migration")
+    except sqlite3.Error as e:
+        print(f"Error checking for sales table: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def addUniqueIndexOnSalesCorrectionRecord(db_path):
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_sales_correction_record_unique'"
+        )
+        exists = cursor.fetchone() is not None
+
+        if not exists:
+            print("Adding UNIQUE index on sales_correction(record_number, change_type)...")
+            cursor.execute(
+                "CREATE UNIQUE INDEX idx_sales_correction_record_unique "
+                "ON sales_correction(record_number, change_type)"
+            )
+            conn.commit()
+            print("UNIQUE index created successfully.")
+        else:
+            print("UNIQUE index on sales_correction(record_number, change_type) already exists.")
+    except sqlite3.Error as e:
+        print(f"Error adding UNIQUE index on sales_correction: {e}")
+    finally:
+        if conn:
+            conn.close()
 

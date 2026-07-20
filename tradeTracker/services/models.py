@@ -33,5 +33,21 @@ class SaleResult:
 @dataclass
 class LabelResult:
     filename: str
-    bytes: bytes
+    bytes: bytes 
+
+@dataclass
+class EPHSheetInfo:
+    sheetId: str
+    state: str | None
+    parcelId: str
+    filename: str | None
+    label: bytes | None
+    
+@dataclass
+class PacketaHomeDeliveryResult:
+   packetId: str
+   courierNumber: str
+
+
+       
 

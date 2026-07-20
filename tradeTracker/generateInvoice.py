@@ -30,19 +30,10 @@ def add_bulk_invoice_item(invoice, item, item_type):
         tax=Decimal("0")
     ))
 
-def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=None, ex=None, payment_methods=None, shipping=None):
+#TODO: move getting the invoice number upstream so I dont need to pass it in
+def generate_invoice(reciever, invoice_num, items=None, sealed=None , bulk=None, holo=None, ex=None, payment_methods=None, shipping=None, type="invoice", dn_num=None):
     logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
-
-    # Read or create env.txt with invoice_num
-    try:
-        invoice_num = db.execute('SELECT invoice_number FROM sales WHERE invoice_number NOT LIKE "S%" ORDER BY id DESC LIMIT 1').fetchone()[0]
-        invoice_num = int(invoice_num) + 1
-    except:
-        invoice_num = 936;
-        #raise Exception("Failed to get invoice_number")
-
     invoice_date = date.today()
-    # Set language to Slovak (or English 'en') if supported by your system locale
 
     # 1. Define the Supplier (Dominik Forró - CARD ANVIL)
     provider = Provider(
@@ -77,6 +68,8 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
     # 3. Create the Invoicegene
     invoice = Invoice(client, provider, Creator("Dominik Forró"))
     invoice.number = invoice_num                # Invoice No.
+    if type == "debit":
+        invoice.number_label = f"Tarchopis č.:{dn_num} k faktúre č.:"
     invoice.variable_symbol = invoice_num       # VS
     invoice.currency = u'€'
     invoice.currency_locale = 'en_US.UTF-8'
@@ -147,9 +140,8 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
     add_bulk_invoice_item(invoice, bulk, 'bulk')
     add_bulk_invoice_item(invoice, holo, 'holo')
     add_bulk_invoice_item(invoice, ex, 'ex')
-
-    if shipping:
-        shippingPrice = Decimal(str(shipping.get('shippingPrice'))) / Decimal('1.23')
+    if shipping is not None:
+        shippingPrice = Decimal(str(shipping.get('shippingPrice') or 0)) / Decimal('1.23')
         invoice.add_item(Item(
             count=1,
             price=shippingPrice,
@@ -163,7 +155,10 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
     
     # Build a filesystem-safe client component (names may contain '/', etc.)
     safe_name = re.sub(r'[^\w.-]+', '_', reciever.get('nameAndSurname', 'client') or 'client').strip('_') or 'client'
-    output_filename = f"{invoice_num}_Invoice_{invoice_date.strftime('%Y%m%d')}_{safe_name}.pdf"
+    if type == "invoice":
+        output_filename = f"{invoice_num}_Invoice_{invoice_date.strftime('%Y%m%d')}_{safe_name}.pdf"
+    else:
+        output_filename = f"{invoice_num}_Tarchopis_c_{dn_num} _{invoice_date.strftime('%Y%m%d')}_{safe_name}.pdf"
 
     # Determine the save path based on environment
     if os.getenv("FLASK_ENV") == "prod":
@@ -188,10 +183,9 @@ def generate_invoice(reciever, db, items=None, sealed=None , bulk=None, holo=Non
             "bytes": pdf_bytes,
         },invoice_num
 
-def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, ex=None, payment_methods=None, shipping=None, original_invoice_num=None):
+def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, ex=None, payment_methods=None, shipping=None, original_invoice_num=None, cn_num = 1):
     logo_path = os.path.join(os.path.dirname(__file__), 'static', 'images', 'logo.png')
 
-    cn_num = '1'
     orig_inv = str(original_invoice_num).strip() if original_invoice_num else "UNKNOWN"
     orig_inv_safe = orig_inv.replace("/", "-").replace("\\", "-").replace(" ", "")
 
@@ -263,29 +257,34 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
 
     if items and len(items) > 0:
         for item in items:
-            mv = item.get("marketValue")
+            mv = item.get("sell_price")
             if mv is None or str(mv) == "":
                 continue
             invoice.add_item(Item(
                 count=1,
                 price=Decimal(str(mv)),
                 unit="ks",
-                description=item.get("cardName", "") + " " + item.get("cardNum", ""),
+                description=(item.get("card_name") or "") + " " + (item.get("card_num") or ""),
                 tax=Decimal("0")
             ))
 
     if sealed:
         for item in sealed:
-            if item.get("auctionId") is None:
+            count = item.get("returnQuantity")
+            if count is None:
+                count = item.get("quantity", 1)
+            if count <= 0:
+                continue
+            if item.get("auction_id") is None:
                 tax = Decimal("23")
             else:
                 tax = Decimal("0")
-            mv = item.get("marketValue") or item.get("market_value", "0")
+            mv = item.get("market_value", "0")
             invoice.add_item(Item(
-                count=1,
+                count=count,
                 price=Decimal(str(mv).replace("€", "")),
                 unit="ks",
-                description=item.get("sealedName") or item.get("name", ""),
+                description=item.get("name", ""),
                 tax=tax
             ))
 
@@ -294,7 +293,8 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
     add_bulk_invoice_item(invoice, ex, 'ex')
 
     if shipping:
-        shippingPrice = Decimal(str(shipping.get('shippingPrice'))) / Decimal('1.23')
+        # Legacy sales may have NULL shipping_info -> shippingPrice None
+        shippingPrice = Decimal(str(shipping.get('shippingPrice') or 0)) / Decimal('1.23')
         invoice.add_item(Item(
             count=1,
             price=shippingPrice,
@@ -317,7 +317,6 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
         output_filename = f"Dobropis_{cn_num}_INV{orig_inv_safe}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
         output_path = os.path.join(invoices_dir, output_filename)
 
-    print(output_filename) 
     pdf.gen(output_path, generate_qr_code=True)
     with open(output_path, "rb") as f:
          pdf_bytes = f.read()

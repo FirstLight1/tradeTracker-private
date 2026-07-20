@@ -141,6 +141,8 @@ DROP TABLE IF EXISTS bulk_counter;
 DROP TABLE IF EXISTS bulk_sales;
 DROP TABLE IF EXISTS bulk_items;
 DROP TABLE IF EXISTS sealed;
+DROP TABLE IF EXISTS sales_correction;
+DROP TABLE IF EXISTS barter;
 
 CREATE TABLE auctions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -157,6 +159,7 @@ CREATE TABLE cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     auction_id INTEGER NOT NULL,
     card_name TEXT NOT NULL,
+    normalized_name TEXT,
     card_num TEXT,
     condition TEXT,
     card_price REAL,
@@ -169,6 +172,7 @@ CREATE TABLE cards (
 CREATE INDEX idx_cards_card_name ON cards(card_name);
 CREATE INDEX idx_cards_card_num ON cards(card_num);
 CREATE INDEX idx_cards_auction_id ON cards(auction_id);
+CREATE INDEX idx_cards_normalized_name ON cards(normalized_name);
 
 CREATE TABLE sales (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -182,6 +186,19 @@ CREATE TABLE sales (
 
 CREATE INDEX idx_sales_invoice ON sales(invoice_number);
 CREATE INDEX idx_sales_date ON sales(sale_date);
+
+
+CREATE TABLE sales_correction(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_id INTEGER NOT NULL,
+    value_change REAL,
+    change_type TEXT NOT NULL,
+    record_number INTEGER NOT NULL,
+    FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_sales_correction_sale_id ON sales_correction(sale_id);
+CREATE UNIQUE INDEX idx_sales_correction_record_unique ON sales_correction(record_number, change_type);
 
 CREATE TABLE sale_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -237,12 +254,14 @@ CREATE INDEX idx_bulk_sales_sale_id ON bulk_sales(sale_id);
 CREATE TABLE sealed(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
+    normalized_name TEXT,
     quantity INTEGER NOT NULL DEFAULT 1,
     price REAL,
     market_value REAL,
     date TEXT,
     sale_id INTEGER,
     auction_id INTEGER,
+    opened INTEGER DEFAULT 0,
     cardMarketID TEXT,
     FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE SET NULL,
     FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE
@@ -250,6 +269,7 @@ CREATE TABLE sealed(
 
 CREATE INDEX idx_sealed_name ON sealed(name);
 CREATE INDEX idx_sealed_auction_id ON sealed(auction_id);
+CREATE INDEX idx_sealed_normalized_name ON sealed(normalized_name);
 
 CREATE TABLE collection(
     id INTEGER PRIMARY KEY AUTOINCREMENT,

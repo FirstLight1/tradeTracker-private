@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="stylesheet" href="../static/styles/auctions-aligment.css">
+    <link rel="stylesheet" href="../static/styles/header-align.css">
+    <link rel="stylesheet" href="../static/styles/auctions-hollowKnightStyle.css">
+    <link rel="stylesheet" href="../static/styles/creditnote-style.css">
+    <title>Trade Tracker</title>
+    <link rel="icon" type="image/x-icon" href="../static/images/cardanvil.ico">
+</head>
+
+<body>
+    <main>
+        <h1>Debit<span class="shadow"></span> Note</h1>
+        <header class="header">
+            <nav class="nav-bar">
+                <div>
+                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                    <button class="sales"><a href="{{ url_for('renderers.renderAuctions') }}">Sales</a></button>
+                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
+                </div>
+                <div>
+                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                    <button class="addAuction"><a href="{{ url_for('renderers.addAuction') }}">Add auction</a></button>
+                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
+                </div>
+                <div>
+                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                    <button class="addSingles"><a href="{{ url_for('renderers.addSingles') }}">Add Singles</a></button>
+                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
+                </div>
+                <div>
+                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                    <button class="sold"><a href="{{ url_for('renderers.sold') }}">Sold</a></button>
+                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
+                </div>
+                <div>
+                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+                    <button class="collection"><a
+                            href="{{ url_for('renderers.renderCollection')}}">Collection</a></button>
+                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
+                </div>
+            </nav>
+        </header>
+        <div class="back-btn-container">
+            <button class="back-btn"><a href="{{ url_for('renderers.sold') }}"><img class="back-arrow-img"
+                        src="../static/images/back-arrow.svg" alt="back arrow">Back</a></button>
+        </div>
+        <div id="alert-div"></div>
+        <div class="creditnote-grid">
+            <section class="creditnote-box creditnote-sale-info">
+                <p class="creditnote-box-title">Provider</p>
+                <div class="creditnote-box-content"></div>
+            </section>
+            <section class="creditnote-box creditnote-receiver">
+                <p class="creditnote-box-title">Receiver</p>
+                <div class="creditnote-reciver-content"></div>
+            </section>
+            <section class="creditnote-box creditnote-items">
+                <p class="creditnote-box-title">Items</p>
+                <div class="debit-note-search">
+                    <input type="text" class="search-field">
+                    <button class="search-btn">Search</button>
+                    <div class="search-results"></div>
+                </div>
+                <div class="creditnote-item-content"></div>
+            </section>
+            <section class="creditnote-box creditnote-total">
+                <p>Total price</p>
+                <div class="total-price">
+                    <p class="total-amount">0.00</p><span>€</span>
+                </div>
+            </section>
+            <section class="creditnote-box creditnote-confirm">
+                <button class="confirm-btn">Confirm</button>
+            </section>
+        </div>
+    </main>
+    <script type="module" src="../static/scripts/utils/sanitizers.js"></script>
+    <script type="module" src="../static/scripts/utils/renderUtil.js"></script>
+    <script type="module" src="../static/scripts/createDebitNote.js"></script>
+    <script src="../static/vendor/purify.min.js"></script>
+</body>
+
+</html>
