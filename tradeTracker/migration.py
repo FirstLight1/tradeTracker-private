@@ -70,6 +70,8 @@ def migrate_database(db_path):
 
         createSalesCorrectionTable(db_path)
         addUniqueIndexOnSalesCorrectionRecord(db_path)
+
+        createExternalTable(db_path)
         print("Database migration check complete.")
     except sqlite3.Error as e:
         print(f"Database migration failed: {e}")
@@ -866,3 +868,34 @@ def addUniqueIndexOnSalesCorrectionRecord(db_path):
         if conn:
             conn.close()
 
+
+def createExternalTable(db_path):
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='external'")
+        exist = cursor.fetchone() is not None
+
+
+        if not exist:
+            print("Correction table not found, running migration...")
+            cursor.execute("""
+                CREATE TABLE external(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    external_id TEXT NOT NULL UNIQUE,
+                    card_name TEXT NOT NULL,
+                    card_num TEXT,
+                    expansion TEXT,
+                    );
+            """)
+            cursor.execute("CREATE INDEX idx_external_card_name ON external(card_name, card_num)")
+            conn.commit()
+        else:
+            print("external table already exists, skipping migration")
+    except sqlite3.Error as e:
+        print(f"Error checking for external table: {e}")
+    finally:
+        if conn:
+            conn.close()
