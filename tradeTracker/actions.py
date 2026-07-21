@@ -1,6 +1,6 @@
 import base64
 from decimal import Decimal
-from flask import request, Blueprint, jsonify, current_app, send_file, abort
+from flask import request, Blueprint, jsonify, current_app, send_file, abort, render_template
 from reportlab.platypus import SimpleDocTemplate
 from tradeTracker.db import get_db
 from io import BytesIO, TextIOWrapper, StringIO
@@ -34,6 +34,7 @@ import pandas as pd
 import logging
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_wtf import FlaskForm
 from . import generateInvoice, CONSTANTS, csrf
 from tradeTracker.services.models import EPHSheetInfo, SaleInput, ReceiptResult, SaleResult, LabelResult, PacketaHomeDeliveryResult
 from tradeTracker.services.sale_service import SaleService
@@ -191,6 +192,41 @@ def parse_payment_methods(payment_method_text):
     payment_types = payment_method_text.strip().split()
     return [{"type": payment_type, "amount": 0} for payment_type in payment_types if payment_type]
 
+class MyForm(FlaskForm):
+    pass
+
+@bp.route('/updateExternal', methods=('POST','GET'))
+@verify_token
+def updateExternal():
+    if request.method == 'GET':
+        return render_template('populateExternal.html', form=MyForm())
+    db = get_db()
+    curr = db.cursor()
+
+    files = request.files.getlist('file-input')
+    
+    for file in files:
+        stream = TextIOWrapper(file.stream, encoding='utf-8-sig', newline='')
+        reader = csv.DictReader(stream)
+
+        dataList = []
+        for row in reader:
+            item = (
+                row['name'],
+                row['expansionCode'] + ' ' + row['collectorNumber'] if row['collectorNumber'] else '',
+                row['expansion'],
+                row['cardmarketId'],
+            )
+            dataList.append(item)
+        try:
+            curr.executemany("INSERT OR IGNORE INTO external (card_name, card_num, expansion, cardmarketId) VALUES (?, ?, ?, ?)", dataList)
+        except Exception as e:
+            db.rollback()
+            logger.warning("Failed to insert external | error: %s", e)
+            return jsonify({'status': 'error', 'message': 'Failed to insert external'}), 500
+
+    db.commit()
+    return jsonify({'status': 'success', 'message': 'Successfully added external'}), 200
 
 @bp.route('/add', methods=('POST',))
 @verify_token

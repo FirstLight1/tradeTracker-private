@@ -291,7 +291,7 @@ CREATE TABLE barter(
 
 CREATE TABLE external(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    external_id TEXT NOT NULL UNIQUE,
+    cardmarketId TEXT NOT NULL UNIQUE,
     card_name TEXT NOT NULL,
     card_num TEXT,
     expansion TEXT,

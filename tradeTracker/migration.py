@@ -884,10 +884,10 @@ def createExternalTable(db_path):
             cursor.execute("""
                 CREATE TABLE external(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    external_id TEXT NOT NULL UNIQUE,
+                    cardmarketId TEXT NOT NULL UNIQUE,
                     card_name TEXT NOT NULL,
                     card_num TEXT,
-                    expansion TEXT,
+                    expansion TEXT
                     );
             """)
             cursor.execute("CREATE INDEX idx_external_card_name ON external(card_name, card_num)")
