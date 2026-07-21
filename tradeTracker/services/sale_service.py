@@ -227,7 +227,7 @@ class SaleService:
         remaining = sell_qty
 
         rows = self.db.execute(
-            "SELECT id, name, quantity, price, market_value, date, auction_id FROM sealed "
+            "SELECT id, name, quantity, price, market_value, date, auction_id, cardMarketID FROM sealed "
             "WHERE lower(name) = lower(?) AND sale_id IS NULL AND opened = 0 ORDER BY id ASC",
             (name,),
         ).fetchall()
@@ -249,8 +249,8 @@ class SaleService:
                     (remaining, row["id"]),
                 )
                 self.db.execute(
-                    "INSERT INTO sealed(name, normalized_name, quantity, price, market_value, date, auction_id, sale_id) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO sealed(name, normalized_name, quantity, price, market_value, date, auction_id, sale_id, cardMarketID) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         row["name"],
                         normalize(row["name"]),
@@ -260,6 +260,7 @@ class SaleService:
                         row["date"],
                         row["auction_id"],
                         sale_id,
+                        row["cardMarketID"],
                     ),
                 )
                 remaining = 0

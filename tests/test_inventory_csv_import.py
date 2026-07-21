@@ -101,22 +101,25 @@ class InventoryCSVImportTestCase(unittest.TestCase):
 
             # Cards: Pikachu x1 + Cetoddle x2 = 3 rows
             cards = db.execute(
-                'SELECT card_name, card_num, condition, card_price, market_value, auction_id '
+                'SELECT card_name, card_num, condition, card_price, market_value, auction_id, cardMarketID '
                 'FROM cards ORDER BY id'
             ).fetchall()
             self.assertEqual(len(cards), 3, [dict(c) for c in cards])
             card_names = [c['card_name'] for c in cards]
             self.assertEqual(card_names.count('Pikachu'), 1)
             self.assertEqual(card_names.count('Cetoddle'), 2)
+            self.assertEqual(cards[0]['cardMarketID'], '900001')
+            self.assertTrue(all(card['cardMarketID'] == '900002' for card in cards[1:]))
 
             # Sealed: ETB row
             sealed = db.execute(
-                'SELECT name, quantity, price, market_value, auction_id FROM sealed'
+                'SELECT name, quantity, price, market_value, auction_id, cardMarketID FROM sealed'
             ).fetchall()
             self.assertEqual(len(sealed), 1, [dict(s) for s in sealed])
             self.assertEqual(sealed[0]['name'], 'Chaos Rising Pokemon Center Elite Trainer Box')
             self.assertEqual(sealed[0]['quantity'], 1)
             self.assertEqual(sealed[0]['market_value'], 180.0)
+            self.assertEqual(sealed[0]['cardMarketID'], '900003')
 
             # Auction price is the sum of per-unit buy_price rows
             # (one row per CSV line, not expanded by quantity).

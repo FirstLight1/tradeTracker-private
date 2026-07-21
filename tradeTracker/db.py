@@ -294,7 +294,7 @@ CREATE TABLE external(
     cardmarketId TEXT NOT NULL UNIQUE,
     card_name TEXT NOT NULL,
     card_num TEXT,
-    expansion TEXT,
+    expansion TEXT
     );
 
 CREATE INDEX idx_external_card_name ON external(card_name, card_num);

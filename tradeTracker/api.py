@@ -61,12 +61,13 @@ def cardMarketTable():
                         card.get('condition', None),
                         buyPrice,
                         marketValue,
-                        auction_id
+                        auction_id,
+                        actions.resolve_cardmarket_id(db, card, 'name', 'num'),
                     ))
         
             # Execute the insert ONCE after building the full list
             db.executemany(
-                'INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                'INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id, cardMarketID) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                 cardsToInsert
             )
 
@@ -87,11 +88,12 @@ def cardMarketTable():
                     buyPrice,
                     marketValue,
                     date,
-                    auction_id
+                    auction_id,
+                    actions.resolve_cardmarket_id(db, item, 'name', 'num'),
                 ))
 
             db.executemany(
-                'INSERT INTO sealed (name, normalized_name, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?)', sealedToInsert
+                'INSERT INTO sealed (name, normalized_name, quantity, price, market_value, date, auction_id, cardMarketID) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', sealedToInsert
             )
 
             db.commit()

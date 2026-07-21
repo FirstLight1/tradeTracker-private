@@ -688,34 +688,29 @@ def addQuantityToSealedTable(db_path):
             raise e
 
 def addCardMarketIDToCardsTable(db_path):
+    conn = None
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
-        cursor.execute("PRAGMA table_info(cards)")
-        columns = [info[1] for info in cursor.fetchall()]
-        if 'cardMarketID' not in columns:
-            print("Applying migration: Adding 'cardMarketID' to 'cards' table...")
-            cursor.execute("ALTER TABLE cards ADD COLUMN cardMarketID TEXT NULL")
-            print("'cardMarketID' column added successfully.")
-        else:
-            print("'cardMarketID' column already exists in 'cards' table.")
+        for table in ('cards', 'sealed'):
+            cursor.execute(f"PRAGMA table_info({table})")
+            columns = [info[1] for info in cursor.fetchall()]
+            if not columns:
+                print(f"'{table}' table not found, skipping 'cardMarketID' column migration.")
+            elif 'cardMarketID' not in columns:
+                print(f"Applying migration: Adding 'cardMarketID' to '{table}' table...")
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN cardMarketID TEXT NULL")
+                print("'cardMarketID' column added successfully.")
+            else:
+                print(f"'cardMarketID' column already exists in '{table}' table.")
 
-        cursor.execute("PRAGMA table_info(sealed)")
-        columns = [info[1] for info in cursor.fetchall()]
-        if 'cardMarketID' not in columns:
-            print("Applying migration: Adding 'cardMarketID' to 'cards' table...")
-            cursor.execute("ALTER TABLE sealed ADD COLUMN cardMarketID TEXT NULL")
-            print("'cardMarketID' column added successfully.")
-        else:
-            print("'cardMarketID' column already exists in 'sealed' table.")
-
-
+        conn.commit()
     except sqlite3.Error as e:
-        if "no such table: cards" in str(e):
-            print("'sealed' table not found, skipping 'cardMarketID' column migration.")
-        else:
-            raise e
+        raise e
+    finally:
+        if conn:
+            conn.close()
 
 
 def addOpenedFlagToSealedTable(db_path):
