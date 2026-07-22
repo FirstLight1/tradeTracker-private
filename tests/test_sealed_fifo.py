@@ -6,6 +6,7 @@ import os
 import unittest
 import tempfile
 from datetime import date
+from unittest.mock import patch
 
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -64,7 +65,7 @@ class SealedFIFOTestCase(unittest.TestCase):
         # A sale row to attach sold sealed to (FK target)
         db.execute(
             'INSERT INTO sales (id, invoice_number, sale_date, total_amount) '
-            'VALUES (999, "TEST-1", "2026-06-04", 0)'
+            'VALUES (999, "1", "2026-06-04", 0)'
         )
         db.commit()
 
@@ -256,37 +257,51 @@ class SealedFIFOTestCase(unittest.TestCase):
 
     @unittest.skipUnless(os.environ.get("KEY"), "KEY env required for invoice encryption")
     def test_create_sale_invoice_end_to_end(self):
-        """Full /createSale/invoice: sells 2 units, expects DB split + sale row."""
+        """A two-unit sale from one sealed row invoices its unit price once."""
         import json
-        from tradeTracker import actions
+
+        captured_invoices = []
+
+        class FakePdf:
+            def __init__(self, invoice):
+                captured_invoices.append(invoice)
+
+            def gen(self, output_path, generate_qr_code=True):
+                with open(output_path, 'wb') as output:
+                    output.write(b'%PDF-test')
 
         client = self.app.test_client()
-        resp = client.post(
-            '/createSale/invoice',
-            data=json.dumps({
-                'paymentMethods': [{'type': 'Hotovosť', 'amount': 200}],
-                'cards': [],
-                'sealed': [{
-                    'sid': 's10',
-                    'auctionId': '2',
-                    'sealedName': 'Booster Box',
-                    'marketValue': '100',
-                    'quantity': 2,
-                }],
-                'recieverInfo': {
-                    'nameAndSurname': 'Test User',
-                    'address': 'Test 1',
-                    'city': 'Town',
-                    'state': 'SK',
-                    'paybackDate': date.today().isoformat(),
-                    'total': 200,
-                },
-            }),
-            content_type='application/json',
-            base_url='https://localhost',
-        )
+        with patch('tradeTracker.generateInvoice.SimpleInvoice', FakePdf):
+            resp = client.post(
+                '/createSale/invoice',
+                data=json.dumps({
+                    'paymentMethods': [{'type': 'Hotovosť', 'amount': 120}],
+                    'cards': [],
+                    'sealed': [{
+                        'sid': 's10',
+                        'auctionId': '2',
+                        'sealedName': 'Booster Box',
+                        'marketValue': '60',
+                        'quantity': 2,
+                    }],
+                    'recieverInfo': {
+                        'nameAndSurname': 'Test User',
+                        'address': 'Test 1',
+                        'city': 'Town',
+                        'state': 'SK',
+                        'paybackDate': date.today().isoformat(),
+                        'total': 120,
+                    },
+                }),
+                content_type='application/json',
+                base_url='https://localhost',
+            )
         self.assertEqual(resp.status_code, 200, resp.data[:300])
-        self.assertEqual(resp.mimetype, 'application/zip')
+        self.assertEqual(resp.mimetype, 'application/pdf')
+        sealed_item = captured_invoices[0]._items[0]
+        self.assertEqual(sealed_item.count, 2)
+        self.assertEqual(sealed_item.price, 60)
+        self.assertEqual(sealed_item.total_tax, 120)
 
         with self.app.app_context():
             db = get_db()
