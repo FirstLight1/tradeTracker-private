@@ -1175,23 +1175,30 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
         const exSub = cartContent.exItem ? Number(cartContent.exItem.sell_price) : 0;
         const fixedSubtotal = bulkSub + holoSub + exSub;
         const cardsSub = cartContent.cards ? cartContent.cards.reduce((sum, c) => sum + Number(c.marketValue), 0) : 0;
-        const sealedSub = cartContent.sealed ? cartContent.sealed.reduce((sum, c) => sum + Number(c.marketValue.replace('€', '')), 0) : 0;
+        const sealedSub = cartContent.sealed ? cartContent.sealed.reduce(
+            (sum, item) => sum + Number(String(item.marketValue).replace('€', '')) * (Number(item.quantity) || 1),
+            0
+        ) : 0;
 
         const adjustableSubtotal = cardsSub + sealedSub;
         const targetAdjustable = cartValueInput - fixedSubtotal;
 
         if (adjustableSubtotal > 0) {
             const scale = targetAdjustable / adjustableSubtotal;
-            const allItems = [...(cartContent.cards || 0), ...(cartContent.sealed || 0)];
+            const allItems = [
+                ...(cartContent.cards || []).map(item => ({ item, quantity: 1 })),
+                ...(cartContent.sealed || []).map(item => ({ item, quantity: Number(item.quantity) || 1 }))
+            ];
 
             let distributed = 0;
             for (let i = 0; i < allItems.length; i++) {
+                const { item, quantity } = allItems[i];
                 if (i === allItems.length - 1) {
-                    allItems[i].marketValue = (targetAdjustable - distributed).toFixed(2);
+                    item.marketValue = ((targetAdjustable - distributed) / quantity).toFixed(2);
                 } else {
-                    const scaled = parseFloat((allItems[i].marketValue * scale).toFixed(2));
-                    allItems[i].marketValue = scaled.toFixed(2);
-                    distributed += scaled;
+                    const scaled = parseFloat((Number(item.marketValue) * scale).toFixed(2));
+                    item.marketValue = scaled.toFixed(2);
+                    distributed += scaled * quantity;
                 }
             }
         }
