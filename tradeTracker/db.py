@@ -258,6 +258,7 @@ CREATE TABLE sealed(
     quantity INTEGER NOT NULL DEFAULT 1,
     price REAL,
     market_value REAL,
+    sell_price REAL,
     date TEXT,
     sale_id INTEGER,
     auction_id INTEGER,

@@ -70,6 +70,7 @@ def migrate_database(db_path):
 
         createSalesCorrectionTable(db_path)
         addUniqueIndexOnSalesCorrectionRecord(db_path)
+        addSellPriceToSealedTable(db_path)
         print("Database migration check complete.")
     except sqlite3.Error as e:
         print(f"Database migration failed: {e}")
@@ -862,6 +863,27 @@ def addUniqueIndexOnSalesCorrectionRecord(db_path):
             print("UNIQUE index on sales_correction(record_number, change_type) already exists.")
     except sqlite3.Error as e:
         print(f"Error adding UNIQUE index on sales_correction: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def addSellPriceToSealedTable(db_path):
+    """Store the price selected at checkout for sold sealed products."""
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        columns = [info[1] for info in cursor.execute("PRAGMA table_info(sealed)").fetchall()]
+        if 'sell_price' not in columns:
+            print("Applying migration: Adding 'sell_price' to 'sealed' table...")
+            cursor.execute("ALTER TABLE sealed ADD COLUMN sell_price REAL")
+            conn.commit()
+            print("'sell_price' column added successfully.")
+        else:
+            print("'sell_price' column already exists in 'sealed' table.")
+    except sqlite3.Error as e:
+        if "no such table: sealed" not in str(e):
+            raise e
     finally:
         if conn:
             conn.close()
