@@ -674,10 +674,11 @@ def loadSoldCards(sale_id):
     bulk_sales = db.execute(
         'SELECT * FROM bulk_sales WHERE sale_id = ?', (sale_id,))
     bulk_sales_list = [dict(bulk) for bulk in bulk_sales]
+
     response = {
         "cards": [dict(card) for card in cards],
         "sealed": sealed_sales_list,
-        "bulk_sales": bulk_sales_list
+        "bulk_sales": bulk_sales_list,
     }
 
     return jsonify(response)

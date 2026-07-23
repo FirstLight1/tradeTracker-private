@@ -148,7 +148,7 @@ p {
 }
 
 .sold-tab {
-    grid-template-columns: repeat(4, 150px) repeat(4, 50px);
+    grid-template-columns: 150px 220px 120px 120px 150px repeat(3, 50px);
     justify-content: center;
 }
 

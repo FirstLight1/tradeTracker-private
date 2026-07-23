@@ -27,7 +27,7 @@ async function loadContent(button, soldDate) {
                     <p>Card number</p>
                     <p>Condition</p>
                     <p>Buy price</p>
-                    <p>Market value</p>
+                    <p>Inventory market value</p>
                     <p>Sell price</p>
                     <p>Margin</p>
                     <p>Sold Date</p>
@@ -70,8 +70,8 @@ async function loadContent(button, soldDate) {
                     <p class='card-info quantity'>qty: ${item.quantity}</p>
                     <p class='card-info card-price'>${DOMPurify.sanitize(item.price)}</p>
                     <p class='card-info market-value'>${DOMPurify.sanitize(item.market_value)}</p>
-                    <p class='card-info sell-price'>${DOMPurify.sanitize(item.market_value)}</p>
-                    <p>${item.market_value !== null && item.price !== null ? (item.market_value - item.price).toFixed(2) + '€' : 'Unknown'}</p>
+                    <p class='card-info sell-price'>${DOMPurify.sanitize(item.sell_price ?? item.market_value)}</p>
+                    <p>${(item.sell_price ?? item.market_value) !== null && item.price !== null ? ((item.sell_price ?? item.market_value) - item.price).toFixed(2) + '€' : 'Unknown'}</p>
                     <p>${formattedDate}</p>
                     <span hidden class = "sid">${safeSealedId}</span>
                     `;
@@ -97,6 +97,7 @@ async function loadContent(button, soldDate) {
                 `;
                 cardsContainer.appendChild(bulkElement);
             });
+
         }
     } else {
         cardsContainer.hidden = true;
@@ -125,9 +126,12 @@ async function loadHistory() {
         } catch (e) {
             name = sale.notes;
         }
+        const totalAmount = Number(sale.total_amount);
+        const shipping = Number(sale.shipping_info) || 0;
         saleElement.innerHTML = `
             <p class="auction-name">Invoice #${DOMPurify.sanitize(sale.invoice_number)} - ${formattedDate}</p>
-            <p class="auction-price">Celková suma: ${DOMPurify.sanitize(Number.isFinite(Number(sale.total_amount)) ? Number(sale.total_amount).toFixed(2) : sale.total_amount)}€</p>
+            <p class="auction-price">Celková suma (vrátane dopravy): ${DOMPurify.sanitize(Number.isFinite(totalAmount) ? totalAmount.toFixed(2) : sale.total_amount)}€</p>
+            <p>Shipping: ${DOMPurify.sanitize(shipping.toFixed(2))}€</p>
             <p>Marža: ${sale.total_profit ? DOMPurify.sanitize(sale.total_profit.toFixed(2)) : '0.00'}€</p>
             <p>${DOMPurify.sanitize(name)}</p>
             <button class="view-auction" data-id="${safeSaleId}">View</button>
