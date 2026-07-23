@@ -122,7 +122,10 @@ class SaleService:
         if sealed:
             for item in sealed:
                 self._deduct_sealed_fifo(
-                    item.get("sealedName"), int(item.get("quantity", 1)), sale_id
+                    item.get("sealedName"),
+                    int(item.get("quantity", 1)),
+                    sale_id,
+                    float(item.get("marketValue") or 0),
                 )
 
         bulk = sale_input.bulk
@@ -214,7 +217,7 @@ class SaleService:
                 )
                 remaining = 0
 
-    def _deduct_sealed_fifo(self, name, sell_qty, sale_id):
+    def _deduct_sealed_fifo(self, name, sell_qty, sale_id, sell_price=None):
         """Deduct sealed units for a product using FIFO (oldest rows first).
 
         When a row is only partially sold it is split: the inventory row's
@@ -239,7 +242,8 @@ class SaleService:
             if row["quantity"] <= remaining:
                 # Whole row consumed - attach it to this sale (keeps its quantity)
                 self.db.execute(
-                    "UPDATE sealed SET sale_id = ? WHERE id = ?", (sale_id, row["id"])
+                    "UPDATE sealed SET sale_id = ?, sell_price = ? WHERE id = ?",
+                    (sale_id, sell_price, row["id"]),
                 )
                 remaining -= row["quantity"]
             else:
@@ -249,14 +253,15 @@ class SaleService:
                     (remaining, row["id"]),
                 )
                 self.db.execute(
-                    "INSERT INTO sealed(name, normalized_name, quantity, price, market_value, date, auction_id, sale_id) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO sealed(name, normalized_name, quantity, price, market_value, sell_price, date, auction_id, sale_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         row["name"],
                         normalize(row["name"]),
                         remaining,
                         row["price"],
                         row["market_value"],
+                        sell_price,
                         row["date"],
                         row["auction_id"],
                         sale_id,

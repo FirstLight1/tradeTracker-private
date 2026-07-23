@@ -650,6 +650,11 @@ def loadSoldHistory():
 def loadSoldCards(sale_id):
     db = get_db()
 
+    sale = db.execute(
+        'SELECT total_amount, COALESCE(shipping_info, 0) AS shipping_info FROM sales WHERE id = ?',
+        (sale_id,),
+    ).fetchone()
+
     cards = db.execute(
         'SELECT c.*, si.sell_price as invoice_sell_price, si.sold_cm, si.sold, s.sale_date, s.invoice_number '
         'FROM cards c '
@@ -665,10 +670,15 @@ def loadSoldCards(sale_id):
     bulk_sales = db.execute(
         'SELECT * FROM bulk_sales WHERE sale_id = ?', (sale_id,))
     bulk_sales_list = [dict(bulk) for bulk in bulk_sales]
+    sale_detail = dict(sale) if sale else None
+    if sale_detail:
+        sale_detail['shipping_info'] = float(sale_detail['shipping_info'] or 0)
+
     response = {
         "cards": [dict(card) for card in cards],
         "sealed": sealed_sales_list,
-        "bulk_sales": bulk_sales_list
+        "bulk_sales": bulk_sales_list,
+        "sale": sale_detail,
     }
 
     return jsonify(response)
