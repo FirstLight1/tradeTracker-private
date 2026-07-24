@@ -143,6 +143,7 @@ DROP TABLE IF EXISTS bulk_items;
 DROP TABLE IF EXISTS sealed;
 DROP TABLE IF EXISTS sales_correction;
 DROP TABLE IF EXISTS barter;
+DROP TABLE IF EXISTS external;
 
 CREATE TABLE auctions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -288,6 +289,16 @@ CREATE TABLE barter(
     FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE SET NULL,
     FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
     );
+
+CREATE TABLE external(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cardmarketId TEXT NOT NULL UNIQUE,
+    card_name TEXT NOT NULL,
+    card_num TEXT,
+    expansion TEXT
+    );
+
+CREATE INDEX idx_external_card_name ON external(card_name, card_num);
 '''
         db.executescript(schema)
     except Exception as e:

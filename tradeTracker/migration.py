@@ -70,7 +70,10 @@ def migrate_database(db_path):
 
         createSalesCorrectionTable(db_path)
         addUniqueIndexOnSalesCorrectionRecord(db_path)
+
         addSellPriceToSealedTable(db_path)
+
+        createExternalTable(db_path)
         print("Database migration check complete.")
     except sqlite3.Error as e:
         print(f"Database migration failed: {e}")
@@ -687,34 +690,29 @@ def addQuantityToSealedTable(db_path):
             raise e
 
 def addCardMarketIDToCardsTable(db_path):
+    conn = None
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
-        cursor.execute("PRAGMA table_info(cards)")
-        columns = [info[1] for info in cursor.fetchall()]
-        if 'cardMarketID' not in columns:
-            print("Applying migration: Adding 'cardMarketID' to 'cards' table...")
-            cursor.execute("ALTER TABLE cards ADD COLUMN cardMarketID TEXT NULL")
-            print("'cardMarketID' column added successfully.")
-        else:
-            print("'cardMarketID' column already exists in 'cards' table.")
+        for table in ('cards', 'sealed'):
+            cursor.execute(f"PRAGMA table_info({table})")
+            columns = [info[1] for info in cursor.fetchall()]
+            if not columns:
+                print(f"'{table}' table not found, skipping 'cardMarketID' column migration.")
+            elif 'cardMarketID' not in columns:
+                print(f"Applying migration: Adding 'cardMarketID' to '{table}' table...")
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN cardMarketID TEXT NULL")
+                print("'cardMarketID' column added successfully.")
+            else:
+                print(f"'cardMarketID' column already exists in '{table}' table.")
 
-        cursor.execute("PRAGMA table_info(sealed)")
-        columns = [info[1] for info in cursor.fetchall()]
-        if 'cardMarketID' not in columns:
-            print("Applying migration: Adding 'cardMarketID' to 'cards' table...")
-            cursor.execute("ALTER TABLE sealed ADD COLUMN cardMarketID TEXT NULL")
-            print("'cardMarketID' column added successfully.")
-        else:
-            print("'cardMarketID' column already exists in 'sealed' table.")
-
-
+        conn.commit()
     except sqlite3.Error as e:
-        if "no such table: cards" in str(e):
-            print("'sealed' table not found, skipping 'cardMarketID' column migration.")
-        else:
-            raise e
+        raise e
+    finally:
+        if conn:
+            conn.close()
 
 
 def addOpenedFlagToSealedTable(db_path):
@@ -888,3 +886,34 @@ def addSellPriceToSealedTable(db_path):
         if conn:
             conn.close()
 
+
+def createExternalTable(db_path):
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='external'")
+        exist = cursor.fetchone() is not None
+
+
+        if not exist:
+            print("Correction table not found, running migration...")
+            cursor.execute("""
+                CREATE TABLE external(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cardmarketId TEXT NOT NULL UNIQUE,
+                    card_name TEXT NOT NULL,
+                    card_num TEXT,
+                    expansion TEXT
+                    );
+            """)
+            cursor.execute("CREATE INDEX idx_external_card_name ON external(card_name, card_num)")
+            conn.commit()
+        else:
+            print("external table already exists, skipping migration")
+    except sqlite3.Error as e:
+        print(f"Error checking for external table: {e}")
+    finally:
+        if conn:
+            conn.close()

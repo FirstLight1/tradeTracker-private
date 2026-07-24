@@ -53,9 +53,9 @@ class SealedFIFOTestCase(unittest.TestCase):
         db.execute('INSERT INTO auctions (id, auction_name, auction_price) VALUES (3, "A3", 75.0)')
         # Product "Booster Box": 5 units in auction 2 (older), 4 units in auction 3
         db.execute(
-            'INSERT INTO sealed (id, name, normalized_name, quantity, price, market_value, date, auction_id) '
-            'VALUES (10, ?, ?, 5, 80.0, 100.0, "2026-01-01", 2)',
-            ('Booster Box', normalize('Booster Box'))
+            'INSERT INTO sealed (id, name, normalized_name, quantity, price, market_value, date, auction_id, cardMarketID) '
+            'VALUES (10, ?, ?, 5, 80.0, 100.0, "2026-01-01", 2, "900010")',
+            ('Booster Box', normalize('Booster Box')),
         )
         db.execute(
             'INSERT INTO sealed (id, name, normalized_name, quantity, price, market_value, date, auction_id) '
@@ -86,7 +86,7 @@ class SealedFIFOTestCase(unittest.TestCase):
 
             # A new sold row of quantity 2 with the source row's price/auction
             sold = db.execute(
-                'SELECT quantity, price, market_value, auction_id, date FROM sealed '
+                'SELECT quantity, price, market_value, auction_id, date, cardMarketID FROM sealed '
                 'WHERE sale_id = 999'
             ).fetchall()
             self.assertEqual(len(sold), 1)
@@ -95,6 +95,7 @@ class SealedFIFOTestCase(unittest.TestCase):
             self.assertEqual(sold[0]['market_value'], 100.0)
             self.assertEqual(sold[0]['auction_id'], 2)
             self.assertEqual(sold[0]['date'], "2026-01-01")
+            self.assertEqual(sold[0]['cardMarketID'], '900010')
 
     def test_whole_row_sale_no_split(self):
         """Sell exactly 5 of a 5-unit row -> row stamped sold, no new row."""
@@ -151,6 +152,18 @@ class SealedFIFOTestCase(unittest.TestCase):
         """/openSealed/<auction_id>: contents land in the auction, one unit marked opened."""
         import json
 
+        with self.app.app_context():
+            db = get_db()
+            db.execute(
+                'INSERT INTO external (cardmarketId, card_name, card_num, expansion) VALUES (?, ?, ?, ?)',
+                ('900100', 'Pikachu', '25', 'Test Set'),
+            )
+            db.execute(
+                'INSERT INTO external (cardmarketId, card_name, card_num, expansion) VALUES (?, ?, ?, ?)',
+                ('900101', 'Mini Tin', '', 'Test Set'),
+            )
+            db.commit()
+
         client = self.app.test_client()
         resp = client.post(
             '/openSealed/2',
@@ -161,9 +174,12 @@ class SealedFIFOTestCase(unittest.TestCase):
                     'cardNum': '25',
                     'condition': 'NM',
                     'marketValue': 120.0,
-                    'cardmarketId': '900100',
                 }],
-                'sealed': [],
+                'sealed': [{
+                    'cardName': 'Mini Tin',
+                    'cardNum': '',
+                    'marketValue': 60.0,
+                }],
             }),
             content_type='application/json',
             base_url='https://localhost',
@@ -172,15 +188,21 @@ class SealedFIFOTestCase(unittest.TestCase):
 
         with self.app.app_context():
             db = get_db()
-            # newTotal=120, initialValue=100 -> priceDiff=20 -> discounted price 100
+            # newTotal=180, initialValue=100 -> priceDiff=80 -> card discounted to 66.67
             card = db.execute(
-                'SELECT card_name, card_price, market_value, auction_id FROM cards '
+                'SELECT card_name, card_price, market_value, auction_id, cardMarketID FROM cards '
                 'WHERE auction_id = 2'
             ).fetchone()
             self.assertIsNotNone(card)
             self.assertEqual(card['card_name'], 'Pikachu')
-            self.assertEqual(card['card_price'], 100.0)
+            self.assertEqual(card['card_price'], 66.67)
             self.assertEqual(card['market_value'], 120.0)
+            self.assertEqual(card['cardMarketID'], '900100')
+
+            sealed_content = db.execute(
+                'SELECT cardMarketID FROM sealed WHERE name = "Mini Tin"'
+            ).fetchone()
+            self.assertEqual(sealed_content['cardMarketID'], '900101')
 
             # Original row decremented 5 -> 4, still unopened
             original = db.execute('SELECT quantity, opened FROM sealed WHERE id = 10').fetchone()

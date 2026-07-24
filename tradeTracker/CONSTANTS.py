@@ -22,6 +22,7 @@ COlLUMN_MAP ={
     'price': 'market_value',
     'listedAt': 'date_created',
     'quantity': 'quantity',
+    'cardmarketId': 'cardmarket_id',
 }
 
 CONDITION_DICT = {

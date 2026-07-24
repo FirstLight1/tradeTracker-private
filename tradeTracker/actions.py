@@ -1,6 +1,6 @@
 import base64
 from decimal import Decimal
-from flask import request, Blueprint, jsonify, current_app, send_file, abort
+from flask import request, Blueprint, jsonify, current_app, send_file, abort, render_template
 from reportlab.platypus import SimpleDocTemplate
 from tradeTracker.db import get_db
 from io import BytesIO, TextIOWrapper, StringIO
@@ -34,6 +34,7 @@ import pandas as pd
 import logging
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_wtf import FlaskForm
 from . import generateInvoice, CONSTANTS, csrf
 from tradeTracker.services.models import EPHSheetInfo, SaleInput, ReceiptResult, SaleResult, LabelResult, PacketaHomeDeliveryResult
 from tradeTracker.services.sale_service import SaleService
@@ -63,6 +64,37 @@ def normalize(s: str | None) -> str | None:
         return None
     # NFD decomposes é → e + combining accent, then encode/decode drops the accent
     return unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode("ascii").upper()
+
+
+def resolve_cardmarket_id(db, item, name_key, card_num_key):
+    """Use an imported ID when present, otherwise resolve one external match."""
+    supplied_id = item.get('cardmarketId')
+    if supplied_id is not None and str(supplied_id).strip():
+        return str(supplied_id).strip()
+
+    name = item.get(name_key)
+    card_num = item.get(card_num_key) or ''
+    if not name:
+        logger.warning('Unable to resolve CardMarket ID: item has no name')
+        return None
+
+    matches = db.execute(
+        'SELECT cardmarketId FROM external '
+        'WHERE lower(trim(card_name)) = lower(trim(?)) '
+        "AND lower(trim(COALESCE(card_num, ''))) = lower(trim(?))",
+        (name, card_num),
+    ).fetchall()
+    if len(matches) == 1:
+        return matches[0]['cardmarketId']
+
+    reason = 'no match' if not matches else 'multiple matches'
+    logger.warning(
+        'Unable to resolve CardMarket ID: %s | name: %s | card_num: %s',
+        reason,
+        name,
+        card_num,
+    )
+    return None
 
 def get_bulk_item_unit_price(item_type):
     return CONSTANTS.BULK_ITEM_UNIT_PRICES.get(item_type, 0)
@@ -191,6 +223,41 @@ def parse_payment_methods(payment_method_text):
     payment_types = payment_method_text.strip().split()
     return [{"type": payment_type, "amount": 0} for payment_type in payment_types if payment_type]
 
+class MyForm(FlaskForm):
+    pass
+
+@bp.route('/updateExternal', methods=('POST','GET'))
+@verify_token
+def updateExternal():
+    if request.method == 'GET':
+        return render_template('populateExternal.html', form=MyForm())
+    db = get_db()
+    curr = db.cursor()
+
+    files = request.files.getlist('file-input')
+    
+    for file in files:
+        stream = TextIOWrapper(file.stream, encoding='utf-8-sig', newline='')
+        reader = csv.DictReader(stream)
+
+        dataList = []
+        for row in reader:
+            item = (
+                row['name'],
+                row['expansionCode'] + ' ' + row['collectorNumber'] if row['collectorNumber'] else '',
+                row['expansion'],
+                row['cardmarketId'],
+            )
+            dataList.append(item)
+        try:
+            curr.executemany("INSERT OR IGNORE INTO external (card_name, card_num, expansion, cardmarketId) VALUES (?, ?, ?, ?)", dataList)
+        except Exception as e:
+            db.rollback()
+            logger.warning("Failed to insert external | error: %s", e)
+            return jsonify({'status': 'error', 'message': 'Failed to insert external'}), 500
+
+    db.commit()
+    return jsonify({'status': 'success', 'message': 'Successfully added external'}), 200
 
 @bp.route('/add', methods=('POST',))
 @verify_token
@@ -220,9 +287,10 @@ def add():
             )
             auction_id = cursor.lastrowid
             for card in cardsArr[1:]:
+                cardmarket_id = resolve_cardmarket_id(db, card, 'cardName', 'cardNum')
                 db.execute(
-                    'INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id) '
-                    'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    'INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id, cardMarketID) '
+                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                     (
                         card.get('cardName'),
                         normalize(card.get('cardName')),
@@ -230,11 +298,12 @@ def add():
                         card.get('condition'),
                         card.get('buyPrice'),
                         card.get('marketValue'),
-                        auction_id
+                        auction_id,
+                        cardmarket_id,
                     )
                 )
-                db.commit()
-                return jsonify({'status': 'success', 'auction_id': auction_id}), 201
+            db.commit()
+            return jsonify({'status': 'success', 'auction_id': auction_id}), 201
         except Exception as e:
             db.rollback()
             logger.exception('DB error, auction creation failed | %s', e)
@@ -423,14 +492,14 @@ def addSealed():
             date = sealed.get('dateAdded') if sealed.get('dateAdded') else datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             if date and len(date) == 10:
                 date = date + 'T00:00:00Z'
-            db.execute("INSERT INTO sealed(name, normalized_name, price, market_value, date) VALUES (?, ?, ?, ?, ?)",(sealed.get("name"), normalize(sealed.get("name")), price, marketValue, date))
+            cardmarket_id = resolve_cardmarket_id(db, sealed, 'name', 'cardNum')
+            db.execute("INSERT INTO sealed(name, normalized_name, price, market_value, date, cardMarketID) VALUES (?, ?, ?, ?, ?, ?)",(sealed.get("name"), normalize(sealed.get("name")), price, marketValue, date, cardmarket_id))
         db.commit()
         return jsonify({'status':'success'}),200
     except Exception as e:
         db.rollback()
         logger.exception('DB error, sealed creation failed | %s', e)
         return jsonify({'status': 'error', 'message': 'Error code: Ax02'}), 400
-
 
 @bp.route('/loadCards/<int:auction_id>',methods=('GET',))
 @verify_token
@@ -562,8 +631,9 @@ def addToExistingAuction(auction_id):
         db = get_db()
         try:
             for card in cards:
-                db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id)'
-                ' VALUES (?, ?, ?, ?, ?, ?, ?)',
+                cardmarket_id = resolve_cardmarket_id(db, card, 'cardName', 'cardNum')
+                db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id, cardMarketID)'
+                ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                 (
                     card.get('cardName'),
                     normalize(card.get('cardName')),
@@ -571,7 +641,8 @@ def addToExistingAuction(auction_id):
                     card.get('condition'),
                     card.get('buyPrice'),
                     card.get('marketValue'),
-                    auction_id
+                    auction_id,
+                    cardmarket_id,
                 )
             )
 
@@ -584,9 +655,10 @@ def addToExistingAuction(auction_id):
                     date = item.get('date') if item.get('date') is not None else datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
                     if date and len(date) == 10:
                         date = date + 'T00:00:00Z'
+                    cardmarket_id = resolve_cardmarket_id(db, item, 'name', 'cardNum')
                     db.execute(
-                        "INSERT INTO sealed(name, normalized_name, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (item.get("name"), normalize(item.get("name")),item.get("quantity"), price, marketValue, date, auction_id)
+                        "INSERT INTO sealed(name, normalized_name, quantity, price, market_value, date, auction_id, cardMarketID) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (item.get("name"), normalize(item.get("name")),item.get("quantity"), price, marketValue, date, auction_id, cardmarket_id)
                     )
 
             bulk = data.get('bulk')
@@ -1599,8 +1671,9 @@ def addToSingles():
         data = request.get_json()
 
         for card in data[1:]:
-            db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id)'
-                    'VALUES (?, ?, ?, ?, ?, ?, ?)',
+            cardmarket_id = resolve_cardmarket_id(db, card, 'cardName', 'cardNum')
+            db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id, cardMarketID)'
+                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                     (
                         card.get('cardName'),
                         normalize(card.get('cardName')),
@@ -1608,7 +1681,8 @@ def addToSingles():
                         card.get('condition'),
                         card.get('buyPrice'),
                         card.get('marketValue'),
-                        auction_id
+                        auction_id,
+                        cardmarket_id,
                     )
             )
         db.commit()
@@ -1679,7 +1753,7 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
                     new_price,
                     card.get('marketValue'),
                     auction_id,
-                    card.get('cardmarketId')
+                    resolve_cardmarket_id(cur, card, 'cardName', 'cardNum')
                 ))
 
         for item in sealed:
@@ -1696,7 +1770,7 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
                                 item.get('marketValue'),
                                 datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                                 auction_id,
-                                item.get('cardmarketId')
+                                resolve_cardmarket_id(cur, item, 'cardName', 'cardNum')
                              ))
 
     except Exception as e:
@@ -1746,7 +1820,7 @@ def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
                         new_price,
                         card.get('marketValue'),
                         auctionId,
-                        card.get('cardmarketId')
+                        resolve_cardmarket_id(cur, card, 'cardName', 'cardNum')
                     ))
         except Exception as e:
             logger.exception(
@@ -1772,7 +1846,7 @@ def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
                                 item.get('marketValue'),
                                 datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                                 auctionId,
-                                item.get('cardmarketId')
+                                resolve_cardmarket_id(cur, item, 'cardName', 'cardNum')
                              ))
     except Exception as e:
         logger.exception(
@@ -2122,6 +2196,7 @@ def _create_inventory(db, dataList=None):
 
         if isSealed:
             try:
+                cardmarket_id = resolve_cardmarket_id(db, item, 'card_name', 'card_num')
                 db.execute('INSERT INTO sealed (name, normalized_name, quantity, price, market_value, date, auction_id, cardmarketId)'
                     'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                     (
@@ -2132,7 +2207,7 @@ def _create_inventory(db, dataList=None):
                         item.get('market_value'),
                         item.get('date'),
                         auctionId,
-                        item.get('cardmarketId')
+                        cardmarket_id
                     )
                 )
             except Exception as e:
@@ -2142,6 +2217,7 @@ def _create_inventory(db, dataList=None):
             quantity = int(item.get('quantity'))
             if quantity is None:
                 quantity = 1
+            cardmarket_id = resolve_cardmarket_id(db, item, 'card_name', 'card_num')
             for i in range(quantity):
                 try:
                     buyPrice = round(float(item.get('market_value')) * 0.8, 2)
@@ -2155,7 +2231,7 @@ def _create_inventory(db, dataList=None):
                             buyPrice,
                             item.get('market_value'),
                             auctionId,
-                            item.get('cardmarketId')
+                            cardmarket_id
                         )
                     )
                 except Exception as e:
