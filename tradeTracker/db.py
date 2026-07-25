@@ -143,6 +143,8 @@ DROP TABLE IF EXISTS bulk_items;
 DROP TABLE IF EXISTS sealed;
 DROP TABLE IF EXISTS sales_correction;
 DROP TABLE IF EXISTS barter;
+DROP TABLE IF EXISTS grading_submission_cards;
+DROP TABLE IF EXISTS grading_submissions;
 
 CREATE TABLE auctions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -288,6 +290,56 @@ CREATE TABLE barter(
     FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE SET NULL,
     FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
     );
+
+CREATE TABLE grading_submissions(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        grader TEXT NOT NULL,
+        service_level TEXT,
+        status TEXT NOT NULL DEFAULT 'DRAFT',
+        outbound_shipping_cost REAL NOT NULL DEFAULT 0,
+        return_shipping_cost REAL NOT NULL DEFAULT 0,
+        insurance_cost REAL NOT NULL DEFAULT 0,
+        customs_duty_cost REAL NOT NULL DEFAULT 0,
+        other_shared_cost REAL NOT NULL DEFAULT 0,
+        submitted_at TEXT,
+        returned_at TEXT,
+        notes TEXT
+        );
+
+    CREATE TABLE grading_submission_cards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        submission_id INTEGER NOT NULL,
+        card_id INTEGER NOT NULL,
+        grader TEXT NOT NULL,
+        is_current INTEGER NOT NULL DEFAULT 1,
+        submitted_value REAL NOT NULL DEFAULT 0,
+        grading_fee REAL NOT NULL DEFAULT 0,
+        prep_fee REAL NOT NULL DEFAULT 0,
+        upcharge_fee REAL NOT NULL DEFAULT 0,
+        allocated_shared_cost REAL NOT NULL DEFAULT 0,
+        total_grading_cost REAL NOT NULL DEFAULT 0,
+        landed_cost REAL,
+        grade_numeric REAL,
+        grade_label TEXT,
+        qualifier TEXT,
+        cert_number TEXT COLLATE NOCASE DEFAULT '',
+        post_grade_market_value REAL,
+        notes TEXT,
+        FOREIGN KEY (submission_id) REFERENCES grading_submissions(id) ON DELETE RESTRICT,
+        FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE RESTRICT,
+        UNIQUE (submission_id, card_id),
+        UNIQUE (grader, cert_number)
+    );
+
+    CREATE UNIQUE INDEX idx_grading_current_card
+    ON grading_submission_cards(card_id)
+    WHERE is_current = 1;
+
+    CREATE INDEX idx_grading_submission_cards_submission
+    ON grading_submission_cards(submission_id);
+
+    CREATE INDEX idx_grading_submission_cards_card
+    ON grading_submission_cards(card_id);
 '''
         db.executescript(schema)
     except Exception as e:
