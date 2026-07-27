@@ -1,5 +1,7 @@
 from dataclasses import dataclass
+import enum
 from typing import Any
+import datetime
 
 @dataclass
 class Payment:
@@ -48,6 +50,49 @@ class PacketaHomeDeliveryResult:
    packetId: str
    courierNumber: str
 
+class GradeStatus(enum.strEnum):
+    RAW = "raw"
+    PREPARING = "preparing"
+    SENT_FOR_GRADING = "sent_for_grading"
+    RECEIVED_BY_GRADER = "received_by_grader"
+    GRADED = "graded"
+    RETURNED = "returned"
+    CANCELLED = "cancelled"   
 
-       
+@dataclass
+class GradingSubmission:
+    grader: str 
+    service_level :str
+    status: GradeStatus
+    outbound_shipping_cost: float = 0.0
+    return_shipping_cost: float = 0.0
+    insurance_cost: float = 0.0
+    customs_duty_cost: float = 0.0
+    other_shared_cost: float = 0.0
+    submitted_at: datetime.datetime
+    returned_at: datetime.datetime | None
+    notes: str | None
+    cards: list[GradingSubmissionCard]
+
+
+@dataclass
+class GradingSubmissionCard:
+    card_id: int
+    grader: str
+    grading_fee: float
+    submitted_value: float
+    upcharge: float | None
+    total_grading_cost: float
+    
+@dataclass
+class GradingCompleteItems:
+    card_id: int
+    grade_numeric: float
+    grade_label: str
+    qualifier: str | None 
+    cert_number: str | None
+    post_grade_market_value: float | None
+
+
+
 
