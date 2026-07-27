@@ -81,9 +81,9 @@ class GradingSubmissionCard:
     grader: str
     grading_fee: float
     submitted_value: float
+    prep_fee: float = 0.0
     upcharge: float | None
-    total_grading_cost: float
-    
+     
 @dataclass
 class GradingCompleteItems:
     card_id: int
