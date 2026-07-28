@@ -6,10 +6,9 @@ class GradingService:
     def __init__(self, db):
         self.db = db
 
-    def get_submissions(self, submission_id: int) -> dict:
+    def get_submissions(self) -> dict:
 
-        submissions = self.db.execute('SELECT * FROM grading_submissions '
-                                      'WHERE submission_id = ?', (submission_id,)).fetchall()
+        submissions = self.db.execute('SELECT * FROM grading_submissions ').fetchall()
         return [dict(submission) for submission in submissions]
         
 
@@ -22,7 +21,7 @@ class GradingService:
         return [dict(card) for card in cards]
 
 
-    def create_submission(self, submission: models.GradingSubmission, submission_items: models.GradingSubmissionCard) -> str | None:
+    def create_submission(self, submission: models.GradingSubmission, submission_items: list[models.GradingSubmissionCard]) -> str | None:
         self.db.execute('BEGIN IMMEDIATE')
         curr = db.cursor()
         try: 

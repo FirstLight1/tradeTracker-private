@@ -50,7 +50,7 @@ class PacketaHomeDeliveryResult:
    packetId: str
    courierNumber: str
 
-class GradeStatus(enum.strEnum):
+class GradeStatus(enum.StrEnum):
     RAW = "raw"
     PREPARING = "preparing"
     SENT_FOR_GRADING = "sent_for_grading"
@@ -60,29 +60,30 @@ class GradeStatus(enum.strEnum):
     CANCELLED = "cancelled"   
 
 @dataclass
-class GradingSubmission:
-    grader: str 
-    service_level :str
-    status: GradeStatus
-    outbound_shipping_cost: float = 0.0
-    return_shipping_cost: float = 0.0
-    insurance_cost: float = 0.0
-    customs_duty_cost: float = 0.0
-    other_shared_cost: float = 0.0
-    submitted_at: datetime.datetime
-    returned_at: datetime.datetime | None
-    notes: str | None
-    cards: list[GradingSubmissionCard]
-
-
-@dataclass
 class GradingSubmissionCard:
     card_id: int
     grader: str
     grading_fee: float
     submitted_value: float
     prep_fee: float = 0.0
-    upcharge: float | None
+    upcharge: float = 0.0
+
+@dataclass
+class GradingSubmission:
+    grader: str 
+    service_level :str
+    status: GradeStatus
+    submitted_at: datetime.datetime
+    returned_at: datetime.datetime | None
+    notes: str | None
+    cards: list[GradingSubmissionCard]
+    outbound_shipping_cost: float = 0.0
+    return_shipping_cost: float = 0.0
+    insurance_cost: float = 0.0
+    customs_duty_cost: float = 0.0
+    other_shared_cost: float = 0.0
+
+
      
 @dataclass
 class GradingCompleteItems:
