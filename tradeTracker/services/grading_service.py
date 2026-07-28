@@ -22,8 +22,8 @@ class GradingService:
         return [dict(card) for card in cards]
 
 
-    #TODO: I probably need to calculated some costs
     def create_submission(self, submission: models.GradingSubmission, submission_items: models.GradingSubmissionCard) -> str | None:
+        self.db.execute('BEGIN IMMEDIATE')
         curr = db.cursor()
         try: 
             curr.execute('INSERT INTO grading_submissions (grader, service_level, status, outbound_shipping_cost, return_shipping_cost, insurance_cost, customs_duty_cost, other_shared_cost, submitted_at, returned_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -61,12 +61,14 @@ class GradingService:
             return "Failed to cancel submission | " + str(e)
 
     def complete_submission(self, submission_id: int, items: List[GradingCompleteItems]) -> str | None:
+        self.db.execute('BEGIN IMMEDIATE')
         try:
             self.db.execute('UPDATE grading_submissions SET status = ? WHERE submission_id = ?', (models.GradeStatus.GRADED, submission_id))
            
             for item in items:
                 self.db.execute('INSERT INTO grading_complete_items (submission_id, card_id, grade_numeric, grade_label, qualifier, cert_number, post_grade_market_value) VALUES (?, ?, ?, ?, ?, ?, ?)',
                                 (submission_id, item.card_id, item.grade_numeric, item.grade_label, item.qualifier, item.cert_number, item.post_grade_market_value))
+                self.db.execute('UPDATE cards SET market_value = ? WHERE id = ?', (item.post_grade_market_value, item.card_id))
 
             db.commit()
             return None
