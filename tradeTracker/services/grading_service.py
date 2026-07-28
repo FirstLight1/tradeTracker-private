@@ -39,6 +39,10 @@ class GradingService:
         try:
             cards = submission_items.cards
             for card in cards:
+                existing_card = self.db.execute('SELECT * FROM grading_cards WHERE card_id = ? AND sold_date IS NULL', (card.card_id,)).fetchone()
+                if not existing_card:
+                    return f'Failed to create grading submission card | Card with id:{card.card_id} not found'
+
                 shared_cost = total_grading_cost * item.submitted_value / total_submitted_value 
                 total_grading_cost = shared_cost + card.grading_fee + card.prep_fee + card.upcharge
                 curr.execute('INSERT INTO grading_cards (submission_id, card_id, grader, grading_fee, submitted_value, allocated_shared_cost, upcharge_fee, total_grading_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
