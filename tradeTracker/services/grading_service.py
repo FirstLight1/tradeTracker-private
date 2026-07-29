@@ -14,9 +14,9 @@ class GradingService:
         
 
     def get_submited_cards(self, submission_id: int) -> list[dict[str, Any]]:
-        cards = self.db.execute('SELECT * FROM grading_cards gd JOIN cards c '
+        cards = self.db.execute('SELECT * FROM grading_submission_cards gd JOIN cards c '
                                 'ON gd.card_id = c.id '
-                                'WHERE gd.submission_id = ? AND',
+                                'WHERE gd.submission_id = ?',
                                 (submission_id,)).fetchall()
 
         return [dict(card) for card in cards]

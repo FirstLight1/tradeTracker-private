@@ -10,9 +10,7 @@ import logging
 bp = Blueprint('grading', __name__)
 logger = logging.getLogger(__name__)
 
-@bp.route('/grading', methods=('POST',))
-
-
+@bp.route('/grading', methods=('GET',))
 @verify_token
 def grading_render():
     return render_template("grading.html")
