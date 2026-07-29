@@ -11,8 +11,10 @@ bp = Blueprint('grading', __name__)
 logger = logging.getLogger(__name__)
 
 @bp.route('/grading', methods=('POST',))
+
+
 @verify_token
-def grading():
+def grading_render():
     return render_template("grading.html")
 
 @bp.route('/grading/submissions', methods=('GET',))
@@ -33,22 +35,53 @@ def get_submission(submission_id):
 @bp.route('/grading/submissions/<int:submission_id>/create', methods=('POST',))
 def create_submission(submission_id):
     gs = GradingService(get_db())
-    submission = request.get_json()
-    items = submission.get('cards')
+    data = request.get_json()
+    submission = data.get('submission')
+    items = data.get('cards')
 
-    grading_submission = GradingSubmission()
+    grading_submission = GradingSubmission.from_dict(submission)
 
     grading_cards = []
     for item in items:
-        card = GradingSubmissionCard()
+        card = GradingSubmissionCard.from_dict(item)
         grading_cards.append(card)
 
-    err = gs.complete_submission(grading_submission, grading_cards)
+    grading_submission.cards = grading_cards
+    err = gs.create_submission(grading_submission)
     if err:
         return jsonify({'status': 'error', 'message': f'{err}, Error code: Gx01'}), 400
     return jsonify({'status': 'success'}), 200
 
+@bp.route('/grading/submissions/<int:submission_id>/cancel', methods=('GET',))
+def cancel_submission(submission_id):
+    gs = GradingService(get_db())
+    err =  gs.cancel_submission(submission_id)
+  
+    if err:
+        return jsonify({'status': 'error', 'message': f'{err}, Error code: Gx02'}), 400
+    return jsonify({'status': 'success'}), 200
+
+
 @bp.route('/grading/submissions/<int:submission_id>/complete', methods=('POST',))
 def complete_submission(submission_id):
     gs = GradingService(get_db())
-    gs.complete_submission(submission_id, request.get_json())
+    items = request.get_json()
+    completed_items = []
+    for item in items:
+        complete = GradingCompleteItems.from_dict(item)
+    gs.complete_submission(submission_id,completed_items) 
+
+    return jsonify({'status': 'success'}), 200
+
+@bp.route('/grading/submissions/<int:submission_id>/updateStatus', methods=('POST',))
+def update_submission_status(submission_id):
+    data = request.get_json()
+    gs = GradingService(get_db())
+    status = GradeStatus(data.get('status'))
+
+    err =  gs.update_submission_status(submission_id, status, data.get('notes', None))
+    if err:
+        return jsonify({'status': 'error', 'message': f'{err}, Error code: Gx03'}), 400
+    return jsonify({'status': 'success'}), 200
+
+
