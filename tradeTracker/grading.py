@@ -41,14 +41,21 @@ def create_submission():
     try:
         grading_submission = GradingSubmission.from_dict(submission)
         grading_cards = [GradingSubmissionCard.from_dict(item) for item in items]
-    except (KeyError, TypeError, ValueError):
+    except (KeyError, TypeError, ValueError) as e:
+        logger.warning('Invalid grading submission payload | reason: %s', e)
         return jsonify({'status': 'error', 'message': 'Invalid grading submission payload'}), 400
 
     grading_submission.cards = grading_cards
     gs = GradingService(get_db())
     err = gs.create_submission(grading_submission)
     if err:
+        logger.warning('Failed to create grading submission | reason: %s', err)
         return jsonify({'status': 'error', 'message': f'{err}, Error code: Gx01'}), 400
+    logger.info(
+        'Grading submission created successfully | grader: %s | card_count: %s',
+        grading_submission.grader,
+        len(grading_cards),
+    )
     return jsonify({'status': 'success'}), 200
 
 @bp.route('/grading/submissions/<int:submission_id>/cancel', methods=('POST',))
@@ -58,7 +65,13 @@ def cancel_submission(submission_id):
     err =  gs.cancel_submission(submission_id)
   
     if err:
+        logger.warning(
+            'Failed to cancel grading submission | submission_id: %s | reason: %s',
+            submission_id,
+            err,
+        )
         return jsonify({'status': 'error', 'message': f'{err}, Error code: Gx02'}), 400
+    logger.info('Grading submission cancelled successfully | submission_id: %s', submission_id)
     return jsonify({'status': 'success'}), 200
 
 
@@ -71,14 +84,29 @@ def complete_submission(submission_id):
         if not items:
             raise ValueError('A completion payload must contain at least one card')
         completed_items = [GradingCompleteItems.from_dict(item) for item in items]
-    except (KeyError, TypeError, ValueError):
+    except (KeyError, TypeError, ValueError) as e:
+        logger.warning(
+            'Invalid grading completion payload | submission_id: %s | reason: %s',
+            submission_id,
+            e,
+        )
         return jsonify({'status': 'error', 'message': 'Invalid grading completion payload'}), 400
 
     gs = GradingService(get_db())
     err = gs.complete_submission(submission_id, completed_items)
 
     if err:
+        logger.warning(
+            'Failed to complete grading submission | submission_id: %s | reason: %s',
+            submission_id,
+            err,
+        )
         return jsonify({'status': 'error', 'message': f'{err}, Error code: Gx04'}), 400
+    logger.info(
+        'Grading submission completed successfully | submission_id: %s | card_count: %s',
+        submission_id,
+        len(completed_items),
+    )
     return jsonify({'status': 'success'}), 200
 
 @bp.route('/grading/submissions/<int:submission_id>/updateStatus', methods=('POST',))
@@ -88,13 +116,29 @@ def update_submission_status(submission_id):
 
     try:
         status = GradeStatus(data.get('status'))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as e:
+        logger.warning(
+            'Invalid grading status payload | submission_id: %s | reason: %s',
+            submission_id,
+            e,
+        )
         return jsonify({'status': 'error', 'message': 'Invalid grading status payload'}), 400
 
     gs = GradingService(get_db())
     err =  gs.update_submission_status(submission_id, status, data.get('notes', None))
     if err:
+        logger.warning(
+            'Failed to update grading submission status | submission_id: %s | status: %s | reason: %s',
+            submission_id,
+            status.value,
+            err,
+        )
         return jsonify({'status': 'error', 'message': f'{err}, Error code: Gx03'}), 400
+    logger.info(
+        'Grading submission status updated successfully | submission_id: %s | status: %s',
+        submission_id,
+        status.value,
+    )
     return jsonify({'status': 'success'}), 200
 
 
