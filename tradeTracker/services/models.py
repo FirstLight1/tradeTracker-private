@@ -122,7 +122,7 @@ class GradingSubmission:
             else None
             ),
         cards = [],
-        outbound_shipping_cost = float(item["outbound_shipping_cost"]),
+        outbound_shipping_cost = float(item.get("outbound_shipping_cost", 0.0)),
         return_shipping_cost = float(item.get("return_shipping_cost", 0.0)),
         insurance_cost = float(item.get("insurance_cost", 0.0)),
         customs_duty_cost = float(item.get("customs_duty_cost", 0.0)),
@@ -144,8 +144,16 @@ class GradingCompleteItems:
     def from_dict(cls, item: dict[str, Any]) -> "GradingCompleteItems":
         return cls(
             card_id=int(item["card_id"]),
-            grade_numeric=float(item["grade_numeric"]),
-            grade_label=str(item["grade_label"]),
+            grade_numeric=(
+                float(item["grade_numeric"])
+                if item.get("grade_numeric") is not None
+                else None
+            ),
+            grade_label=(
+                str(item["grade_label"])
+                if item.get("grade_label") is not None
+                else None
+            ),
             qualifier=(
                 str(item["qualifier"])
                 if item.get("qualifier") is not None
