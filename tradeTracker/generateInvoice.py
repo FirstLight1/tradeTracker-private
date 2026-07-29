@@ -141,13 +141,13 @@ def generate_invoice(reciever, invoice_num, items=None, sealed=None , bulk=None,
     add_bulk_invoice_item(invoice, holo, 'holo')
     add_bulk_invoice_item(invoice, ex, 'ex')
     if shipping is not None:
-        shippingPrice = Decimal(str(shipping.get('shippingPrice') or 0)) / Decimal('1.23')
+        shippingPrice = Decimal(str(shipping.get('shippingPrice') or 0))
         invoice.add_item(Item(
             count=1,
             price=shippingPrice,
             description=shipping.get("shippingWay"),
             unit="ks",
-            tax=Decimal("23")
+            tax=Decimal("0")
         ))
 
     # 5. Generate PDF
@@ -294,13 +294,13 @@ def generateCreditNote(reciever, items=None, sealed=None, bulk=None, holo=None, 
 
     if shipping:
         # Legacy sales may have NULL shipping_info -> shippingPrice None
-        shippingPrice = Decimal(str(shipping.get('shippingPrice') or 0)) / Decimal('1.23')
+        shippingPrice = Decimal(str(shipping.get('shippingPrice') or 0))
         invoice.add_item(Item(
             count=1,
             price=shippingPrice,
             description=shipping.get("shippingWay"),
             unit="ks",
-            tax=Decimal("23")
+            tax=Decimal("0")
         ))
 
     pdf = CreditNoteInvoice(invoice)
