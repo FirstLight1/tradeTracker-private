@@ -12,11 +12,10 @@ class GradingService:
         
 
     def get_submited_cards(self, submission_id: int) -> list[dict[str, Any]]:
-        cards = self.db.execute(
-            'SELECT gsc.*, c.* FROM grading_submission_cards gsc JOIN cards c '
-            'ON gsc.card_id = c.id WHERE gsc.submission_id = ?',
-            (submission_id,),
-        ).fetchall()
+        cards = self.db.execute('SELECT * FROM grading_submission_cards gd JOIN cards c '
+                                'ON gd.card_id = c.id '
+                                'WHERE gd.submission_id = ?',
+                                (submission_id,)).fetchall()
 
         return [dict(card) for card in cards]
 
