@@ -91,7 +91,7 @@ class GradingService:
                 updated = self.db.execute(
                     'UPDATE grading_submission_cards SET grade_numeric = ?, grade_label = ?, '
                     'qualifier = ?, cert_number = ?, post_grade_market_value = ? '
-                    'WHERE submission_id = ? AND card_id = ?',
+                    'WHERE submission_id = ? AND card_id = ? AND is_current = 1',
                     (
                         item.grade_numeric, item.grade_label, item.qualifier,
                         item.cert_number, item.post_grade_market_value,

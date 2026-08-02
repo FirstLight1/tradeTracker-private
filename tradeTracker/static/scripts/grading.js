@@ -73,7 +73,7 @@ function renderCards(cardsContainer, cards) {
         appendTextCell(cardElement, card.condition || 'Unknown', 'card-info condition');
         appendTextCell(cardElement, formatCurrency(card.submitted_value), 'card-info submitted-value');
         appendTextCell(cardElement, formatCurrency(card.total_grading_cost), 'card-info grading-cost');
-        appendTextCell(cardElement, gradeParts.join(' - ') || 'Pending', 'card-info grade');
+        appendTextCell(cardElement, gradeParts.join(' - ') || '', 'card-info grade');
         appendTextCell(cardElement, card.qualifier || '', 'card-info qualifier');
         appendTextCell(cardElement, card.cert_number || '', 'card-info cert-number');
         appendTextCell(
@@ -246,6 +246,7 @@ function openStatusModal(button, submission) {
 }
 
 function renderSubmission(container, submission) {
+    const completable = ['preparing', 'sent_for_grading', 'received_by_grader'];
     const submissionId = sanitizeNumericId(submission.id);
     const submissionElement = document.createElement('div');
     submissionElement.className = 'grading-tab auction-tab';
@@ -271,8 +272,14 @@ function renderSubmission(container, submission) {
     buttonContainer.innerHTML = `
         <button class='view-auction' data-id=${submissionId}>View</button>
         <button class='change-status' data-id=${submissionId}>Change Status</button>
-        <button class='complete' data-id=${submissionId}>Complete</button>
         `;
+    if (completable.includes(submission.status)) {
+        const completeButton = document.createElement('button');
+        completeButton.classList.add('complete');
+        completeButton.setAttribute('data-id', submissionId);
+        completeButton.innerHTML = `<a href='grading/submissions/${submissionId}/complete'>Complete</a>`;
+        buttonContainer.append(completeButton);
+    }
     submissionElement.appendChild(buttonContainer);
 
     const cardsContainer = document.createElement('div');
@@ -287,6 +294,7 @@ function renderSubmission(container, submission) {
     submissionElement.addEventListener('click', event => {
         if (event.target === submissionElement) loadSubmissionCards(viewButton);
     });
+
 
     if (submission.notes) submissionElement.title = submission.notes;
     container.appendChild(submissionElement);

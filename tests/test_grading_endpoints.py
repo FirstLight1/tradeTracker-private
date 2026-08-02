@@ -63,6 +63,17 @@ def test_grading_page_renders_template(app, monkeypatch):
     assert response.get_data(as_text=True) == "grading.html"
 
 
+def test_complete_grading_page_renders_for_submission(app, monkeypatch):
+    render_template = MagicMock(return_value="completeGrading.html")
+    monkeypatch.setattr(grading, "render_template", render_template)
+
+    response = app.test_client().get("/grading/submissions/3/complete")
+
+    assert response.status_code == 200
+    assert response.get_data(as_text=True) == "completeGrading.html"
+    render_template.assert_called_once_with("completeGrading.html", submission_id=3)
+
+
 def test_get_submissions_returns_service_result(app, service):
     service.get_submissions.return_value = [{"id": 3, "status": "preparing"}]
 
@@ -227,9 +238,7 @@ def test_update_submission_status_returns_service_error(app, service):
         ("post", "/grading"),
         ("post", "/grading/submissions"),
         ("post", "/grading/submissions/3"),
-        ("get", "/grading/submissions/create"),
         ("get", "/grading/submissions/3/cancel"),
-        ("get", "/grading/submissions/3/complete"),
         ("get", "/grading/submissions/3/updateStatus"),
     ],
 )
@@ -267,6 +276,7 @@ def test_endpoints_reject_invalid_payloads(app, service, path, payload, message)
         ("get", "/grading", None),
         ("get", "/grading/submissions", None),
         ("get", "/grading/submissions/3", None),
+        ("get", "/grading/submissions/3/complete", None),
         ("post", "/grading/submissions/create", submission_payload()),
         ("post", "/grading/submissions/3/cancel", None),
         ("post", "/grading/submissions/3/complete", []),

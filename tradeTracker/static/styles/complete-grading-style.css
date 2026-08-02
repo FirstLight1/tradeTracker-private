@@ -1,0 +1,115 @@
+.grading-completion-form {
+    grid-template-columns: 1fr;
+}
+
+.grading-completion-form .creditnote-items {
+    min-width: 0;
+}
+
+.completion-help {
+    margin: -8px 0 20px;
+    color: rgba(201, 209, 217, 0.8);
+    font-size: 0.9rem;
+}
+
+.completion-card-list {
+    overflow-x: auto;
+    color: var(--text-color);
+    font-family: var(--primary-font), serif;
+}
+
+.completion-card-header,
+.completion-card-row {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.5fr) 110px repeat(5, minmax(110px, 1fr));
+    gap: 12px;
+    align-items: center;
+    min-width: 1080px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+}
+
+.completion-card-header {
+    color: rgba(201, 209, 217, 0.85);
+    font-size: 0.72rem;
+    line-height: 1.1;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.completion-card-header span:first-child {
+    text-align: left;
+}
+
+.completion-card-row {
+    min-height: 58px;
+    border-radius: 10px;
+}
+
+.completion-card-row:nth-child(even) {
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.completion-card-row p {
+    margin: 0;
+}
+
+.completion-card-info {
+    min-width: 0;
+}
+
+.completion-card-name {
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+.completion-card-number {
+    margin-top: 3px !important;
+    color: rgba(201, 209, 217, 0.7);
+    font-size: 0.82rem;
+}
+
+.completion-condition {
+    text-align: center;
+}
+
+.completion-card-row input {
+    min-width: 0;
+    text-align: right;
+}
+
+.completion-card-row .grade-label-input,
+.completion-card-row .qualifier-input,
+.completion-card-row .cert-number-input {
+    text-align: left;
+}
+
+.completion-loading,
+.completion-empty {
+    padding: 30px 12px;
+    text-align: center;
+}
+
+.grading-completion-form .creditnote-confirm {
+    grid-column: 1;
+    justify-self: end;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+}
+
+.grading-completion-form .creditnote-confirm:hover {
+    box-shadow: none;
+}
+
+@media (max-width: 760px) {
+    .grading-completion-form .creditnote-items {
+        padding: 18px 14px;
+    }
+
+    .grading-completion-form .creditnote-confirm,
+    .grading-completion-form .confirm-btn {
+        width: 100%;
+    }
+}

@@ -78,39 +78,42 @@ def cancel_submission(submission_id):
     return jsonify({'status': 'success'}), 200
 
 
-@bp.route('/grading/submissions/<int:submission_id>/complete', methods=('POST',))
+@bp.route('/grading/submissions/<int:submission_id>/complete', methods=('POST','GET'))
 @verify_token
 def complete_submission(submission_id):
-    items = request.get_json()
+    if request.method == 'GET':
+        return render_template("completeGrading.html", submission_id=submission_id)
+    else:
+        items = request.get_json()
 
-    try:
-        if not items:
-            raise ValueError('A completion payload must contain at least one card')
-        completed_items = [GradingCompleteItems.from_dict(item) for item in items]
-    except (KeyError, TypeError, ValueError) as e:
-        logger.warning(
-            'Invalid grading completion payload | submission_id: %s | reason: %s',
+        try:
+            if not items:
+                raise ValueError('A completion payload must contain at least one card')
+            completed_items = [GradingCompleteItems.from_dict(item) for item in items]
+        except (KeyError, TypeError, ValueError) as e:
+            logger.warning(
+                'Invalid grading completion payload | submission_id: %s | reason: %s',
+                submission_id,
+                e,
+            )
+            return jsonify({'status': 'error', 'message': 'Invalid grading completion payload'}), 400
+
+        gs = GradingService(get_db())
+        err = gs.complete_submission(submission_id, completed_items)
+
+        if err:
+            logger.warning(
+                'Failed to complete grading submission | submission_id: %s | reason: %s',
+                submission_id,
+                err,
+            )
+            return jsonify({'status': 'error', 'message': f'{err}, Error code: Gx04'}), 400
+        logger.info(
+            'Grading submission completed successfully | submission_id: %s | card_count: %s',
             submission_id,
-            e,
+            len(completed_items),
         )
-        return jsonify({'status': 'error', 'message': 'Invalid grading completion payload'}), 400
-
-    gs = GradingService(get_db())
-    err = gs.complete_submission(submission_id, completed_items)
-
-    if err:
-        logger.warning(
-            'Failed to complete grading submission | submission_id: %s | reason: %s',
-            submission_id,
-            err,
-        )
-        return jsonify({'status': 'error', 'message': f'{err}, Error code: Gx04'}), 400
-    logger.info(
-        'Grading submission completed successfully | submission_id: %s | card_count: %s',
-        submission_id,
-        len(completed_items),
-    )
-    return jsonify({'status': 'success'}), 200
+        return jsonify({'status': 'success'}), 200
 
 @bp.route('/grading/submissions/<int:submission_id>/updateStatus', methods=('POST',))
 @verify_token

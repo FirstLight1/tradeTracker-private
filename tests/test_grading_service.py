@@ -165,6 +165,28 @@ def test_complete_submission_rolls_back_if_card_is_not_in_submission(db):
     assert db.execute("SELECT market_value FROM cards WHERE id = 2").fetchone()[0] == 60
 
 
+def test_complete_submission_rejects_cancelled_submission(db):
+    service = GradingService(db)
+    assert service.create_submission(
+        make_submission([GradingSubmissionCard(1, "PSA", 5, 50)])
+    ) is None
+    assert service.cancel_submission(1) is None
+
+    error = service.complete_submission(
+        1, [GradingCompleteItems(1, 9, "Mint", None, "CERT-1", 180)]
+    )
+
+    assert "not in submission" in error
+    status = db.execute(
+        "SELECT status FROM grading_submissions WHERE id = 1"
+    ).fetchone()[0]
+    card = db.execute(
+        "SELECT grade_numeric, is_current FROM grading_submission_cards WHERE card_id = 1"
+    ).fetchone()
+    assert status == GradeStatus.CANCELLED
+    assert tuple(card) == (None, 0)
+
+
 def test_update_submission_status_updates_notes(db):
     service = GradingService(db)
     assert service.create_submission(
