@@ -77,17 +77,99 @@
 
 .grading-card-search .search-results {
     position: absolute;
-    top: calc(100% + 4px);
+    top: calc(100% + 12px);
     left: 0;
     right: 0;
+    width: 100%;
+    margin-top: 0;
     z-index: 10;
     border-radius: 8px;
     background: rgba(13, 17, 23, 0.96);
 }
 
+.grading-card-search .search-results .search-result-item {
+    grid-template-columns: minmax(0, 1fr) 90px 110px 70px 90px;
+    column-gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 4px;
+    padding: 5px 9px;
+    font-size: 0.84rem;
+}
+
+.grading-card-search .search-results .result-condition {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.grading-card-search .search-results .result-quantity,
+.grading-card-search .search-results .result-market-value {
+    text-align: right;
+    white-space: nowrap;
+}
+
 .grading-submission-form .creditnote-item-content {
     min-height: 190px;
     max-height: 420px;
+    overflow: auto;
+}
+
+.creditnote-item-content .creditnote-item-row.grading-card-row,
+.creditnote-item-content .grading-card-header {
+    grid-template-columns: minmax(220px, 1fr) 120px repeat(4, 100px) 24px;
+    gap: 12px;
+    min-width: 900px;
+}
+
+.creditnote-item-content .creditnote-item-row.grading-card-row {
+    height: auto;
+    min-height: 46px;
+    padding: 10px 12px;
+}
+
+.creditnote-item-content .creditnote-item-row.grading-card-row:hover {
+    z-index: auto;
+    border-color: transparent;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 30px rgba(147, 112, 219, 0.1);
+    color: var(--text-color);
+    background: transparent;
+}
+
+.creditnote-item-content .grading-card-header {
+    display: grid;
+    align-items: end;
+    padding: 0 12px;
+    color: rgba(201, 209, 217, 0.85);
+    font-size: 0.72rem;
+    line-height: 1.1;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.creditnote-item-content .grading-card-header span:first-child {
+    text-align: left;
+}
+
+.creditnote-item-content .grading-card-row input {
+    min-width: 0;
+    padding: 6px 7px;
+    text-align: right;
+}
+
+.creditnote-item-content .grading-card-row .item-remove-btn {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid rgba(229, 104, 116, 0.4);
+    border-radius: 4px;
+    background: rgba(229, 104, 116, 0.1);
+    color: var(--condition-colors-played, #E56874);
+    cursor: pointer;
+}
+
+.creditnote-item-content .grading-card-row .item-remove-btn:hover {
+    border-color: var(--condition-colors-played, #E56874);
+    background: rgba(229, 104, 116, 0.3);
 }
 
 .grading-submission-form .creditnote-confirm {

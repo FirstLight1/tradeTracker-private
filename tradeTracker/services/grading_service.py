@@ -7,7 +7,7 @@ class GradingService:
 
     def get_submissions(self) -> list[dict[str, Any]]:
 
-        submissions = self.db.execute('SELECT * FROM grading_submissions ').fetchall()
+        submissions = self.db.execute('SELECT * FROM grading_submissions ORDER BY id DESC').fetchall()
         return [dict(submission) for submission in submissions]
         
 
@@ -33,7 +33,7 @@ class GradingService:
 
             for card in submission.cards:
                 available_card = self.db.execute(
-                    'SELECT id FROM cards c WHERE c.id = ? AND c.sold_date IS NULL '
+                    'SELECT c.id FROM cards c WHERE c.id = ? AND c.sold_date IS NULL '
                     'AND NOT EXISTS ('
                     'SELECT 1 FROM grading_submission_cards gsc '
                     'WHERE gsc.card_id = c.id AND gsc.is_current = 1)',

@@ -2589,6 +2589,12 @@ def search():
             placeholders = ",".join(["?"] * len(card_cart_ids))
             card_where_clause += f" AND c.id NOT IN ({placeholders})"
             card_params.extend(card_cart_ids)
+
+        card_where_clause += (
+            " AND NOT EXISTS ("
+            "SELECT 1 FROM grading_submission_cards gsc "
+            "WHERE gsc.card_id = c.id AND gsc.is_current = 1)"
+        )
         
         # Build WHERE clause for SEALED items (alias 's')
         sealed_where_conditions = []
@@ -2672,6 +2678,10 @@ def getCardIds():
                      'AND c.condition = ? '
                      'AND si.card_id IS NULL')
             params = [card_name, card_num, condition]
+
+        query += (' AND NOT EXISTS ('
+                  'SELECT 1 FROM grading_submission_cards gsc '
+                  'WHERE gsc.card_id = c.id AND gsc.is_current = 1)')
 
         if exclude_ids:
             placeholders = ','.join('?' for _ in exclude_ids)
