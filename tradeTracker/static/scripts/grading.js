@@ -1,6 +1,15 @@
 import { renderAlert, scrollOnLoad } from "./utils/renderUtil.js";
 import { sanitizeNumericId, csrfFetch } from "./utils/sanitizers.js";
 
+const GRADING_STATUSES = [
+    'preparing',
+    'sent_for_grading',
+    'received_by_grader',
+    'graded',
+    'returned',
+    'cancelled',
+];
+
 function formatCurrency(value) {
     if (value === null || value === undefined || value === '') return '0.00€';
     const number = Number(value);
@@ -117,6 +126,125 @@ async function loadSubmissionCards(button) {
     }
 }
 
+function openStatusModal(button, submission) {
+    const modal = document.createElement('div');
+    modal.className = 'reciever-div grading-status-overlay';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'grading-status-title');
+
+    const content = document.createElement('form');
+    content.className = 'modal-content grading-status-modal';
+
+    const closeButton = document.createElement('button');
+    closeButton.className = 'close-modal';
+    closeButton.type = 'button';
+    closeButton.setAttribute('aria-label', 'Close');
+    closeButton.textContent = '\u00d7';
+
+    const title = document.createElement('h2');
+    title.id = 'grading-status-title';
+    title.textContent = 'Update grading submission';
+
+    const statusLabel = document.createElement('label');
+    statusLabel.htmlFor = 'grading-status-select';
+    statusLabel.textContent = 'Status';
+
+    const statusSelect = document.createElement('select');
+    statusSelect.id = 'grading-status-select';
+    statusSelect.name = 'status';
+    GRADING_STATUSES.forEach(status => {
+        const option = document.createElement('option');
+        option.value = status;
+        option.textContent = formatStatus(status);
+        statusSelect.appendChild(option);
+    });
+    statusSelect.value = submission.status;
+
+    const notesLabel = document.createElement('label');
+    notesLabel.htmlFor = 'grading-notes';
+    notesLabel.textContent = 'Note';
+
+    const notes = document.createElement('textarea');
+    notes.id = 'grading-notes';
+    notes.name = 'notes';
+    notes.rows = 5;
+    notes.placeholder = 'Add a note about this submission';
+    notes.value = submission.notes || '';
+
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'modal-buttons';
+
+    const cancelButton = document.createElement('button');
+    cancelButton.type = 'button';
+    cancelButton.textContent = 'Cancel';
+
+    const saveButton = document.createElement('button');
+    saveButton.type = 'submit';
+    saveButton.textContent = 'Save';
+
+    buttonContainer.append(cancelButton, saveButton);
+    content.append(closeButton, title, statusLabel, statusSelect, notesLabel, notes, buttonContainer);
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+
+    const close = () => {
+        document.removeEventListener('keydown', handleKeydown);
+        modal.remove();
+        button.focus();
+    };
+    const handleKeydown = event => {
+        if (event.key === 'Escape') close();
+    };
+
+    closeButton.addEventListener('click', close);
+    cancelButton.addEventListener('click', close);
+    modal.addEventListener('click', event => {
+        if (event.target === modal) close();
+    });
+    document.addEventListener('keydown', handleKeydown);
+
+    content.addEventListener('submit', async event => {
+        event.preventDefault();
+        saveButton.disabled = true;
+        saveButton.textContent = 'Saving';
+
+        const submissionId = sanitizeNumericId(submission.id);
+        const updatedNotes = notes.value.trim();
+
+        try {
+            const response = await csrfFetch(`/grading/submissions/${submissionId}/updateStatus`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    status: statusSelect.value,
+                    notes: updatedNotes || null,
+                }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || `request failed with status ${response.status}`);
+
+            submission.status = statusSelect.value;
+            submission.notes = updatedNotes || null;
+            const submissionElement = button.closest('.auction-tab');
+            submissionElement.querySelector('.grading-status').textContent = formatStatus(submission.status);
+            if (submission.notes) {
+                submissionElement.title = submission.notes;
+            } else {
+                submissionElement.removeAttribute('title');
+            }
+            close();
+            renderAlert('Grading submission updated', 'message');
+        } catch (error) {
+            renderAlert(`Error updating grading submission: ${error}`, 'error');
+            saveButton.disabled = false;
+            saveButton.textContent = 'Save';
+        }
+    });
+
+    statusSelect.focus();
+}
+
 function renderSubmission(container, submission) {
     const submissionId = sanitizeNumericId(submission.id);
     const submissionElement = document.createElement('div');
@@ -140,11 +268,11 @@ function renderSubmission(container, submission) {
     appendTextCell(submissionElement, formatCurrency(sharedCosts), 'shared-cost');
 
     const buttonContainer = document.createElement('div');
-    const viewButton = document.createElement('button');
-    viewButton.className = 'view-auction';
-    viewButton.dataset.id = submissionId;
-    viewButton.textContent = 'View';
-    buttonContainer.appendChild(viewButton);
+    buttonContainer.innerHTML = `
+        <button class='view-auction' data-id=${submissionId}>View</button>
+        <button class='change-status' data-id=${submissionId}>Change Status</button>
+        <button class='complete' data-id=${submissionId}>Complete</button>
+        `;
     submissionElement.appendChild(buttonContainer);
 
     const cardsContainer = document.createElement('div');
@@ -152,7 +280,10 @@ function renderSubmission(container, submission) {
     cardsContainer.hidden = true;
     submissionElement.appendChild(cardsContainer);
 
+    const viewButton = buttonContainer.querySelector('.view-auction');
+    const changeStatusButton = buttonContainer.querySelector('.change-status');
     viewButton.addEventListener('click', () => loadSubmissionCards(viewButton));
+    changeStatusButton.addEventListener('click', () => openStatusModal(changeStatusButton, submission));
     submissionElement.addEventListener('click', event => {
         if (event.target === submissionElement) loadSubmissionCards(viewButton);
     });

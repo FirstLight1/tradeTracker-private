@@ -187,7 +187,12 @@
     min-width: 210px;
 }
 
+textarea {
+    max-height: 120px;
+}
+
 @media (max-width: 1600px) {
+
     .creditnote-grid,
     .back-btn-container {
         width: min(100%, 1530px);
