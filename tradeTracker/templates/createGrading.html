@@ -1,0 +1,132 @@
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/auctions-aligment.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/header-align.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/auctions-hollowKnightStyle.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/creditnote-style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/create-grading-style.css') }}">
+    <title>Create Grading Submission - Trade Tracker</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/cardanvil.ico') }}">
+</head>
+
+<body>
+    <main>
+        <h1>Create<span class="shadow"></span> Grading Submission</h1>
+        <header class="header">
+            <nav class="nav-bar">
+                <div>
+                    <span class="arrow left"><img src="{{ url_for('static', filename='images/leftarrow.png') }}"
+                            alt="left arrow"></span>
+                    <button class="sales"><a href="{{ url_for('renderers.renderAuctions') }}">Sales</a></button>
+                    <span class="arrow left"><img src="{{ url_for('static', filename='images/rightarrow.png') }}"
+                            alt="right arrow"></span>
+                </div>
+                <div>
+                    <span class="arrow left"><img src="{{ url_for('static', filename='images/leftarrow.png') }}"
+                            alt="left arrow"></span>
+                    <button class="addAuction"><a href="{{ url_for('renderers.addAuction') }}">Add auction</a></button>
+                    <span class="arrow left"><img src="{{ url_for('static', filename='images/rightarrow.png') }}"
+                            alt="right arrow"></span>
+                </div>
+                <div>
+                    <span class="arrow left"><img src="{{ url_for('static', filename='images/leftarrow.png') }}"
+                            alt="left arrow"></span>
+                    <button class="addSingles"><a href="{{ url_for('renderers.addSingles') }}">Add Singles</a></button>
+                    <span class="arrow left"><img src="{{ url_for('static', filename='images/rightarrow.png') }}"
+                            alt="right arrow"></span>
+                </div>
+                <div>
+                    <span class="arrow left"><img src="{{ url_for('static', filename='images/leftarrow.png') }}"
+                            alt="left arrow"></span>
+                    <button class="sold"><a href="{{ url_for('renderers.sold') }}">Sold</a></button>
+                    <span class="arrow left"><img src="{{ url_for('static', filename='images/rightarrow.png') }}"
+                            alt="right arrow"></span>
+                </div>
+                <div>
+                    <span class="arrow left"><img src="{{ url_for('static', filename='images/leftarrow.png') }}"
+                            alt="left arrow"></span>
+                    <button class="collection"><a
+                            href="{{ url_for('renderers.renderCollection') }}">Collection</a></button>
+                    <span class="arrow left"><img src="{{ url_for('static', filename='images/rightarrow.png') }}"
+                            alt="right arrow"></span>
+                </div>
+            </nav>
+        </header>
+        <div class="back-btn-container">
+            <button class="back-btn"><a href="{{ url_for('grading.grading_render') }}"><img class="back-arrow-img"
+                        src="{{ url_for('static', filename='images/back-arrow.svg') }}"
+                        alt="back arrow">Back</a></button>
+        </div>
+        <div id="alert-div"></div>
+        <form class="creditnote-grid grading-submission-form">
+            <section class="creditnote-box creditnote-sale-info">
+                <p class="creditnote-box-title">Submission details</p>
+                <div class="creditnote-box-content">
+                    <label for="grader">Grader</label>
+                    <input id="grader" name="grader" type="text" required>
+                    <label for="service-level">Service level</label>
+                    <input id="service-level" name="service_level" type="text">
+                    <label for="status">Status</label>
+                    <select id="status" name="status" required>
+                        <option value="preparing">Preparing</option>
+                        <option value="sent_for_grading">Sent for grading</option>
+                        <option value="received_by_grader">Received by grader</option>
+                        <option value="graded">Graded</option>
+                        <option value="returned">Returned</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                    <label for="submitted-at">Submitted at</label>
+                    <input id="submitted-at" name="submitted_at" type="date" required>
+                    <label for="returned-at">Returned at</label>
+                    <input id="returned-at" name="returned_at" type="date">
+                    <label for="notes">Notes</label>
+                    <textarea id="notes" name="notes" rows="3"></textarea>
+                </div>
+            </section>
+            <section class="creditnote-box creditnote-receiver">
+                <p class="creditnote-box-title">Shared costs</p>
+                <div class="creditnote-reciver-content">
+                    <label for="outbound-shipping-cost">Outbound shipping</label>
+                    <input id="outbound-shipping-cost" name="outbound_shipping_cost" type="number" min="0" step="0.01"
+                        value="0">
+                    <label for="return-shipping-cost">Return shipping</label>
+                    <input id="return-shipping-cost" name="return_shipping_cost" type="number" min="0" step="0.01"
+                        value="0">
+                    <label for="insurance-cost">Insurance</label>
+                    <input id="insurance-cost" name="insurance_cost" type="number" min="0" step="0.01" value="0">
+                    <label for="customs-duty-cost">Customs duty</label>
+                    <input id="customs-duty-cost" name="customs_duty_cost" type="number" min="0" step="0.01" value="0">
+                    <label for="other-shared-cost">Other shared costs</label>
+                    <input id="other-shared-cost" name="other_shared_cost" type="number" min="0" step="0.01" value="0">
+                </div>
+            </section>
+            <section class="creditnote-box creditnote-items">
+                <p class="creditnote-box-title">Cards</p>
+                <div class="grading-card-search">
+                    <input type="text" class="search-field" aria-label="Search cards">
+                    <button class="search-btn" type="button">Search</button>
+                    <div class="search-results"></div>
+                </div>
+                <div class="creditnote-item-content"></div>
+            </section>
+            <section class="creditnote-box creditnote-total">
+                <p>Total grading cost</p>
+                <div class="total-price">
+                    <p class="total-amount">0.00</p><span>EUR</span>
+                </div>
+            </section>
+            <section class="creditnote-box creditnote-confirm">
+                <button class="confirm-btn" type="submit">Create submission</button>
+            </section>
+        </form>
+    </main>
+    <script type="module" src="{{ url_for('static', filename='scripts/utils/sanitizers.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='scripts/utils/renderUtil.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/purify.min.js') }}"></script>
+</body>
+
+</html>

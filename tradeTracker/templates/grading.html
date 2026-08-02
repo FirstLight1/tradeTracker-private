@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,6 +11,7 @@
     <title>Grading - Trade Tracker</title>
     <link rel="icon" type="image/x-icon" href="../static/images/cardanvil.ico">
 </head>
+
 <body>
     <main>
         <h1>Grading<span class="shadow"></span> Submissions</h1>
@@ -37,11 +39,15 @@
                 </div>
                 <div>
                     <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                    <button class="collection"><a href="{{ url_for('renderers.renderCollection') }}">Collection</a></button>
+                    <button class="collection"><a
+                            href="{{ url_for('renderers.renderCollection') }}">Collection</a></button>
                     <span class="arrow left"><img src="../static/images/rightarrow.png" alt="right arrow"></span>
                 </div>
             </nav>
         </header>
+        <div>
+            <a href="{{ url_for('grading.create_submission') }}">Create new submission</a>
+        </div>
         <div id="alert-div"></div>
         <div class="content-container">
             <div class="auction-container">
@@ -62,4 +68,5 @@
     <script type="module" src="../static/scripts/utils/renderUtil.js"></script>
     <script type="module" src="../static/scripts/grading.js"></script>
 </body>
+
 </html>
