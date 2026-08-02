@@ -51,7 +51,6 @@ class PacketaHomeDeliveryResult:
    courierNumber: str
 
 class GradeStatus(enum.StrEnum):
-    RAW = "raw"
     PREPARING = "preparing"
     SENT_FOR_GRADING = "sent_for_grading"
     RECEIVED_BY_GRADER = "received_by_grader"

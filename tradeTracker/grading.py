@@ -30,33 +30,36 @@ def get_submission(submission_id):
     cards = gs.get_submited_cards(submission_id)
     return jsonify(cards)
 
-@bp.route('/grading/submissions/create', methods=('POST',))
+@bp.route('/grading/submissions/create', methods=('POST','GET'))
 @verify_token
 def create_submission():
-    data = request.get_json()
+    if request.method == 'GET':
+        return render_template("createGrading.html")
+    else:
+        data = request.get_json()
 
-    submission = data.get('submission')
-    items = data.get('cards')
+        submission = data.get('submission')
+        items = data.get('cards')
 
-    try:
-        grading_submission = GradingSubmission.from_dict(submission)
-        grading_cards = [GradingSubmissionCard.from_dict(item) for item in items]
-    except (KeyError, TypeError, ValueError) as e:
-        logger.warning('Invalid grading submission payload | reason: %s', e)
-        return jsonify({'status': 'error', 'message': 'Invalid grading submission payload'}), 400
+        try:
+            grading_submission = GradingSubmission.from_dict(submission)
+            grading_cards = [GradingSubmissionCard.from_dict(item) for item in items]
+        except (KeyError, TypeError, ValueError) as e:
+            logger.warning('Invalid grading submission payload | reason: %s', e)
+            return jsonify({'status': 'error', 'message': 'Invalid grading submission payload'}), 400
 
-    grading_submission.cards = grading_cards
-    gs = GradingService(get_db())
-    err = gs.create_submission(grading_submission)
-    if err:
-        logger.warning('Failed to create grading submission | reason: %s', err)
-        return jsonify({'status': 'error', 'message': f'{err}, Error code: Gx01'}), 400
-    logger.info(
-        'Grading submission created successfully | grader: %s | card_count: %s',
-        grading_submission.grader,
-        len(grading_cards),
-    )
-    return jsonify({'status': 'success'}), 200
+        grading_submission.cards = grading_cards
+        gs = GradingService(get_db())
+        err = gs.create_submission(grading_submission)
+        if err:
+            logger.warning('Failed to create grading submission | reason: %s', err)
+            return jsonify({'status': 'error', 'message': f'{err}, Error code: Gx01'}), 400
+        logger.info(
+            'Grading submission created successfully | grader: %s | card_count: %s',
+            grading_submission.grader,
+            len(grading_cards),
+        )
+        return jsonify({'status': 'success'}), 200
 
 @bp.route('/grading/submissions/<int:submission_id>/cancel', methods=('POST',))
 @verify_token
