@@ -114,6 +114,8 @@ class GradingService:
     def update_submission_status(self, submission_id: int, status: models.GradeStatus, notes: str | None = None) -> str | None:
         try:
             self.db.execute('UPDATE grading_submissions SET status = ?, notes = ? WHERE id = ?', (status, notes, submission_id))
+            if status == models.GradeStatus.RETURNED or status == models.GradeStatus.CANCELLED:
+                self.cancel_submission(submission_id)
             self.db.commit()
             return None
         except Exception as e:

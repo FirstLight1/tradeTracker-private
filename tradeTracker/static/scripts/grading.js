@@ -211,6 +211,10 @@ function openStatusModal(button, submission) {
 
         const submissionId = sanitizeNumericId(submission.id);
         const updatedNotes = notes.value.trim();
+        if (statusSelect.value === 'graded') {
+            window.location.href = `/grading/submissions/${submissionId}/complete`
+            return
+        }
 
         try {
             const response = await csrfFetch(`/grading/submissions/${submissionId}/updateStatus`, {
