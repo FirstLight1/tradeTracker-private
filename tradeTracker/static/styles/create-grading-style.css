@@ -88,7 +88,7 @@
 }
 
 .grading-card-search .search-results .search-result-item {
-    grid-template-columns: minmax(0, 1fr) 90px 110px 70px 90px;
+    grid-template-columns: minmax(0, 1fr) 90px 110px minmax(120px, 0.7fr) 90px;
     column-gap: 12px;
     width: 100%;
     box-sizing: border-box;
@@ -102,7 +102,7 @@
     white-space: nowrap;
 }
 
-.grading-card-search .search-results .result-quantity,
+.grading-card-search .search-results .result-source,
 .grading-card-search .search-results .result-market-value {
     text-align: right;
     white-space: nowrap;

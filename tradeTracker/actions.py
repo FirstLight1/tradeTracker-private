@@ -2557,6 +2557,7 @@ def search():
         card = request.get_json()
         query = card.get("query", "").strip()
         cart_ids = card.get('cartIds', [])
+        individual_cards = card.get('individualCards') is True
         # Split search query into individual words; normalize so diacritics
         # match the accent-stripped normalized_name column (e.g. "Poké" -> "POKE")
         search_terms = [normalize(term) for term in query.split()]
@@ -2614,12 +2615,17 @@ def search():
         db = get_db()
         
         # Search cards
+        card_grouping = "ORDER BY c.id ASC LIMIT 8" if individual_cards else (
+            "GROUP BY UPPER(c.card_name), UPPER(c.card_num), UPPER(c.condition) "
+            "ORDER BY c.id ASC LIMIT 8"
+        )
         card_matches = db.execute(
-            f"SELECT c.card_name, c.card_num, c.condition, c.market_value, c.id, c.auction_id,COUNT(*) as available_count, a.auction_name FROM cards c "
+            f"SELECT c.card_name, c.card_num, c.condition, c.market_value, c.id, c.auction_id, "
+            f"{'1' if individual_cards else 'COUNT(*)'} as available_count, a.auction_name FROM cards c "
             "JOIN auctions a ON c.auction_id = a.id "
             "LEFT JOIN sale_items si ON c.id = si.card_id "
             f"WHERE ({card_where_clause}) AND si.card_id IS NULL "
-            "GROUP BY UPPER(c.card_name), UPPER(c.card_num), UPPER(c.condition) ORDER BY c.id ASC LIMIT 8",
+            f"{card_grouping}",
             card_params
         ).fetchall()
         

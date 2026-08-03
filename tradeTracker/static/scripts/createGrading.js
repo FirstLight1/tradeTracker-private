@@ -30,7 +30,7 @@ function searchBar() {
             searchContainer.replaceChildren();
             return;
         }
-        const results = (await searchCard(query, [...addedIds]) || [])
+        const results = (await searchCard(query, [...addedIds], true) || [])
             .filter(result => !Object.prototype.hasOwnProperty.call(result, 'sid'))
             .slice(0, 7);
         currentResultsQueue = new queue(results.length + 1);
@@ -65,13 +65,13 @@ function displayResults(results, resultsQueue, searchInput, searchContainer) {
             <p class="result result-name">${escapeHtml(result.card_name || 'N/A')}</p>
             <p class="result result-num">${escapeHtml(result.card_num || '')}</p>
             <p class="result result-condition ${sanitizeClassToken(result.condition || '')}">${escapeHtml(result.condition || '')}</p>
-            <p class="result result-quantity">1 / ${escapeHtml(String(result.available_count || 1))}</p>
+            <p class="result result-source">${escapeHtml(result.auction_name || 'Unknown source')}</p>
             <p class="result result-market-value">${escapeHtml(String(result.market_value ?? ''))}€</p>
         `;
         resultsQueue.enqueue(row);
 
-        const add = async () => {
-            await addCard(result);
+        const add = () => {
+            addCard(result);
             searchInput.value = '';
             searchInput.focus();
             searchContainer.replaceChildren();
@@ -89,28 +89,17 @@ function displayResults(results, resultsQueue, searchInput, searchContainer) {
                 resultsQueue.getCurrent().focus();
             } else if (event.key === 'Enter') {
                 event.preventDefault();
-                await add();
+                add();
             }
         });
         searchContainer.appendChild(row);
     });
 }
 
-async function addCard(result) {
-    const response = await csrfFetch('/getCardIds', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            card_name: result.card_name,
-            card_num: result.card_num,
-            condition: result.condition,
-            exclude_ids: [...addedIds],
-        }),
-    });
-    const data = await response.json();
-    const cardId = data.status === 'success' ? data.card_ids?.[0] : null;
+function addCard(result) {
+    const cardId = Number(result.id);
     if (!cardId) {
-        renderAlert('No more available copies of this card', 'error');
+        renderAlert('Unable to identify this card', 'error');
         return;
     }
 
