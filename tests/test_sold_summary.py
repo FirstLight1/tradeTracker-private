@@ -1,9 +1,11 @@
 """Regression coverage for sold-page payment reconciliation."""
 import base64
+import inspect
 import os
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -99,6 +101,44 @@ class SoldSummaryTestCase(unittest.TestCase):
 
         self.assertEqual(sold_item['market_value'], 100.0)
         self.assertEqual(sold_item['sell_price'], 95.0)
+
+    def test_sales_report_uses_sealed_checkout_sell_price(self):
+        receipt_service = MagicMock()
+        receipt_service.issue.return_value = ReceiptResult(kind='invoice', number='1187')
+        sale_input = SaleInput(
+            reciever={'total': 95.00}, cards=[],
+            sealed=[{'sealedName': 'Booster Box', 'quantity': 1, 'marketValue': 95.00}],
+            bulk=None, holo=None, ex=None, shipping=None, payments=[],
+        )
+
+        captured = {}
+        with self.app.app_context(), patch.dict(
+            os.environ, {'KEY': base64.b64encode(b'0' * 16).decode()}
+        ), tempfile.TemporaryDirectory() as report_dir:
+            sale = SaleService(get_db(), receipt_service).process_sale(sale_input)
+            get_db().execute(
+                'UPDATE sales SET sale_date = "2026-06-04" WHERE id = ?', (sale.sale_id,)
+            )
+            get_db().commit()
+            pdf_path = Path(report_dir) / 'sales.pdf'
+            xls_path = Path(report_dir) / 'purchases.xlsx'
+            pdf_path.touch()
+            xls_path.touch()
+
+            def capture_pdf(month, year, cards, sealed, bulk, shipping):
+                captured['sealed'] = sealed
+                return str(pdf_path)
+
+            with patch.object(actions, 'generatePDF', side_effect=capture_pdf), patch.object(
+                actions, 'createBuyReport', return_value=str(xls_path)
+            ), self.app.test_request_context('/generateSoldReport?month=6&year=2026'):
+                response = inspect.unwrap(actions.generateSoldReport)()
+
+            response.close()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(captured['sealed'][0]['market_value'], 100.0)
+        self.assertEqual(captured['sealed'][0]['sell_price'], 95.0)
 
 
 if __name__ == '__main__':

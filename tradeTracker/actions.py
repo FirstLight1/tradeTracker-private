@@ -1136,7 +1136,10 @@ def generateSoldReport():
         'WHERE strftime("%Y", s.sale_date) = ? AND strftime("%m", s.sale_date) = ?', 
         (year, month)).fetchall()
    
-    sealed = db.execute('SELECT se.name,se.quantity, se.price, se.market_value, se.auction_id, s.sale_date FROM sealed se JOIN sales s ON se.sale_id = s.id WHERE strftime("%Y", s.sale_date) = ? AND strftime("%m", s.sale_date) = ? ',
+    sealed = db.execute('SELECT se.name, se.quantity, se.price, se.market_value, '
+                        'COALESCE(se.sell_price, se.market_value) AS sell_price, se.auction_id, s.sale_date '
+                        'FROM sealed se JOIN sales s ON se.sale_id = s.id '
+                        'WHERE strftime("%Y", s.sale_date) = ? AND strftime("%m", s.sale_date) = ? ',
                         (year, month)).fetchall()
     sealedList = [dict(item) for item in sealed]
 
@@ -1273,7 +1276,7 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
         + sum((item['price'] * item['quantity']) or 0 for item in sealed)
         + sum(item['quantity'] * get_bulk_item_unit_price(item['item_type']) for item in bulkAndHoloList)
     )
-    total_sell_price = sum(card['sell_price'] or 0 for card in cards) + sum((item['market_value'] * item['quantity']) or 0 for item in sealed) + sum(item['total_price'] or 0 for item in bulkAndHoloList)
+    total_sell_price = sum(card['sell_price'] or 0 for card in cards) + sum((item['sell_price'] * item['quantity']) or 0 for item in sealed) + sum(item['total_price'] or 0 for item in bulkAndHoloList)
     total_profit = total_sell_price - total_buy_price
     total_neg_margin = 0
     total_pos_margin = 0
@@ -1289,7 +1292,7 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
 
     for item in sealed:
         if item['auction_id'] is not None:
-            curr_margin = Decimal(item['market_value'] * item['quantity'] - item['price'] * item['quantity'])
+            curr_margin = Decimal(item['sell_price'] * item['quantity'] - item['price'] * item['quantity'])
             if curr_margin > 0:
                 total_pos_margin += curr_margin
             else:
@@ -1424,8 +1427,8 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
         name = item['name'] or 'N/A'
         quantity = str(item['quantity']) or "1"
         buy_price = f"{item['price']:.2f}€" if item['price'] else 'N/A'
-        sell_price = f"{item['market_value']:.2f}€" if item['market_value'] else 'N/A'
-        card_profit = f"{((item['market_value'] - item['price']) * item['quantity']):.2f}€" if item['market_value'] and item['price'] else 'N/A'
+        sell_price = f"{item['sell_price']:.2f}€" if item['sell_price'] else 'N/A'
+        card_profit = f"{((item['sell_price'] - item['price']) * item['quantity']):.2f}€" if item['sell_price'] and item['price'] else 'N/A'
         sold_date = format_iso_date(item['sale_date'])
 
         # Estimate height needed for product name
