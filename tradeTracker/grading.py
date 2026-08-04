@@ -147,4 +147,10 @@ def update_submission_status(submission_id):
     )
     return jsonify({'status': 'success'}), 200
 
+@bp.route('/gradeCard', methods=('POST',))
+def grade_card():
+    data = request.get_json()
+    gs = GradingService(get_db())
+
+    return jsonify({'status': 'success'})
 

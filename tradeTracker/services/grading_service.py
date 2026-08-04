@@ -122,3 +122,13 @@ class GradingService:
             self.db.rollback()
             return "Failed to update submission | " + str(e)
 
+    def grade_card(self, card_id: int, grade: models.GradingCompleteItems) -> str | None:
+        try:
+            self.db.execute('UPDATE grading_submission_cards SET grader = ?, grade_numeric = ?, grade_label = ?, qualifier = ?, cert_number = ?, post_grade_market_value = ? ',
+                            (grade.grader, grade.grade_numeric, grade.grade_label, grade.qualifier, grade.cert_number, grade.post_grade_market_value))
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            return "Failed to update submission | " + str(e)
+        return None
+

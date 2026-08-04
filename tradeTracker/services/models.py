@@ -133,6 +133,7 @@ class GradingSubmission:
 @dataclass
 class GradingCompleteItems:
     card_id: int
+    grader: str | None
     grade_numeric: float | None
     grade_label: str | None
     qualifier: str | None 
@@ -148,6 +149,11 @@ class GradingCompleteItems:
                 if item.get("grade_numeric") is not None
                 else None
             ),
+            grader=(
+                str(item["grader"])
+                if item.get("grader") is not None
+                else None
+                ),
             grade_label=(
                 str(item["grade_label"])
                 if item.get("grade_label") is not None
