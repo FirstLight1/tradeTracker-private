@@ -570,6 +570,111 @@ function createSealedModal(sid, auctionId, initialValue) {
     });
 }
 
+function gradingModal(cardId) {
+    const existingModal = document.querySelector('.grading-modal-overlay');
+    if (existingModal) {
+        existingModal.querySelector('#grading-grader')?.focus();
+        return;
+    }
+
+    const modal = document.createElement('div');
+    modal.classList.add('reciever-div', 'grading-modal-overlay');
+    modal.dataset.cardId = cardId;
+    modal.innerHTML = `
+        <div class="modal-content grading-status-modal" role="dialog" aria-modal="true" aria-labelledby="grading-modal-title">
+            <span class="close-modal" role="button" tabindex="0" aria-label="Close grading modal">&times;</span>
+            <p id="grading-modal-title">Grade card</p>
+            <div>
+                <label for="grading-grader">Grader</label>
+                <input id="grading-grader" name="grader" type="text" autocomplete="organization">
+            </div>
+            <div>
+                <label for="grading-grade-numeric">Numeric grade</label>
+                <input id="grading-grade-numeric" name="grade_numeric" type="number" min="0" step="0.01">
+            </div>
+            <div>
+                <label for="grading-grade-label">Grade label</label>
+                <input id="grading-grade-label" name="grade_label" type="text">
+            </div>
+            <div>
+                <label for="grading-qualifier">Qualifier</label>
+                <input id="grading-qualifier" name="qualifier" type="text">
+            </div>
+            <div>
+                <label for="grading-cert-number">Certificate number</label>
+                <input id="grading-cert-number" name="cert_number" type="text">
+            </div>
+            <div>
+                <label for="grading-market-value">Post-grade market value</label>
+                <input id="grading-market-value" name="post_grade_market_value" type="number" min="0" step="0.01">
+            </div>
+            <div class="modal-buttons">
+                <button class="grading-confirm-btn" type="button">Confirm</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const closeButton = modal.querySelector('.close-modal');
+    const close = () => {
+        document.removeEventListener('keydown', handleKeydown);
+        modal.remove();
+    };
+    const handleKeydown = (event) => {
+        if (event.key === 'Escape') close();
+    };
+
+    closeButton.addEventListener('click', close);
+    closeButton.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') close();
+    });
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) close();
+    });
+    modal.querySelector('.grading-confirm-btn').addEventListener('click', async () => {
+        const nullableText = (selector) => {
+            const value = modal.querySelector(selector).value.trim();
+            return value || null;
+        };
+        const nullableNumber = (selector) => {
+            const value = modal.querySelector(selector).value;
+            return value === '' ? null : Number(value);
+        };
+        const confirmButton = modal.querySelector('.grading-confirm-btn');
+        confirmButton.disabled = true;
+        confirmButton.textContent = 'Saving...';
+
+        try {
+            const response = await csrfFetch('/gradeCard', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    card_id: Number(modal.dataset.cardId),
+                    grader: nullableText('#grading-grader'),
+                    grade_numeric: nullableNumber('#grading-grade-numeric'),
+                    grade_label: nullableText('#grading-grade-label'),
+                    qualifier: nullableText('#grading-qualifier'),
+                    cert_number: nullableText('#grading-cert-number'),
+                    post_grade_market_value: nullableNumber('#grading-market-value'),
+                }),
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(result.message || `request failed with status ${response.status}`);
+            }
+            close();
+            renderAlert('Card grading saved', 'message');
+        } catch (error) {
+            renderAlert(`Error saving card grading: ${error}`, 'error');
+            confirmButton.disabled = false;
+            confirmButton.textContent = 'Confirm';
+        }
+    });
+    document.addEventListener('keydown', handleKeydown);
+    modal.querySelector('#grading-grader').focus();
+}
+
 window.handleSealedInput = function(input, container) {
     window.handleCardInput(input, {
         itemSelector: '.sealed-item-row',
@@ -2205,6 +2310,9 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
                                 <div class="">
                                     <button class="delete-card" data-id="${cardId}">Delete</button>
                                 </div>
+                                <div class="">
+                                ${isSealed ? '' : `<button class="grade-card" data-id="${cardId}">Grade</button>`}
+                                </div>
                             </div>
                         </div>
                         <span hidden class="card-id">${cardId}</span>
@@ -2216,10 +2324,21 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
         openButton.addEventListener('click', () => {
             const auctionDiv = itemLine.closest('.auction-tab');
             const auctionId = auctionDiv?.getAttribute('data-id');
-            const initialValue = itemLine.querySelector('.sealed-market-value').textContent.replace('€', '');
+            const initialValue = itemLine.querySelector('.sealed-market-value, .market-value-sealed').textContent.replace('€', '');
             createSealedModal(cardId, auctionId, initialValue);
             box?.remove();
             box = null;
+        });
+    } else {
+        const gradeButton = box.querySelector('.grade-card');
+        gradeButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!isSealed) {
+                const cardId = gradeButton.getAttribute('data-id');
+                gradingModal(cardId);
+                box?.remove();
+                box = null;
+            }
         });
     }
 
@@ -2228,11 +2347,11 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
     if (isSealed) {
         button.addEventListener('click', () => {
             const auctionDiv = itemLine.closest('.auction-tab');
-            const auctionId = auctionDiv.getAttribute('data-id');
+            const auctionId = auctionDiv?.getAttribute('data-id');
 
             const sealedData = {
                 name: DOMPurify.sanitize(itemLine.querySelector('.sealed-name').textContent),
-                market_value: DOMPurify.sanitize(itemLine.querySelector('.sealed-market-value').textContent.replace('€', ''))
+                market_value: DOMPurify.sanitize(itemLine.querySelector('.sealed-market-value, .market-value-sealed').textContent.replace('€', ''))
             };
 
             const available = Number(itemLine.getAttribute('data-quantity')) || null;
@@ -2269,7 +2388,7 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
         const auctionDiv = itemLine.closest('.auction-tab');
         const auctionId = auctionDiv?.getAttribute('data-id');
 
-        if (cardId.includes('s')) {
+        if (isSealed) {
             try {
                 const response = await csrfFetch(`/deleteSealed/${cardId}`, { method: 'DELETE' });
                 const data = await response.json();
@@ -2538,6 +2657,10 @@ async function loadAuctionContent(button) {
                             `;
 
                         cardsContainer.insertBefore(sealedDiv, cardsContainer.querySelector('.button-container'));
+                        sealedDiv.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                            spawnItemsContextMenu(sealedItem.sid, event, sealedDiv);
+                        });
                     });
 
                     // Sealed "Open" lives in the items context menu (spawnItemsContextMenu)
@@ -2925,6 +3048,9 @@ async function loadSealed(viewButton) {
                     const sealedDiv = document.createElement('div');
                     sealedDiv.classList.add('sealed-item');
                     sealedDiv.setAttribute('sid', sealedData.sid);
+                    if (sealedData.quantity != null) {
+                        sealedDiv.setAttribute('data-quantity', sealedData.quantity);
+                    }
                     const margin = (Number(DOMPurify.sanitize(sealedData.market_value)) - Number(DOMPurify.sanitize(sealedData.price))).toFixed(2);
                     const timeStamp = DOMPurify.sanitize(sealedData.date).replace('Z', '');
                     const date = new Date(timeStamp);
@@ -2937,60 +3063,12 @@ async function loadSealed(viewButton) {
                         <p class='market-value-sealed'>${DOMPurify.sanitize(sealedData.market_value)}</p>
                         <p class='margin'>${margin}</p>
                         <p class='add-date'>${formatedDate}</p>
-                        <div class="item-options">
-                            <span class="item-options-star" title="Show options">&#9733;</span>
-                            <div class="item-options-list">
-                                <div class="item-option">
-                                    <button class='open-sealed'>Open</button>
-                                </div>
-                                <div class="item-option">
-                                    <button class='add-to-cart'>Add to cart</button>
-                                </div>
-                                <div class="item-option">
-                                    <button class='delete-sealed'>Delete</button>
-                                </div>
-                            </div>
-                        </div>
+                        <p></p>
                         `
 
-                    const addToCart = sealedDiv.querySelector('.add-to-cart');
-                    addToCart.addEventListener('click', () => {
-                        const available = sealedData.quantity ? Number(sealedData.quantity) : null;
-                        addSealedToCart(sealedData, sealedData.sid, null, 1, available)
-                    });
-
-                    const openSealedButton = sealedDiv.querySelector('.open-sealed');
-                    openSealedButton.addEventListener('click', () => {
-                        const sid = sealedDiv.getAttribute('sid');
-                        const initialValue = sealedDiv.querySelector('.sealed-market-value').textContent.replace('€', '');
-                        createSealedModal(sid, 0, initialValue);
-                    });
-
-
-                    const removeSealed = sealedDiv.querySelector('.delete-sealed');
-                    removeSealed.addEventListener('click', async () => {
-
-                        if (removeSealed.textContent === 'Confirm') {
-                            const response = await csrfFetch(`/deleteSealed/${sealedData.sid}`, { method: 'DELETE' })
-                            const data = await response.json();
-
-                            if (data.status === 'success') {
-                                sealedDiv.remove();
-                            }
-                        } else {
-                            removeSealed.textContent = 'Confirm';
-                            const timerID = setTimeout(() => {
-                                removeSealed.textContent = 'Delete';
-                            }, 3000);
-                            // Remove confirmation if user clicks elsewhere
-                            document.addEventListener('click', function handler(e) {
-                                if (e.target !== removeSealed) {
-                                    removeSealed.textContent = 'Delete';
-                                    document.removeEventListener('click', handler);
-                                    clearTimeout(timerID);
-                                }
-                            });
-                        }
+                    sealedDiv.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        spawnItemsContextMenu(sealedData.sid, event, sealedDiv);
                     });
                     contentDiv.append(sealedDiv);
                 })

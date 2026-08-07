@@ -148,9 +148,21 @@ def update_submission_status(submission_id):
     return jsonify({'status': 'success'}), 200
 
 @bp.route('/gradeCard', methods=('POST',))
+@verify_token
 def grade_card():
-    data = request.get_json()
+    data = request.get_json(silent=True)
+
+    try:
+        grade = GradingCompleteItems.from_dict(data)
+    except (KeyError, TypeError, ValueError) as e:
+        logger.warning('Invalid card grading payload | reason: %s', e)
+        return jsonify({'status': 'error', 'message': 'Invalid card grading payload'}), 400
+
     gs = GradingService(get_db())
+    err = gs.grade_card(grade.card_id, grade)
+    if err:
+        logger.warning('Failed to grade card | card_id: %s | reason: %s', grade.card_id, err)
+        return jsonify({'status': 'error', 'message': f'{err}, Error code: Gx05'}), 400
 
     return jsonify({'status': 'success'})
 

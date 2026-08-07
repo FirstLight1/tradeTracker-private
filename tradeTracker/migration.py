@@ -914,7 +914,7 @@ def createGradingTables(db_path):
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS grading_submission_cards (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    submission_id INTEGER NOT NULL,
+                    submission_id INTEGER,
                     card_id INTEGER NOT NULL,
                     grader TEXT NOT NULL,
                     is_current INTEGER NOT NULL DEFAULT 1,
