@@ -760,12 +760,16 @@ function renderCartLine(line) {
     line.element = cardDiv;
 
     const updateDisplay = () => {
+        const gradeDisplay = line.grading
+            ? [line.grading.grader, line.grading.grade_numeric, line.grading.grade_label, line.grading.qualifier]
+                .filter(value => value !== null && value !== undefined && value !== '').join(' ') || 'Graded'
+            : line.condition;
         const minusDisabled = line.cardIds.length <= 1 ? 'disabled' : '';
         const plusDisabled = !line.canIncrement ? 'disabled' : '';
         cardDiv.innerHTML = `
             <p class="cart-card-name">${DOMPurify.sanitize(line.cardName)}</p>
             <p class="cart-card-num">${DOMPurify.sanitize(line.cardNum)}</p>
-            <p class="cart-condition">${DOMPurify.sanitize(line.condition)}</p>
+            <p class="cart-condition${line.grading ? ' graded' : ''}">${DOMPurify.sanitize(gradeDisplay)}</p>
             <p class='market-value-invoice'>${DOMPurify.sanitize(line.marketValue)}€</p>
             <div class="qty-controls">
                 <button class="qty-minus" ${minusDisabled}>-</button>
@@ -1662,7 +1666,7 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
         }
 
         // Check if a matching CartLine already exists
-        const existing = cartLines.find(l => l.matches(card.cardName, card.cardNum, card.condition));
+        const existing = cartLines.find(l => l.matches(card.cardName, card.cardNum, card.condition, card.grading));
         if (existing) {
             existing.cardIds.push(cardId);
             existingIDs.add(cardId);
@@ -1680,7 +1684,7 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
             const line = new CartLine(
                 card.cardName, card.cardNum, card.condition,
                 card.auctionName || '', card.marketValue || '',
-                [cardId]
+                [cardId], card.grading
             );
             cartLines.push(line);
             existingIDs.add(cardId);
@@ -1690,7 +1694,7 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
     }
 
     // Entry A: From search results (no cardId)
-    const existing = cartLines.find(l => l.matches(card.cardName, card.cardNum, card.condition));
+    const existing = cartLines.find(l => l.matches(card.cardName, card.cardNum, card.condition, card.grading));
     if (existing) {
         // Try to increment existing line
         if (!existing.canIncrement) {
@@ -1725,6 +1729,8 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
                 card_name: card.cardName,
                 card_num: card.cardNum,
                 condition: card.condition,
+                is_graded: card.grading !== null,
+                ...card.grading,
                 exclude_ids: [...existingIDs]
             })
         });
@@ -1740,7 +1746,7 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
         const line = new CartLine(
             card.cardName, card.cardNum, card.condition,
             card.auctionName || '', card.marketValue || '',
-            data.card_ids
+            data.card_ids, card.grading
         );
         cartLines.push(line);
         existingIDs.add(line.cardIds[0]);
@@ -2190,7 +2196,17 @@ function displaySearchResults(results, resultsQueue, searchInput) {
             card.cardNum = result.card_num;
             card.condition = result.condition;
             card.marketValue = result.market_value;
+            card.grading = result.is_graded ? {
+                grader: result.grader,
+                grade_numeric: result.grade_numeric != null ? String(result.grade_numeric) : null,
+                grade_label: result.grade_label,
+                qualifier: result.qualifier,
+            } : null;
             const safeConditionClass = sanitizeClassToken(result.condition || 'Unknown');
+            const gradeDisplay = card.grading
+                ? [result.grader, result.grade_numeric, result.grade_label, result.qualifier]
+                    .filter(value => value !== null && value !== undefined && value !== '').join(' ') || 'Graded'
+                : result.condition || 'Unknown';
 
             const availableCount = result.available_count ? result.available_count : 1;
             let pendingQty = 1;
@@ -2199,7 +2215,9 @@ function displaySearchResults(results, resultsQueue, searchInput) {
             div.innerHTML = `
                 <p class="result result-card-name">${DOMPurify.sanitize(result.card_name || 'N/A')}</p>
                 <p class="result result-card-num">${DOMPurify.sanitize(result.card_num || 'N/A')}</p>
-                <p class="result result-condition ${safeConditionClass}">${DOMPurify.sanitize(result.condition || 'Unknown')}</p>
+                <p class="result result-condition ${safeConditionClass}${card.grading ? ' graded' : ''}">
+                    ${DOMPurify.sanitize(gradeDisplay)}
+                </p>
                 <p class="result result-market-value">${DOMPurify.sanitize(result.market_value ? result.market_value + '€' : 'N/A')}</p>
                 <p class="result result-quantity">${pendingQty} / ${availableCount}</p>
                 <p class="result result-auction-name">${DOMPurify.sanitize(result.auction_name || result.auction_id - 1)}</p>
@@ -2376,7 +2394,13 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
             const card = new CardStruct();
             card.cardName = itemLine.querySelector('.card-name').textContent;
             card.cardNum = itemLine.querySelector('.card-num').textContent;
-            card.condition = itemLine.querySelector('.condition').textContent;
+            card.condition = itemLine.dataset.condition || itemLine.querySelector('.condition').textContent;
+            card.grading = itemLine.dataset.isGraded === 'true' ? {
+                grader: itemLine.dataset.grader || null,
+                grade_numeric: itemLine.dataset.gradeNumeric || null,
+                grade_label: itemLine.dataset.gradeLabel || null,
+                qualifier: itemLine.dataset.qualifier || null,
+            } : null;
             const marketValueText = itemLine.querySelector('.market-value').textContent;
             card.marketValue = marketValueText ? marketValueText.replace('€', '') : null;
             await addToShoppingCart(card, auctionId, cardId);
@@ -2480,6 +2504,11 @@ async function loadAuctionContent(button) {
                         cardDiv.classList.add('card');
                         cardDiv.setAttribute('data-id', safeCardId);
                         cardDiv.dataset.condition = card.condition || '';
+                        cardDiv.dataset.isGraded = card.grading_is_current === 1 ? 'true' : 'false';
+                        cardDiv.dataset.grader = card.grader ?? '';
+                        cardDiv.dataset.gradeNumeric = card.grade_numeric ?? '';
+                        cardDiv.dataset.gradeLabel = card.grade_label ?? '';
+                        cardDiv.dataset.qualifier = card.qualifier ?? '';
                         cardDiv.innerHTML = `
                         ${renderField(DOMPurify.sanitize(card.card_name), 'text', ['card-info', 'card-name'], 'Card Name', 'card_name')}
                         ${renderField(DOMPurify.sanitize(card.card_num), 'text', ['card-info', 'card-num'], 'Card Number', 'card_num')}

@@ -47,7 +47,10 @@
     color: #DC3545;
 }
 
-.condition.graded {
+.condition.graded,
+.result-condition.graded,
+.item-condition.graded,
+.cart-condition.graded {
     color: #D8B4FE;
 }
 
@@ -145,6 +148,12 @@ h1 {
 
 .search-results div:focus {
     outline: none;
+}
+
+.search-results .result-condition {
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .highlighted-search-result {
