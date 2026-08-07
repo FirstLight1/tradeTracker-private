@@ -675,6 +675,16 @@ function gradingModal(cardId) {
     modal.querySelector('#grading-grader').focus();
 }
 
+function cardConditionDisplay(card) {
+    if (card.grading_is_current === 1) {
+        const fullGrade = [card.grader, card.grade_numeric, card.grade_label, card.qualifier]
+            .filter(value => value !== null && value !== undefined && value !== '')
+            .join(' ');
+        return fullGrade || 'Graded';
+    }
+    return card.condition || 'Unknown';
+}
+
 window.handleSealedInput = function(input, container) {
     window.handleCardInput(input, {
         itemSelector: '.sealed-item-row',
@@ -2463,14 +2473,17 @@ async function loadAuctionContent(button) {
                 `;
                     cards.forEach(card => {
                         const safeCardId = sanitizeNumericId(card.id);
+                        const conditionDisplay = cardConditionDisplay(card);
                         const safeCardConditionClass = sanitizeClassToken(card.condition || 'Unknown');
+                        const gradingClass = card.grading_is_current === 1 ? ' graded' : '';
                         const cardDiv = document.createElement('div');
                         cardDiv.classList.add('card');
                         cardDiv.setAttribute('data-id', safeCardId);
+                        cardDiv.dataset.condition = card.condition || '';
                         cardDiv.innerHTML = `
                         ${renderField(DOMPurify.sanitize(card.card_name), 'text', ['card-info', 'card-name'], 'Card Name', 'card_name')}
                         ${renderField(DOMPurify.sanitize(card.card_num), 'text', ['card-info', 'card-num'], 'Card Number', 'card_num')}
-                        <p class='card-info condition ${safeCardConditionClass}' data-field="condition">${DOMPurify.sanitize(card.condition) ? DOMPurify.sanitize(card.condition) : 'Unknown'}</p>
+                        <p class='card-info condition ${safeCardConditionClass}${gradingClass}' data-field="condition">${DOMPurify.sanitize(conditionDisplay)}</p>
                         ${renderField(card.card_price ? DOMPurify.sanitize(card.card_price) + '€' : null, 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
                         ${renderField(card.market_value ? DOMPurify.sanitize(card.market_value) + '€' : null, 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
                         ${renderField(card.card_price !== null && card.market_value !== null ? (card.market_value - card.card_price).toFixed(2) + '€' : ' ', 'text', ['card-info', 'profit'], 'profit', true)}
@@ -2496,6 +2509,7 @@ async function loadAuctionContent(button) {
                             const cardDiv = event.target.closest('.card');
                             const cardId = cardDiv.getAttribute('data-id');
                             if (event.target.classList.contains('condition')) {
+                                if (event.target.classList.contains('graded')) return;
                                 const value = event.target.textContent.trim();
                                 const select = document.createElement('select');
                                 const options = ['Mint', 'Near Mint', 'Excellent', 'Good', 'Light Played', 'Played', 'Poor'];
@@ -2518,10 +2532,10 @@ async function loadAuctionContent(button) {
                                     p.classList.add('card-info', 'condition', classValue);
                                     p.textContent = selectedValue || value;
                                     select.replaceWith(p);
+                                    cardDiv.dataset.condition = p.textContent;
                                     patchValue(cardId, p.textContent, dataset);
                                 });
-                            }
-                            if (event.target.tagName === "P") {
+                            } else if (event.target.tagName === "P") {
                                 let value = event.target.textContent.replace('€', '');
                                 if (isNaN(value)) {
                                     value = value.toUpperCase();
@@ -2579,7 +2593,7 @@ async function loadAuctionContent(button) {
                             const card = new CardStruct();
                             card.cardName = cardDiv.querySelector('.card-name').textContent;
                             card.cardNum = cardDiv.querySelector('.card-num').textContent;
-                            card.condition = cardDiv.querySelector('.condition').textContent;
+                            card.condition = cardDiv.dataset.condition;
                             const marketValueText = cardDiv.querySelector('.market-value').textContent;
                             card.marketValue = marketValueText ? marketValueText.replace('€', '') : null;
                             await addToShoppingCart(card, auctionId, cardId);

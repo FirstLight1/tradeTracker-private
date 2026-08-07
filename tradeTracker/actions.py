@@ -428,8 +428,11 @@ def addSealed():
 def loadCards(auction_id):
     db = get_db()
     cards = db.execute(
-        'SELECT c.* FROM cards c '
+        'SELECT c.*, gsc.grader, gsc.grade_numeric, gsc.grade_label, '
+        'gsc.qualifier, gsc.is_current AS grading_is_current FROM cards c '
         'LEFT JOIN sale_items si ON c.id = si.card_id '
+        'LEFT JOIN grading_submission_cards gsc '
+        'ON c.id = gsc.card_id AND gsc.is_current = 1 '
         'WHERE c.auction_id = ? AND si.card_id IS NULL', (auction_id,)).fetchall()
     return jsonify([dict(card) for card in cards]),200
 
@@ -656,10 +659,14 @@ def loadSoldCards(sale_id):
     ).fetchone()
 
     cards = db.execute(
-        'SELECT c.*, si.sell_price as invoice_sell_price, si.sold_cm, si.sold, s.sale_date, s.invoice_number '
+        'SELECT c.*, si.sell_price as invoice_sell_price, si.sold_cm, si.sold, s.sale_date, s.invoice_number, '
+        'gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, '
+        'gsc.is_current AS grading_is_current '
         'FROM cards c '
         'JOIN sale_items si ON c.id = si.card_id '
         'JOIN sales s ON si.sale_id = s.id '
+        'LEFT JOIN grading_submission_cards gsc '
+        'ON c.id = gsc.card_id AND gsc.is_current = 1 '
         'WHERE si.sale_id = ?',
         (sale_id,)
     ).fetchall()
