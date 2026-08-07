@@ -21,6 +21,7 @@ def db(tmp_path):
         CREATE TABLE cards (
             id INTEGER PRIMARY KEY,
             card_name TEXT NOT NULL,
+            card_price REAL,
             market_value REAL,
             sold_date TEXT
         );
@@ -34,10 +35,10 @@ def db(tmp_path):
     connection.execute("PRAGMA foreign_keys = ON")
     connection.executescript(
         """
-        INSERT INTO cards (id, card_name, market_value, sold_date) VALUES
-            (1, 'Charizard', 100, NULL),
-            (2, 'Blastoise', 60, NULL),
-            (3, 'Sold card', 20, '2026-07-01');
+        INSERT INTO cards (id, card_name, card_price, market_value, sold_date) VALUES
+            (1, 'Charizard', 40, 100, NULL),
+            (2, 'Blastoise', 20, 60, NULL),
+            (3, 'Sold card', 10, 20, '2026-07-01');
         """
     )
     yield connection
@@ -79,8 +80,10 @@ def test_create_and_read_submission_allocates_costs(db):
     assert cards_by_id[1]["grader"] == "PSA"
     assert cards_by_id[1]["allocated_shared_cost"] == pytest.approx(5)
     assert cards_by_id[1]["total_grading_cost"] == pytest.approx(9.5)
+    assert cards_by_id[1]["landed_cost"] == pytest.approx(49.5)
     assert cards_by_id[2]["allocated_shared_cost"] == pytest.approx(15)
     assert cards_by_id[2]["total_grading_cost"] == pytest.approx(22.5)
+    assert cards_by_id[2]["landed_cost"] == pytest.approx(42.5)
 
 
 @pytest.mark.parametrize("card_id", [3, 999])
@@ -158,7 +161,7 @@ def test_complete_submission_rolls_back_if_card_is_not_in_submission(db):
         1, [GradingCompleteItems(2, 9, "Mint", None, "CERT-2", 95)]
     )
 
-    assert "not in submission" in error
+    assert "every card" in error
     assert db.execute(
         "SELECT status FROM grading_submissions WHERE id = 1"
     ).fetchone()[0] == GradeStatus.PREPARING
@@ -176,7 +179,7 @@ def test_complete_submission_rejects_cancelled_submission(db):
         1, [GradingCompleteItems(1, 9, "Mint", None, "CERT-1", 180)]
     )
 
-    assert "not in submission" in error
+    assert "every card" in error
     status = db.execute(
         "SELECT status FROM grading_submissions WHERE id = 1"
     ).fetchone()[0]
@@ -185,6 +188,20 @@ def test_complete_submission_rejects_cancelled_submission(db):
     ).fetchone()
     assert status == GradeStatus.CANCELLED
     assert tuple(card) == (None, 0)
+
+
+def test_complete_submission_rejects_partial_batch(db):
+    service = GradingService(db)
+    assert service.create_submission(make_submission()) is None
+
+    error = service.complete_submission(
+        1, [GradingCompleteItems(1, 9, "Mint", None, "CERT-1", 180)]
+    )
+
+    assert "every card" in error
+    assert db.execute(
+        "SELECT status FROM grading_submissions WHERE id = 1"
+    ).fetchone()[0] == GradeStatus.PREPARING
 
 
 def test_update_submission_status_updates_notes(db):

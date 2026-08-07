@@ -429,7 +429,7 @@ def loadCards(auction_id):
     db = get_db()
     cards = db.execute(
         'SELECT c.*, gsc.grader, gsc.grade_numeric, gsc.grade_label, '
-        'gsc.qualifier, gsc.is_current AS grading_is_current FROM cards c '
+        'gsc.qualifier, gsc.cert_number, gsc.is_current AS grading_is_current FROM cards c '
         'LEFT JOIN sale_items si ON c.id = si.card_id '
         'LEFT JOIN grading_submission_cards gsc '
         'ON c.id = gsc.card_id AND gsc.is_current = 1 '
@@ -660,7 +660,7 @@ def loadSoldCards(sale_id):
 
     cards = db.execute(
         'SELECT c.*, si.sell_price as invoice_sell_price, si.sold_cm, si.sold, s.sale_date, s.invoice_number, '
-        'gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, '
+        'gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, gsc.cert_number, '
         'gsc.is_current AS grading_is_current '
         'FROM cards c '
         'JOIN sale_items si ON c.id = si.card_id '
@@ -2223,7 +2223,8 @@ def process_sold_csv(files,db):
                "SELECT c.id as id, card_name as itemName, card_num, 1 as quantity, market_value, auction_id, 'card' as item_type, c.condition as condition, cardMarketID as cardmarketId "
                'FROM cards c '
                'LEFT JOIN sale_items si ON si.card_id = c.id '
-              f'WHERE si.card_id IS NULL AND cardMarketID IN ({placehoders}) '
+               'LEFT JOIN grading_submission_cards gsc ON gsc.card_id = c.id AND gsc.is_current = 1 '
+              f'WHERE si.card_id IS NULL AND gsc.id IS NULL AND cardMarketID IN ({placehoders}) '
                'ORDER BY id ASC ', ids + ids)
     allItems = pd.DataFrame(cur.fetchall(), columns=[c[0] for c in cur.description])
     allItemsExpanded = allItems.loc[allItems.index.repeat(allItems['quantity'])].reset_index(drop=True)
@@ -2629,14 +2630,14 @@ def search():
         card_grouping = "ORDER BY c.id ASC LIMIT 8" if individual_cards else (
             "GROUP BY UPPER(c.card_name), UPPER(c.card_num), UPPER(c.condition), "
             "CASE WHEN gsc.id IS NULL THEN 0 ELSE 1 END, "
-            "gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier "
+            "gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, gsc.cert_number "
             "ORDER BY c.id ASC LIMIT 8"
         )
         card_matches = db.execute(
             f"SELECT c.card_name, c.card_num, c.condition, c.market_value, c.id, c.auction_id, "
             f"{'1' if individual_cards else 'COUNT(*)'} as available_count, a.auction_name, "
             "CASE WHEN gsc.id IS NULL THEN 0 ELSE 1 END AS is_graded, "
-            "gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier FROM cards c "
+            "gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, gsc.cert_number FROM cards c "
             "JOIN auctions a ON c.auction_id = a.id "
             "LEFT JOIN sale_items si ON c.id = si.card_id "
             "LEFT JOIN grading_submission_cards gsc "
@@ -2715,11 +2716,12 @@ def getCardIds():
                 ' AND gsc.id IS NOT NULL '
                 "AND (gsc.submission_id IS NULL OR gs.status = 'graded') "
                 'AND gsc.grader IS ? AND gsc.grade_numeric IS ? '
-                'AND gsc.grade_label IS ? AND gsc.qualifier IS ?'
+                'AND gsc.grade_label IS ? AND gsc.qualifier IS ? '
+                "AND COALESCE(gsc.cert_number, '') = COALESCE(?, '')"
             )
             params.extend([
                 data.get('grader'), data.get('grade_numeric'),
-                data.get('grade_label'), data.get('qualifier'),
+                data.get('grade_label'), data.get('qualifier'), data.get('cert_number'),
             ])
         else:
             query += ' AND gsc.id IS NULL'

@@ -72,6 +72,7 @@ def migrate_database(db_path):
         addUniqueIndexOnSalesCorrectionRecord(db_path)
         addSellPriceToSealedTable(db_path)
         createGradingTables(db_path)
+        addGradedSaleCostColumns(db_path)
         print("Database migration check complete.")
     except sqlite3.Error as e:
         print(f"Database migration failed: {e}")
@@ -950,6 +951,33 @@ def createGradingTables(db_path):
                 CREATE INDEX IF NOT EXISTS idx_grading_submission_cards_card
                 ON grading_submission_cards(card_id)
             """)
+    finally:
+        conn.close()
+
+
+def addGradedSaleCostColumns(db_path):
+    """Add internal landed-cost snapshots to sales without changing tax profit."""
+    conn = sqlite3.connect(db_path)
+    try:
+        with conn:
+            columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(sale_items)")
+            }
+            if not columns:
+                return
+            added_internal_cost = "internal_cost" not in columns
+            added_internal_profit = "internal_profit" not in columns
+            if "internal_cost" not in columns:
+                conn.execute("ALTER TABLE sale_items ADD COLUMN internal_cost REAL")
+            if "internal_profit" not in columns:
+                conn.execute("ALTER TABLE sale_items ADD COLUMN internal_profit REAL")
+            if added_internal_cost:
+                conn.execute(
+                    "UPDATE sale_items SET internal_cost = "
+                    "(SELECT card_price FROM cards WHERE cards.id = sale_items.card_id)"
+                )
+            if added_internal_profit:
+                conn.execute("UPDATE sale_items SET internal_profit = profit")
     finally:
         conn.close()
 

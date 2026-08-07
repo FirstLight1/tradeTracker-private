@@ -133,7 +133,12 @@ export class CartLine {
             cardName: this.cardName,
             cardNum: this.cardNum,
             condition: this.condition,
-            marketValue: this.marketValue
+            marketValue: this.marketValue,
+            displayCondition: this.grading
+                ? [this.grading.grader, this.grading.grade_numeric, this.grading.grade_label, this.grading.qualifier]
+                    .filter(value => value !== null && value !== undefined && value !== '').join(' ')
+                : this.condition,
+            certNumber: this.grading?.cert_number || null
         }));
     }
 

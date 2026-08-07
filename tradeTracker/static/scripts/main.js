@@ -2201,6 +2201,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
                 grade_numeric: result.grade_numeric != null ? String(result.grade_numeric) : null,
                 grade_label: result.grade_label,
                 qualifier: result.qualifier,
+                cert_number: result.cert_number,
             } : null;
             const safeConditionClass = sanitizeClassToken(result.condition || 'Unknown');
             const gradeDisplay = card.grading
@@ -2400,6 +2401,7 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
                 grade_numeric: itemLine.dataset.gradeNumeric || null,
                 grade_label: itemLine.dataset.gradeLabel || null,
                 qualifier: itemLine.dataset.qualifier || null,
+                cert_number: itemLine.dataset.certNumber || null,
             } : null;
             const marketValueText = itemLine.querySelector('.market-value').textContent;
             card.marketValue = marketValueText ? marketValueText.replace('€', '') : null;
@@ -2509,6 +2511,7 @@ async function loadAuctionContent(button) {
                         cardDiv.dataset.gradeNumeric = card.grade_numeric ?? '';
                         cardDiv.dataset.gradeLabel = card.grade_label ?? '';
                         cardDiv.dataset.qualifier = card.qualifier ?? '';
+                        cardDiv.dataset.certNumber = card.cert_number ?? '';
                         cardDiv.innerHTML = `
                         ${renderField(DOMPurify.sanitize(card.card_name), 'text', ['card-info', 'card-name'], 'Card Name', 'card_name')}
                         ${renderField(DOMPurify.sanitize(card.card_num), 'text', ['card-info', 'card-num'], 'Card Number', 'card_num')}

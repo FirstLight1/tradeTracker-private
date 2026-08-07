@@ -1,6 +1,6 @@
 import sqlite3
 
-from tradeTracker.migration import createGradingTables
+from tradeTracker.migration import addGradedSaleCostColumns, createGradingTables
 
 
 def test_create_grading_tables_is_idempotent(tmp_path):
@@ -73,3 +73,30 @@ def test_create_grading_tables_completes_partial_migration(tmp_path):
         conn.close()
 
     assert child_exists == (1,)
+
+
+def test_add_graded_sale_cost_columns_backfills_existing_sales(tmp_path):
+    db_path = tmp_path / "graded-sale-cost.sqlite"
+    conn = sqlite3.connect(db_path)
+    conn.executescript("""
+        CREATE TABLE cards (id INTEGER PRIMARY KEY, card_price REAL);
+        CREATE TABLE sale_items (
+            id INTEGER PRIMARY KEY, card_id INTEGER, sell_price REAL, profit REAL
+        );
+        INSERT INTO cards VALUES (1, 40);
+        INSERT INTO sale_items VALUES (1, 1, 90, 50);
+    """)
+    conn.close()
+
+    addGradedSaleCostColumns(db_path)
+    addGradedSaleCostColumns(db_path)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT internal_cost, internal_profit FROM sale_items WHERE id = 1"
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert row == (40, 50)

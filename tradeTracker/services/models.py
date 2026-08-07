@@ -133,12 +133,12 @@ class GradingSubmission:
 @dataclass
 class GradingCompleteItems:
     card_id: int
-    grader: str | None
     grade_numeric: float | None
     grade_label: str | None
     qualifier: str | None 
     cert_number: str | None
     post_grade_market_value: float | None
+    grader: str | None = None
 
     @classmethod
     def from_dict(cls, item: dict[str, Any]) -> "GradingCompleteItems":

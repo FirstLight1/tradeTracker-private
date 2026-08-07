@@ -31,9 +31,10 @@ class GradingService:
             if total_submitted_value <= 0:
                 raise ValueError('Total submitted value must be greater than zero')
 
+            card_prices = {}
             for card in submission.cards:
                 available_card = self.db.execute(
-                    'SELECT c.id FROM cards c WHERE c.id = ? AND c.sold_date IS NULL '
+                    'SELECT c.id, c.card_price FROM cards c WHERE c.id = ? AND c.sold_date IS NULL '
                     'AND NOT EXISTS ('
                     'SELECT 1 FROM grading_submission_cards gsc '
                     'WHERE gsc.card_id = c.id AND gsc.is_current = 1)',
@@ -41,6 +42,7 @@ class GradingService:
                 ).fetchone()
                 if not available_card:
                     raise ValueError(f'Card with id:{card.card_id} is not available')
+                card_prices[card.card_id] = available_card['card_price']
 
             curr.execute('INSERT INTO grading_submissions (grader, service_level, status, outbound_shipping_cost, return_shipping_cost, insurance_cost, customs_duty_cost, other_shared_cost, submitted_at, returned_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                             (submission.grader, submission.service_level, submission.status, submission.outbound_shipping_cost, submission.return_shipping_cost, submission.insurance_cost, submission.customs_duty_cost, submission.other_shared_cost, submission.submitted_at, submission.returned_at, submission.notes))
@@ -59,12 +61,17 @@ class GradingService:
                 curr.execute(
                     'INSERT INTO grading_submission_cards '
                     '(submission_id, card_id, grader, grading_fee, prep_fee, submitted_value, '
-                    'allocated_shared_cost, upcharge_fee, total_grading_cost, cert_number) '
-                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    'allocated_shared_cost, upcharge_fee, total_grading_cost, landed_cost, cert_number) '
+                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                     (
                         submission_id, card.card_id, card.grader or submission.grader,
                         card.grading_fee, card.prep_fee, card.submitted_value,
-                        shared_cost, card.upcharge, total_card_cost, None,
+                        shared_cost, card.upcharge, total_card_cost,
+                        (
+                            card_prices[card.card_id] + total_card_cost
+                            if card_prices[card.card_id] is not None
+                            else None
+                        ), None,
                     ),
                 )
 
@@ -87,6 +94,20 @@ class GradingService:
     def complete_submission(self, submission_id: int, items: list[models.GradingCompleteItems]) -> str | None:
         try:
             self.db.execute('BEGIN IMMEDIATE')
+            expected_card_ids = {
+                row[0] for row in self.db.execute(
+                    'SELECT card_id FROM grading_submission_cards '
+                    'WHERE submission_id = ? AND is_current = 1',
+                    (submission_id,),
+                ).fetchall()
+            }
+            completed_card_ids = {item.card_id for item in items}
+            if (
+                not expected_card_ids
+                or completed_card_ids != expected_card_ids
+                or len(items) != len(expected_card_ids)
+            ):
+                raise ValueError('Completion must include every card in the submission')
             for item in items:
                 updated = self.db.execute(
                     'UPDATE grading_submission_cards SET grade_numeric = ?, grade_label = ?, '
@@ -113,6 +134,8 @@ class GradingService:
 
     def update_submission_status(self, submission_id: int, status: models.GradeStatus, notes: str | None = None) -> str | None:
         try:
+            if status == models.GradeStatus.GRADED:
+                raise ValueError('Use complete_submission to mark a submission graded')
             self.db.execute('UPDATE grading_submissions SET status = ?, notes = ? WHERE id = ?', (status, notes, submission_id))
             if status == models.GradeStatus.RETURNED or status == models.GradeStatus.CANCELLED:
                 self.cancel_submission(submission_id)

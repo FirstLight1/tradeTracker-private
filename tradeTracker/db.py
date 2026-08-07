@@ -210,6 +210,8 @@ CREATE TABLE sale_items (
     sold_cm INTEGER DEFAULT 0,
     sold INTEGER DEFAULT 0,
     profit REAL,
+    internal_cost REAL,
+    internal_profit REAL,
     FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE SET NULL,
     FOREIGN KEY (card_id) REFERENCES cards (id) ON DELETE CASCADE
 );
