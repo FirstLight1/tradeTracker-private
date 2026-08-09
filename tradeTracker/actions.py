@@ -429,10 +429,15 @@ def loadCards(auction_id):
     db = get_db()
     cards = db.execute(
         'SELECT c.*, gsc.grader, gsc.grade_numeric, gsc.grade_label, '
-        'gsc.qualifier, gsc.cert_number, gsc.is_current AS grading_is_current FROM cards c '
+        'gsc.qualifier, gsc.cert_number, gsc.is_current AS grading_is_current, '
+        'gsc.submission_id AS grading_submission_id, gs.status AS grading_submission_status, '
+        "CASE WHEN gsc.id IS NULL THEN 'raw' "
+        "WHEN gsc.submission_id IS NULL OR gs.status = 'graded' THEN 'graded' "
+        "ELSE 'at_grader' END AS grading_state FROM cards c "
         'LEFT JOIN sale_items si ON c.id = si.card_id '
         'LEFT JOIN grading_submission_cards gsc '
         'ON c.id = gsc.card_id AND gsc.is_current = 1 '
+        'LEFT JOIN grading_submissions gs ON gsc.submission_id = gs.id '
         'WHERE c.auction_id = ? AND si.card_id IS NULL', (auction_id,)).fetchall()
     return jsonify([dict(card) for card in cards]),200
 

@@ -664,7 +664,7 @@ function gradingModal(cardId) {
                 throw new Error(result.message || `request failed with status ${response.status}`);
             }
             close();
-            renderAlert('Card grading saved', 'message');
+            window.location.reload();
         } catch (error) {
             renderAlert(`Error saving card grading: ${error}`, 'error');
             confirmButton.disabled = false;
@@ -676,7 +676,16 @@ function gradingModal(cardId) {
 }
 
 function cardConditionDisplay(card) {
-    if (card.grading_is_current === 1) {
+    if (card.grading_state === 'at_grader') {
+        const statusLabels = {
+            preparing: 'Preparing for grading',
+            sent_for_grading: 'Sent for grading',
+            received_by_grader: 'At grader',
+        };
+        const status = statusLabels[card.grading_submission_status] || 'At grader';
+        return [status, card.grader].filter(Boolean).join(' - ');
+    }
+    if (card.grading_state === 'graded') {
         const fullGrade = [card.grader, card.grade_numeric, card.grade_label, card.qualifier]
             .filter(value => value !== null && value !== undefined && value !== '')
             .join(' ');
@@ -2323,6 +2332,11 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
     box?.remove();
 
     const isSealed = cardId.includes('s');
+    const gradingState = isSealed ? null : (itemLine.dataset.gradingState || 'raw');
+    const canAddToCart = isSealed || gradingState !== 'at_grader';
+    const canDelete = isSealed || gradingState === 'raw';
+    const canGrade = !isSealed && gradingState === 'raw';
+    const canViewGrading = !isSealed && gradingState === 'at_grader';
     box = document.createElement('div');
     box.classList.add("context-menu");
     //TODO: move styles to css
@@ -2333,15 +2347,18 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
                                 ${isSealed ? `<div class="">
                                     <button class="open-sealed-item">Open</button>
                                 </div>` : ''}
-                                <div class="">
+                                ${canAddToCart ? `<div class="">
                                     <button class="add-to-cart">Add to cart</button>
-                                </div>
-                                <div class="">
+                                </div>` : ''}
+                                ${canDelete ? `<div class="">
                                     <button class="delete-card" data-id="${cardId}">Delete</button>
-                                </div>
-                                <div class="">
-                                ${isSealed ? '' : `<button class="grade-card" data-id="${cardId}">Grade</button>`}
-                                </div>
+                                </div>` : ''}
+                                ${canGrade ? `<div class="">
+                                    <button class="grade-card" data-id="${cardId}">Grade</button>
+                                </div>` : ''}
+                                ${canViewGrading ? `<div class="">
+                                    <button class="view-grading">View grading</button>
+                                </div>` : ''}
                             </div>
                         </div>
                         <span hidden class="card-id">${cardId}</span>
@@ -2358,22 +2375,29 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
             box?.remove();
             box = null;
         });
-    } else {
-        const gradeButton = box.querySelector('.grade-card');
+    }
+
+    const gradeButton = box.querySelector('.grade-card');
+    if (gradeButton) {
         gradeButton.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (!isSealed) {
-                const cardId = gradeButton.getAttribute('data-id');
-                gradingModal(cardId);
-                box?.remove();
-                box = null;
-            }
+            const gradeCardId = gradeButton.getAttribute('data-id');
+            gradingModal(gradeCardId);
+            box?.remove();
+            box = null;
+        });
+    }
+
+    const viewGradingButton = box.querySelector('.view-grading');
+    if (viewGradingButton) {
+        viewGradingButton.addEventListener('click', () => {
+            window.location.href = '/grading';
         });
     }
 
     const button = box.querySelector('.add-to-cart');
     //sealed add
-    if (isSealed) {
+    if (button && isSealed) {
         button.addEventListener('click', () => {
             const auctionDiv = itemLine.closest('.auction-tab');
             const auctionId = auctionDiv?.getAttribute('data-id');
@@ -2386,7 +2410,7 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
             const available = Number(itemLine.getAttribute('data-quantity')) || null;
             addSealedToCart(sealedData, cardId, auctionId, 1, available);
         });
-    } else {
+    } else if (button) {
         //cards add
         button.addEventListener('click', async () => {
             const auctionDiv = itemLine.closest('.auction-tab');
@@ -2410,7 +2434,7 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
     }
 
     const deleteButton = box.querySelector('.delete-card');
-    deleteButton.addEventListener('click', async (e) => {
+    if (deleteButton) deleteButton.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (deleteButton.textContent !== 'Confirm') {
             deleteButton.textContent = 'Confirm';
@@ -2501,12 +2525,17 @@ async function loadAuctionContent(button) {
                         const safeCardId = sanitizeNumericId(card.id);
                         const conditionDisplay = cardConditionDisplay(card);
                         const safeCardConditionClass = sanitizeClassToken(card.condition || 'Unknown');
-                        const gradingClass = card.grading_is_current === 1 ? ' graded' : '';
+                        const gradingClass = card.grading_state === 'graded'
+                            ? ' graded'
+                            : card.grading_state === 'at_grader' ? ' at-grader' : '';
                         const cardDiv = document.createElement('div');
                         cardDiv.classList.add('card');
                         cardDiv.setAttribute('data-id', safeCardId);
                         cardDiv.dataset.condition = card.condition || '';
-                        cardDiv.dataset.isGraded = card.grading_is_current === 1 ? 'true' : 'false';
+                        cardDiv.dataset.gradingState = card.grading_state || 'raw';
+                        cardDiv.dataset.gradingSubmissionId = card.grading_submission_id ?? '';
+                        cardDiv.dataset.gradingSubmissionStatus = card.grading_submission_status ?? '';
+                        cardDiv.dataset.isGraded = card.grading_state === 'graded' ? 'true' : 'false';
                         cardDiv.dataset.grader = card.grader ?? '';
                         cardDiv.dataset.gradeNumeric = card.grade_numeric ?? '';
                         cardDiv.dataset.gradeLabel = card.grade_label ?? '';

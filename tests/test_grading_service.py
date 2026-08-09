@@ -38,7 +38,9 @@ def db(tmp_path):
         INSERT INTO cards (id, card_name, card_price, market_value, sold_date) VALUES
             (1, 'Charizard', 40, 100, NULL),
             (2, 'Blastoise', 20, 60, NULL),
-            (3, 'Sold card', 10, 20, '2026-07-01');
+            (3, 'Sold card', 10, 20, '2026-07-01'),
+            (4, 'Venusaur', 15, 30, NULL),
+            (5, 'Pikachu', 25, 50, NULL);
         """
     )
     yield connection
@@ -149,6 +151,133 @@ def test_complete_submission_stores_grades_and_updates_market_values(db):
     assert tuple(graded[0]) == (1, 9.0, "Mint", None, "CERT-1", 180.0)
     assert tuple(graded[1]) == (2, 8.5, "NM-MT+", "OC", "CERT-2", 95.0)
     assert [row[0] for row in values] == [180.0, 95.0]
+
+
+def test_complete_submission_preserves_market_values_and_finalizes_costs_to_cents(db):
+    service = GradingService(db)
+    submission = make_submission([
+        GradingSubmissionCard(1, None, 3, 2, prep_fee=1, upcharge=0.5),
+        GradingSubmissionCard(2, None, 4, 1, prep_fee=2, upcharge=1.5),
+    ])
+    submission.outbound_shipping_cost = 10
+    submission.return_shipping_cost = 0
+    submission.insurance_cost = 0
+    submission.customs_duty_cost = 0
+    submission.other_shared_cost = 0
+    assert service.create_submission(submission) is None
+
+    assert service.complete_submission(1, [
+        GradingCompleteItems(1, 9, "Mint", None, "CERT-1", None),
+        GradingCompleteItems(2, 8, "NM-MT", None, "CERT-2", None),
+    ]) is None
+
+    cards = db.execute(
+        "SELECT card_id, allocated_shared_cost, total_grading_cost, landed_cost "
+        "FROM grading_submission_cards ORDER BY card_id"
+    ).fetchall()
+    market_values = db.execute(
+        "SELECT market_value FROM cards WHERE id IN (1, 2) ORDER BY id"
+    ).fetchall()
+
+    assert [tuple(row) for row in cards] == [
+        (1, 6.67, 11.17, 51.17),
+        (2, 3.33, 10.83, 30.83),
+    ]
+    assert sum(row["allocated_shared_cost"] for row in cards) == pytest.approx(10.00)
+    assert [row[0] for row in market_values] == [100.0, 60.0]
+
+
+def test_complete_submission_distributes_small_rounding_remainder_without_negative_costs(db):
+    service = GradingService(db)
+    submission = make_submission([
+        GradingSubmissionCard(card_id, None, 0, 1)
+        for card_id in (1, 2, 4, 5)
+    ])
+    submission.outbound_shipping_cost = 0.02
+    submission.return_shipping_cost = 0
+    submission.insurance_cost = 0
+    submission.customs_duty_cost = 0
+    submission.other_shared_cost = 0
+    assert service.create_submission(submission) is None
+
+    assert service.complete_submission(1, [
+        GradingCompleteItems(card_id, 9, "Mint", None, f"CERT-{card_id}", None)
+        for card_id in (1, 2, 4, 5)
+    ]) is None
+
+    allocations = [
+        row[0] for row in db.execute(
+            "SELECT allocated_shared_cost FROM grading_submission_cards ORDER BY card_id"
+        ).fetchall()
+    ]
+    assert allocations == [0.01, 0.01, 0.0, 0.0]
+    assert sum(allocations) == pytest.approx(0.02)
+    assert all(allocation >= 0 for allocation in allocations)
+
+
+def test_complete_submission_cannot_overwrite_finalized_grade_or_costs(db):
+    service = GradingService(db)
+    assert service.create_submission(
+        make_submission([GradingSubmissionCard(1, None, 5, 50)])
+    ) is None
+    assert service.complete_submission(
+        1, [GradingCompleteItems(1, 9, "Mint", None, "CERT-1", 180)]
+    ) is None
+    finalized = db.execute(
+        "SELECT grade_numeric, cert_number, total_grading_cost, landed_cost, "
+        "post_grade_market_value FROM grading_submission_cards WHERE card_id = 1"
+    ).fetchone()
+
+    error = service.complete_submission(
+        1, [GradingCompleteItems(1, 1, "Poor", None, "REPLACED", None)]
+    )
+
+    assert "finalized" in error
+    unchanged = db.execute(
+        "SELECT grade_numeric, cert_number, total_grading_cost, landed_cost, "
+        "post_grade_market_value FROM grading_submission_cards WHERE card_id = 1"
+    ).fetchone()
+    assert tuple(unchanged) == tuple(finalized)
+    assert db.execute("SELECT market_value FROM cards WHERE id = 1").fetchone()[0] == 180
+
+
+def test_finalized_submission_cannot_be_moved_back_to_an_active_status(db):
+    service = GradingService(db)
+    assert service.create_submission(
+        make_submission([GradingSubmissionCard(1, None, 5, 50)])
+    ) is None
+    assert service.complete_submission(
+        1, [GradingCompleteItems(1, 9, "Mint", None, "CERT-1", 180)]
+    ) is None
+
+    error = service.update_submission_status(1, GradeStatus.SENT_FOR_GRADING)
+
+    assert "finalized" in error
+    assert db.execute(
+        "SELECT status FROM grading_submissions WHERE id = 1"
+    ).fetchone()[0] == GradeStatus.GRADED
+
+
+def test_finalized_submission_cannot_be_cancelled(db):
+    service = GradingService(db)
+    assert service.create_submission(
+        make_submission([GradingSubmissionCard(1, None, 5, 50)])
+    ) is None
+    assert service.complete_submission(
+        1, [GradingCompleteItems(1, 9, "Mint", None, "CERT-1", 180)]
+    ) is None
+
+    error = service.cancel_submission(1)
+
+    assert "finalized" in error
+    submission = db.execute(
+        "SELECT status FROM grading_submissions WHERE id = 1"
+    ).fetchone()
+    grading = db.execute(
+        "SELECT is_current FROM grading_submission_cards WHERE card_id = 1"
+    ).fetchone()
+    assert submission[0] == GradeStatus.GRADED
+    assert grading[0] == 1
 
 
 def test_complete_submission_rolls_back_if_card_is_not_in_submission(db):
