@@ -258,6 +258,40 @@ a.sale-link:focus{
   outline: none;
 }
 
+.grading-actions {
+  display: flex;
+  justify-content: flex-end;
+  width: calc(100% - 30px);
+  max-width: 1424px;
+  margin: 0 auto 10px;
+}
+
+.create-submission-button {
+  color: var(--text-color);
+  background: linear-gradient(135deg, transparent, rgba(127, 255, 212, 0.05), transparent);
+  border: none;
+  border-radius: 25px;
+  padding: 10px 20px;
+  font-family: var(--primary-font), serif;
+  font-size: 16px;
+  letter-spacing: 0.2em;
+  text-decoration: none;
+  text-transform: uppercase;
+  text-shadow:
+    0 0 2px rgba(255, 255, 255, 1),
+    0 0 6px rgba(255, 250, 240, 0.9),
+    0 0 14px rgba(255, 240, 220, 0.7),
+    0 0 30px rgba(200, 190, 255, 0.25);
+  transition: letter-spacing 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.create-submission-button:hover,
+.create-submission-button:focus-visible {
+  color: var(--text-color);
+  letter-spacing: 0.25em;
+  outline: none;
+}
+
 
 .auction-tab select,
 .sold-tab select{
