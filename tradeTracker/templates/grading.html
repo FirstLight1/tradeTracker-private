@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="../static/styles/auctions-aligment.css">
     <link rel="stylesheet" href="../static/styles/auctions-hollowKnightStyle.css">
     <link rel="stylesheet" href="../static/styles/header-align.css">
-    <link rel="stylesheet" href="../static/styles/modal.css">
+    <link rel="stylesheet" href="/static/styles/modal.css">
     <title>Grading - Trade Tracker</title>
     <link rel="icon" type="image/x-icon" href="../static/images/cardanvil.ico">
 </head>
@@ -17,32 +17,28 @@
     <main>
         <h1>Grading<span class="shadow"></span> Submissions</h1>
         <header class="header">
-            <nav class="nav-bar">
-                <div>
-                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                    <button class="addAuction"><a href="{{ url_for('renderers.renderAuctions') }}">Sales</a></button>
-                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="right arrow"></span>
+            <nav class="nav-bar compact-nav" aria-label="Main navigation">
+                <a class="nav-page-link" href="{{ url_for('renderers.renderAuctions') }}">Home</a>
+                <div class="nav-dropdown">
+                    <button class="nav-dropdown-trigger" type="button" aria-haspopup="true">Add</button>
+                    <div class="nav-dropdown-menu">
+                        <a href="{{ url_for('renderers.addAuction') }}">Auction</a>
+                        <a href="{{ url_for('renderers.addSingles') }}">Singles</a>
+                    </div>
                 </div>
-                <div>
-                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                    <button class="addAuction"><a href="{{ url_for('renderers.addAuction') }}">Add auction</a></button>
-                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="right arrow"></span>
+                <div class="nav-dropdown">
+                    <button class="nav-dropdown-trigger" type="button" aria-haspopup="true">History</button>
+                    <div class="nav-dropdown-menu">
+                        <a href="{{ url_for('renderers.sold') }}">Sold</a>
+                        <a href="{{ url_for('renderers.purchases') }}">Purchases</a>
+                    </div>
                 </div>
-                <div>
-                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                    <button class="addSingles"><a href="{{ url_for('renderers.addSingles') }}">Add Singles</a></button>
-                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="right arrow"></span>
-                </div>
-                <div>
-                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                    <button class="addAuction"><a href="{{ url_for('renderers.sold') }}">Sold</a></button>
-                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="right arrow"></span>
-                </div>
-                <div>
-                    <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                    <button class="collection"><a
-                            href="{{ url_for('renderers.renderCollection') }}">Collection</a></button>
-                    <span class="arrow left"><img src="../static/images/rightarrow.png" alt="right arrow"></span>
+                <a class="nav-page-link" href="{{ url_for('grading.grading_render') }}">Grading</a>
+                <button class="upload-csv-btn" type="button">Upload</button>
+                <button class="sales-btn" type="button">Reports</button>
+                <div class="inventory-value">
+                    <p class="inventory-value-header">Inventory</p>
+                    <p class="inventory-value-value"></p>
                 </div>
             </nav>
         </header>
@@ -68,6 +64,7 @@
     <script type="module" src="../static/scripts/utils/sanitizers.js"></script>
     <script type="module" src="../static/scripts/utils/renderUtil.js"></script>
     <script type="module" src="../static/scripts/grading.js"></script>
+    <script type="module" src="/static/scripts/headerActions.js"></script>
 </body>
 
 </html>
