@@ -1,3 +1,5 @@
+"""Archived pre-Yoyo migrations. Kept for historical reference only."""
+
 import sqlite3
 import os
 import re

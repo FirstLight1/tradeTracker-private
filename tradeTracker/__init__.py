@@ -6,6 +6,8 @@ from flask_talisman import Talisman
 from flask_limiter import Limiter
 from flask_wtf import CSRFProtect
 import logging
+from pathlib import Path
+from yoyo import get_backend, read_migrations
 from werkzeug.exceptions import HTTPException
 from .logging_config import configure_logging
 limiter = Limiter(key_func=get_remote_address)
@@ -13,6 +15,16 @@ csrf = CSRFProtect()
 
 def abort_secret_key():
     raise RuntimeError
+
+def apply_database_migrations(db_path):
+    if not os.path.exists(db_path):
+        return
+
+    project_root = Path(__file__).resolve().parent.parent
+    migrations = read_migrations(str(project_root / "migrations"))
+    with get_backend(f"sqlite:///{Path(db_path).resolve().as_posix()}") as backend:
+        with backend.lock():
+            backend.apply_migrations(backend.to_apply(migrations))
 
 def create_app(test_config=None):
     # create and configure the app
@@ -83,10 +95,10 @@ def create_app(test_config=None):
     except OSError:
         pass
 
-    from . import db, tracker, actions, migration, renderers, api
+    from . import db, tracker, actions, renderers, api
 
     # Run database migration before initializing the app
-    migration.migrate_database(app.config["DATABASE"])
+    apply_database_migrations(app.config["DATABASE"])
 
     db.init_app(app)
 
