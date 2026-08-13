@@ -1,4 +1,4 @@
-import { renderAlert, scrollOnLoad } from "./utils/renderUtil.js";
+import { clearFieldErrors, renderAlert, renderServerErrors, scrollOnLoad } from "./utils/renderUtil.js";
 import { csrfFetch, sanitizeNumericId } from "./utils/sanitizers.js";
 
 const main = document.querySelector('main[data-submission-id]');
@@ -61,6 +61,7 @@ function renderCard(card) {
 
     const gradeNumeric = createInput('grade-numeric-input', `${card.card_name || 'Card'} grade number`, 'number');
     gradeNumeric.min = '0';
+    gradeNumeric.max = '10';
     const gradeLabel = createInput('grade-label-input', `${card.card_name || 'Card'} grade label`);
     const qualifier = createInput('qualifier-input', `${card.card_name || 'Card'} qualifier`);
     const certNumber = createInput('cert-number-input', `${card.card_name || 'Card'} certificate number`);
@@ -79,6 +80,16 @@ function renderCard(card) {
 
 async function loadCards() {
     try {
+        const submissionsResponse = await csrfFetch('/grading/submissions');
+        if (!submissionsResponse.ok) throw new Error(`request failed with status ${submissionsResponse.status}`);
+        const submissions = await submissionsResponse.json();
+        const submission = Array.isArray(submissions)
+            ? submissions.find(item => Number(item.id) === Number(submissionId))
+            : null;
+        if (!submission) throw new Error('submission was not found');
+        if (['graded', 'returned', 'cancelled'].includes(submission.status)) {
+            throw new Error('this submission is already finalized and cannot be completed');
+        }
         const response = await csrfFetch(`/grading/submissions/${submissionId}`);
         if (!response.ok) throw new Error(`request failed with status ${response.status}`);
         const cards = await response.json();
@@ -115,6 +126,8 @@ function completionPayload() {
 
 form.addEventListener('submit', async event => {
     event.preventDefault();
+    clearFieldErrors(form);
+    if (!form.reportValidity()) return;
     const payload = completionPayload();
     if (payload.length === 0) return;
 
@@ -127,7 +140,24 @@ form.addEventListener('submit', async event => {
             body: JSON.stringify(payload),
         });
         const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.message || `request failed with status ${response.status}`);
+        if (!response.ok) {
+            const cardField = className => ({ parts }) => {
+                const cardId = parts[1];
+                return cardList.querySelector(
+                    `.completion-card-row[data-card-id="${CSS.escape(cardId)}"] ${className}`
+                );
+            };
+            renderServerErrors(result, form, {
+                grade_numeric: cardField('.grade-numeric-input'),
+                grade_label: cardField('.grade-label-input'),
+                qualifier: cardField('.qualifier-input'),
+                cert_number: cardField('.cert-number-input'),
+                post_grade_market_value: cardField('.market-value-input'),
+            }, 'Unable to complete submission');
+            submitButton.disabled = false;
+            submitButton.textContent = 'Complete submission';
+            return;
+        }
         window.location.href = '/grading';
     } catch (error) {
         renderAlert(`Error completing grading submission: ${error}`, 'error');

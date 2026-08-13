@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import enum
+from tradeTracker.services.grading_validation import grade_number, money, normalize_date, normalize_text
 from typing import Any
 import datetime
 
@@ -58,6 +59,18 @@ class GradeStatus(enum.StrEnum):
     RETURNED = "returned"
     CANCELLED = "cancelled"   
 
+    @property
+    def is_active(self) -> bool:
+        return self in {
+            GradeStatus.PREPARING,
+            GradeStatus.SENT_FOR_GRADING,
+            GradeStatus.RECEIVED_BY_GRADER,
+        }
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in {GradeStatus.GRADED, GradeStatus.RETURNED, GradeStatus.CANCELLED}
+
 @dataclass
 class GradingSubmissionCard:
     card_id: int
@@ -71,15 +84,11 @@ class GradingSubmissionCard:
     def from_dict(cls, item: dict[str, Any]) -> "GradingSubmissionCard":
         return cls(
                     card_id=int(item["card_id"]),
-                    grader=(
-                        str(item["grader"])
-                        if item.get("grader") is not None
-                        else None
-                    ),
-                    grading_fee=float(item["grading_fee"]),
-                    submitted_value=float(item["submitted_value"]),
-                    prep_fee=float(item.get("prep_fee", 0.0)),
-                    upcharge=float(item.get("upcharge", 0.0)),
+                    grader=normalize_text(item.get("grader"), "grader"),
+                    grading_fee=float(money(item.get("grading_fee", 0), "grading_fee")),
+                    submitted_value=float(money(item.get("submitted_value", 0), "submitted_value")),
+                    prep_fee=float(money(item.get("prep_fee", 0), "prep_fee")),
+                    upcharge=float(money(item.get("upcharge", 0), "upcharge")),
                 )
 
 
@@ -102,30 +111,20 @@ class GradingSubmission:
     @classmethod
     def from_dict(cls, item: dict[str, Any]) -> "GradingSubmission":
         return cls(
-        grader = str(item["grader"]),
+        grader = normalize_text(item.get("grader"), "grader", required=True),
         service_level = (
-            str(item['service_level'])
-            if item.get('service_level') is not None
-            else None
+            normalize_text(item.get('service_level'), 'service_level')
             ),
         status = GradeStatus(item["status"]),
-        submitted_at = item["submitted_at"],
-        returned_at = (
-            str(item["returned_at"])
-            if item.get("returned_at") is not None
-            else None
-            ),
-        notes = (
-            item["notes"]
-            if item.get("notes") is not None
-            else None
-            ),
+        submitted_at = normalize_date(item.get("submitted_at"), "submitted_at", required=True),
+        returned_at = normalize_date(item.get("returned_at"), "returned_at"),
+        notes = normalize_text(item.get("notes"), "notes"),
         cards = [],
-        outbound_shipping_cost = float(item.get("outbound_shipping_cost", 0.0)),
-        return_shipping_cost = float(item.get("return_shipping_cost", 0.0)),
-        insurance_cost = float(item.get("insurance_cost", 0.0)),
-        customs_duty_cost = float(item.get("customs_duty_cost", 0.0)),
-        other_shared_cost = float(item.get("other_shared_cost", 0.0)),
+        outbound_shipping_cost = float(money(item.get("outbound_shipping_cost", 0), "outbound_shipping_cost")),
+        return_shipping_cost = float(money(item.get("return_shipping_cost", 0), "return_shipping_cost")),
+        insurance_cost = float(money(item.get("insurance_cost", 0), "insurance_cost")),
+        customs_duty_cost = float(money(item.get("customs_duty_cost", 0), "customs_duty_cost")),
+        other_shared_cost = float(money(item.get("other_shared_cost", 0), "other_shared_cost")),
         )
 
 
@@ -144,35 +143,15 @@ class GradingCompleteItems:
     def from_dict(cls, item: dict[str, Any]) -> "GradingCompleteItems":
         return cls(
             card_id=int(item["card_id"]),
-            grade_numeric=(
-                float(item["grade_numeric"])
-                if item.get("grade_numeric") is not None
-                else None
+            grade_numeric=(lambda value: float(value) if value is not None else None)(
+                grade_number(item.get("grade_numeric"))
             ),
-            grader=(
-                str(item["grader"])
-                if item.get("grader") is not None
-                else None
-                ),
-            grade_label=(
-                str(item["grade_label"])
-                if item.get("grade_label") is not None
-                else None
-            ),
-            qualifier=(
-                str(item["qualifier"])
-                if item.get("qualifier") is not None
-                else None
-            ),
-            cert_number=(
-                str(item["cert_number"])
-                if item.get("cert_number") is not None
-                else None
-            ),
-            post_grade_market_value=(
-                float(item["post_grade_market_value"])
-                if item.get("post_grade_market_value") is not None
-                else None
+            grader=normalize_text(item.get("grader"), "grader"),
+            grade_label=normalize_text(item.get("grade_label"), "grade_label"),
+            qualifier=normalize_text(item.get("qualifier"), "qualifier"),
+            cert_number=normalize_text(item.get("cert_number"), "cert_number"),
+            post_grade_market_value=(lambda value: float(value) if value is not None else None)(
+                money(item.get("post_grade_market_value"), "post_grade_market_value", nullable=True)
             ),
         )
 

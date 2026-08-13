@@ -63,15 +63,25 @@ def test_grading_page_renders_template(app, monkeypatch):
     assert response.get_data(as_text=True) == "grading.html"
 
 
-def test_complete_grading_page_renders_for_submission(app, monkeypatch):
+def test_complete_grading_page_renders_for_submission(app, service, monkeypatch):
     render_template = MagicMock(return_value="completeGrading.html")
     monkeypatch.setattr(grading, "render_template", render_template)
+    service.get_submission.return_value = {"id": 3, "status": "preparing"}
 
     response = app.test_client().get("/grading/submissions/3/complete")
 
     assert response.status_code == 200
     assert response.get_data(as_text=True) == "completeGrading.html"
     render_template.assert_called_once_with("completeGrading.html", submission_id=3)
+
+
+@pytest.mark.parametrize("status", ["graded", "returned", "cancelled"])
+def test_complete_grading_page_rejects_terminal_submission(app, service, status):
+    service.get_submission.return_value = {"id": 3, "status": status}
+
+    response = app.test_client().get("/grading/submissions/3/complete")
+
+    assert response.status_code == 409
 
 
 def test_get_submissions_returns_service_result(app, service):
@@ -179,8 +189,8 @@ def test_complete_submission_passes_every_item_to_service(app, service):
     assert completed_items[1].qualifier == "OC"
 
 
-def test_complete_submission_accepts_nullable_grade_fields(app, service):
-    service.complete_submission.return_value = None
+def test_complete_submission_passes_nullable_fields_to_service_for_domain_validation(app, service):
+    service.complete_submission.return_value = "A numeric grade or grade label is required"
 
     response = app.test_client().post(
         "/grading/submissions/3/complete",
@@ -194,7 +204,7 @@ def test_complete_submission_accepts_nullable_grade_fields(app, service):
         }],
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 400
     item = service.complete_submission.call_args.args[1][0]
     assert item.grade_numeric is None
     assert item.grade_label is None
@@ -232,6 +242,124 @@ def test_update_submission_status_returns_service_error(app, service):
     }
 
 
+def test_update_submission_status_passes_return_details(app, service):
+    service.update_submission_status.return_value = None
+
+    response = app.test_client().post(
+        "/grading/submissions/3/updateStatus",
+        json={
+            "status": "returned",
+            "notes": "Carrier returned the shipment",
+            "returned_at": "2026-08-13",
+        },
+    )
+
+    assert response.status_code == 200
+    service.update_submission_status.assert_called_once_with(
+        3,
+        GradeStatus.RETURNED,
+        "Carrier returned the shipment",
+        "2026-08-13",
+    )
+
+
+def test_update_submission_status_requires_return_details(app, service):
+    response = app.test_client().post(
+        "/grading/submissions/3/updateStatus",
+        json={"status": "returned", "notes": " ", "returned_at": None},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["errors"] == {
+        "notes": "Explain why the submission was returned",
+        "returned_at": "Returned date is required",
+    }
+    service.update_submission_status.assert_not_called()
+
+
+def test_direct_grade_rejects_blank_result(app, service):
+    response = app.test_client().post(
+        "/gradeCard",
+        json={
+            "card_id": 7,
+            "grader": " ",
+            "grade_numeric": None,
+            "grade_label": None,
+            "qualifier": None,
+            "cert_number": None,
+            "post_grade_market_value": None,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["errors"] == {
+        "grader": "Grader is required",
+        "grade_numeric": "Enter a numeric grade or a grade label",
+    }
+    service.grade_card.assert_not_called()
+
+
+def test_create_submission_rejects_reversed_dates(app, service):
+    payload = submission_payload()
+    payload["submission"]["returned_at"] = "2020-01-01"
+
+    response = app.test_client().post("/grading/submissions/create", json=payload)
+
+    assert response.status_code == 400
+    assert response.get_json()["errors"] == {
+        "returned_at": "Active submissions cannot have a returned date"
+    }
+    service.create_submission.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("path", "payload", "field"),
+    [
+        (
+            "/grading/submissions/create",
+            {
+                **submission_payload(),
+                "submission": {
+                    **submission_payload()["submission"],
+                    "outbound_shipping_cost": "1e100000",
+                },
+            },
+            "outbound_shipping_cost",
+        ),
+        (
+            "/grading/submissions/3/complete",
+            [{
+                "card_id": 7,
+                "grade_numeric": 9,
+                "grade_label": "Mint",
+                "qualifier": None,
+                "cert_number": None,
+                "post_grade_market_value": "1e100000",
+            }],
+            "post_grade_market_value",
+        ),
+        (
+            "/gradeCard",
+            {
+                "card_id": 7,
+                "grader": "PSA",
+                "grade_numeric": 9,
+                "grade_label": None,
+                "qualifier": None,
+                "cert_number": None,
+                "post_grade_market_value": "1e100000",
+            },
+            "post_grade_market_value",
+        ),
+    ],
+)
+def test_grading_endpoints_reject_storage_overflow_values(app, service, path, payload, field):
+    response = app.test_client().post(path, json=payload)
+
+    assert response.status_code == 400
+    assert field in response.get_json()["errors"]
+
+
 @pytest.mark.parametrize(
     ("method", "path"),
     [
@@ -249,22 +377,26 @@ def test_endpoints_reject_unsupported_methods(app, method, path):
 
 
 @pytest.mark.parametrize(
-    ("path", "payload", "message"),
+    ("path", "payload", "message", "error_field"),
     [
-        ("/grading/submissions/create", {}, "Invalid grading submission payload"),
-        ("/grading/submissions/3/complete", [], "Invalid grading completion payload"),
+        ("/grading/submissions/create", {}, "Please correct the highlighted fields.", "submission"),
+        ("/grading/submissions/3/complete", [], "Please correct the highlighted fields.", "cards"),
         (
             "/grading/submissions/3/updateStatus",
             {"status": "not-a-status"},
             "Invalid grading status payload",
+            None,
         ),
     ],
 )
-def test_endpoints_reject_invalid_payloads(app, service, path, payload, message):
+def test_endpoints_reject_invalid_payloads(app, service, path, payload, message, error_field):
     response = app.test_client().post(path, json=payload)
 
     assert response.status_code == 400
-    assert response.get_json() == {"status": "error", "message": message}
+    assert response.get_json()["status"] == "error"
+    assert response.get_json()["message"] == message
+    if error_field:
+        assert error_field in response.get_json()["errors"]
     service.create_submission.assert_not_called()
     service.complete_submission.assert_not_called()
     service.update_submission_status.assert_not_called()

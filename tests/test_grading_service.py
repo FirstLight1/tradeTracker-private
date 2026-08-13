@@ -129,6 +129,64 @@ def test_cancel_submission_releases_its_cards(db):
     assert [row[0] for row in current_values] == [0, 0]
 
 
+def test_returned_submission_keeps_returned_status_and_releases_cards(db):
+    service = GradingService(db)
+    assert service.create_submission(make_submission()) is None
+
+    assert service.update_submission_status(
+        1,
+        GradeStatus.RETURNED,
+        "Carrier returned the shipment",
+        "2026-08-01",
+    ) is None
+
+    submission = db.execute(
+        "SELECT status, returned_at, notes FROM grading_submissions WHERE id = 1"
+    ).fetchone()
+    current_values = db.execute(
+        "SELECT is_current FROM grading_submission_cards ORDER BY card_id"
+    ).fetchall()
+    assert tuple(submission) == (
+        GradeStatus.RETURNED,
+        "2026-08-01",
+        "Carrier returned the shipment",
+    )
+    assert [row[0] for row in current_values] == [0, 0]
+
+
+def test_returned_submission_is_terminal_and_cards_can_be_resubmitted(db):
+    service = GradingService(db)
+    assert service.create_submission(
+        make_submission([GradingSubmissionCard(1, "PSA", 5, 50)])
+    ) is None
+    assert service.update_submission_status(
+        1, GradeStatus.RETURNED, "Returned ungraded", "2026-08-01"
+    ) is None
+
+    assert service.update_submission_status(1, GradeStatus.PREPARING) is not None
+    assert service.complete_submission(
+        1, [GradingCompleteItems(1, 9, "Mint", None, "CERT-1", 180)]
+    ) is not None
+    assert service.create_submission(
+        make_submission([GradingSubmissionCard(1, "PSA", 5, 50)])
+    ) is None
+
+
+def test_returned_date_cannot_precede_submission_date(db):
+    service = GradingService(db)
+    assert service.create_submission(make_submission()) is None
+
+    error = service.update_submission_status(
+        1, GradeStatus.RETURNED, "Returned ungraded", "2020-01-01"
+    )
+
+    assert "before submitted" in error
+    submission = db.execute(
+        "SELECT status, returned_at FROM grading_submissions WHERE id = 1"
+    ).fetchone()
+    assert tuple(submission) == (GradeStatus.PREPARING, None)
+
+
 def test_complete_submission_stores_grades_and_updates_market_values(db):
     service = GradingService(db)
     assert service.create_submission(make_submission()) is None
@@ -148,6 +206,12 @@ def test_complete_submission_stores_grades_and_updates_market_values(db):
     ).fetchall()
     values = db.execute("SELECT market_value FROM cards WHERE id IN (1, 2) ORDER BY id").fetchall()
     assert status == GradeStatus.GRADED
+    assert db.execute(
+        "SELECT returned_at FROM grading_submissions WHERE id = 1"
+    ).fetchone()[0] is not None
+    assert [row[0] for row in db.execute(
+        "SELECT is_current FROM grading_submission_cards ORDER BY card_id"
+    ).fetchall()] == [1, 1]
     assert tuple(graded[0]) == (1, 9.0, "Mint", None, "CERT-1", 180.0)
     assert tuple(graded[1]) == (2, 8.5, "NM-MT+", "OC", "CERT-2", 95.0)
     assert [row[0] for row in values] == [180.0, 95.0]
@@ -308,7 +372,7 @@ def test_complete_submission_rejects_cancelled_submission(db):
         1, [GradingCompleteItems(1, 9, "Mint", None, "CERT-1", 180)]
     )
 
-    assert "every card" in error
+    assert "active submission" in error
     status = db.execute(
         "SELECT status FROM grading_submissions WHERE id = 1"
     ).fetchone()[0]
@@ -347,3 +411,89 @@ def test_update_submission_status_updates_notes(db):
         "SELECT status, notes FROM grading_submissions WHERE id = 1"
     ).fetchone()
     assert tuple(row) == (GradeStatus.RECEIVED_BY_GRADER, "Arrived safely")
+
+
+def test_create_submission_allocates_zero_values_equally(db):
+    service = GradingService(db)
+    submission = make_submission([
+        GradingSubmissionCard(1, None, 0, 0),
+        GradingSubmissionCard(2, None, 0, 0),
+    ])
+    submission.outbound_shipping_cost = 0.01
+    submission.return_shipping_cost = 0
+    submission.insurance_cost = 0
+    submission.customs_duty_cost = 0
+    submission.other_shared_cost = 0
+
+    assert service.create_submission(submission) is None
+    allocations = db.execute(
+        "SELECT allocated_shared_cost FROM grading_submission_cards ORDER BY card_id"
+    ).fetchall()
+    assert [row[0] for row in allocations] == [0.01, 0.0]
+
+
+def test_direct_grading_requires_result_and_checks_availability(db):
+    service = GradingService(db)
+    blank = GradingCompleteItems(1, None, None, None, None, None, grader="PSA")
+    assert "numeric grade or grade label" in service.grade_card(1, blank)
+
+    valid = GradingCompleteItems(1, 9, "Mint", None, "DIRECT-1", 180, grader="PSA")
+    assert service.grade_card(1, valid) is None
+    assert service.grade_card(1, valid) is not None
+    row = db.execute(
+        "SELECT grader, grade_numeric, is_current FROM grading_submission_cards WHERE card_id = 1"
+    ).fetchone()
+    assert tuple(row) == ("PSA", 9.0, 1)
+    assert db.execute("SELECT market_value FROM cards WHERE id = 1").fetchone()[0] == 180
+
+
+def test_complete_submission_exact_retry_is_idempotent(db):
+    service = GradingService(db)
+    assert service.create_submission(
+        make_submission([GradingSubmissionCard(1, None, 5, 50)])
+    ) is None
+    result = GradingCompleteItems(1, 9, "Mint", None, "CERT-1", 180)
+    assert service.complete_submission(1, [result], "2026-08-01") is None
+    before = db.execute(
+        "SELECT gs.status, gs.returned_at, gsc.grade_numeric, gsc.cert_number, "
+        "gsc.total_grading_cost, c.market_value FROM grading_submissions gs "
+        "JOIN grading_submission_cards gsc ON gsc.submission_id = gs.id "
+        "JOIN cards c ON c.id = gsc.card_id WHERE gs.id = 1"
+    ).fetchone()
+
+    assert service.complete_submission(1, [result], "2026-08-02") is None
+
+    after = db.execute(
+        "SELECT gs.status, gs.returned_at, gsc.grade_numeric, gsc.cert_number, "
+        "gsc.total_grading_cost, c.market_value FROM grading_submissions gs "
+        "JOIN grading_submission_cards gsc ON gsc.submission_id = gs.id "
+        "JOIN cards c ON c.id = gsc.card_id WHERE gs.id = 1"
+    ).fetchone()
+    assert tuple(after) == tuple(before)
+
+
+def test_complete_submission_rejects_blank_card_result(db):
+    service = GradingService(db)
+    assert service.create_submission(
+        make_submission([GradingSubmissionCard(1, None, 5, 50)])
+    ) is None
+
+    error = service.complete_submission(
+        1, [GradingCompleteItems(1, None, None, None, None, None)]
+    )
+
+    assert "mark the submission returned ungraded" in error
+    assert db.execute(
+        "SELECT status FROM grading_submissions WHERE id = 1"
+    ).fetchone()[0] == GradeStatus.PREPARING
+
+
+@pytest.mark.parametrize("grade", [-0.01, 10.01, float("inf"), float("nan")])
+def test_direct_grading_rejects_invalid_grade_numbers(db, grade):
+    service = GradingService(db)
+    result = GradingCompleteItems(1, grade, None, None, None, None, grader="PSA")
+
+    assert service.grade_card(1, result) is not None
+    assert db.execute(
+        "SELECT COUNT(*) FROM grading_submission_cards"
+    ).fetchone()[0] == 0

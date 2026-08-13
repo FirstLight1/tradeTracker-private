@@ -1137,9 +1137,30 @@ def generateBuyReport():
 @limiter.limit("2 per minute")
 @verify_token
 def generateSoldReport():
+    errors = {}
+    try:
+        month_number = int(request.args.get('month', ''))
+    except (TypeError, ValueError):
+        errors['month'] = 'Month must be a number from 1 to 12.'
+        month_number = None
+    try:
+        year_number = int(request.args.get('year', ''))
+    except (TypeError, ValueError):
+        errors['year'] = 'Year must be a number from 2000 to 2100.'
+        year_number = None
+    if month_number is not None and not 1 <= month_number <= 12:
+        errors['month'] = 'Month must be between 1 and 12.'
+    if year_number is not None and not 2000 <= year_number <= 2100:
+        errors['year'] = 'Year must be between 2000 and 2100.'
+    if errors:
+        return jsonify({
+            'status': 'error',
+            'message': 'Please correct the highlighted fields.',
+            'errors': errors,
+        }), 400
+    month = f'{month_number:02d}'
+    year = str(year_number)
     db = get_db()
-    month = request.args.get('month').zfill(2)
-    year = request.args.get('year')
     cards = db.execute(
         'SELECT c.card_name, c.card_num, c.card_price, si.sell_price, s.sale_date '
         'FROM cards c '

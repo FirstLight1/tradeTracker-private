@@ -1,4 +1,4 @@
-import { renderAlert, downloadFile, updateInventoryValueAndTotalProfit } from "./utils/renderUtil.js";
+import { renderAlert, renderServerErrors, downloadFile, updateInventoryValueAndTotalProfit } from "./utils/renderUtil.js";
 import { csrfFetch } from "./utils/sanitizers.js";
 
 function bindSoldReportButton() {
@@ -7,10 +7,14 @@ function bindSoldReportButton() {
 
     salesBtn.dataset.headerReportBound = 'true';
     salesBtn.addEventListener('click', () => {
+        if (document.querySelector('.sold-report-container')) return;
+        const restoreFocusTo = document.activeElement;
         const div = document.createElement('div');
         div.classList.add('sold-report-container');
         div.innerHTML = `
-            <div class="sold-report-content">
+            <div class="sold-report-content" role="dialog" aria-modal="true" aria-labelledby="sold-report-title">
+                <button class="close-report" type="button" aria-label="Close report dialog">&times;</button>
+                <h2 id="sold-report-title">Sold report</h2>
                 <form class="sold-report-form" method="get">
                 <div>
                     <label for="sold-month">Month:</label>
@@ -28,6 +32,17 @@ function bindSoldReportButton() {
         `;
         document.body.appendChild(div);
 
+        const close = () => {
+            document.removeEventListener('keydown', handleKeydown);
+            div.remove();
+            if (restoreFocusTo?.isConnected) restoreFocusTo.focus();
+        };
+        const handleKeydown = event => {
+            if (event.key === 'Escape') close();
+        };
+        document.addEventListener('keydown', handleKeydown);
+        div.querySelector('.close-report').addEventListener('click', close);
+
         const form = div.querySelector('.sold-report-form');
         if (form) {
             form.addEventListener('submit', async (event) => {
@@ -35,29 +50,34 @@ function bindSoldReportButton() {
                 const monthInput = form.querySelector('#sold-month');
                 const yearInput = form.querySelector('#sold-year');
                 if (!monthInput || !yearInput) return;
-                await generateSoldReport(monthInput.value, yearInput.value, div);
+                await generateSoldReport(monthInput.value, yearInput.value, div, close);
             });
         }
 
         div.addEventListener('click', (event) => {
-            if (event.target === div) div.remove();
+            if (event.target === div) close();
         });
+        div.querySelector('#sold-month').focus();
     });
 }
 
-async function generateSoldReport(month, year, div) {
+async function generateSoldReport(month, year, div, close) {
     try {
         const response = await csrfFetch(`/generateSoldReport?month=${month}&year=${year}`);
         const contentType = response.headers.get('content-type') || '';
         if (!response.ok || contentType.includes('application/json')) {
-            const err = await response.json();
-            renderHeaderAlert(`Error generating sold report: ${err}`, 'error');
+            const err = await response.json().catch(() => ({}));
+            ensureAlertContainer();
+            renderServerErrors(err, div, {
+                month: '#sold-month', 'sold-month': '#sold-month',
+                year: '#sold-year', 'sold-year': '#sold-year',
+            }, 'Unable to generate sold report');
             return;
         }
         downloadFile(response);
-        div.remove();
+        close();
     } catch (e) {
-        renderHeaderAlert('Error: ' + e, 'error');
+        renderHeaderAlert('Error generating sold report: ' + (e.message || e), 'error');
     }
 }
 

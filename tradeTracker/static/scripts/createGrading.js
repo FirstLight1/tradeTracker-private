@@ -1,5 +1,5 @@
 import { queue } from "./utils/classes.js";
-import { renderAlert, scrollOnLoad } from "./utils/renderUtil.js";
+import { clearFieldErrors, renderAlert, renderServerErrors, scrollOnLoad } from "./utils/renderUtil.js";
 import { csrfFetch, escapeHtml, sanitizeClassToken, sanitizeNumericId } from "./utils/sanitizers.js";
 import { searchCard } from "./utils/searchApi.js";
 
@@ -171,7 +171,7 @@ function submissionPayload() {
             service_level: value('#service-level') || null,
             status: value('#status'),
             submitted_at: value('#submitted-at'),
-            returned_at: value('#returned-at') || null,
+            returned_at: null,
             notes: value('#notes') || null,
             outbound_shipping_cost: Number(value('#outbound-shipping-cost')) || 0,
             return_shipping_cost: Number(value('#return-shipping-cost')) || 0,
@@ -192,24 +192,38 @@ function submissionPayload() {
 
 function setupForm() {
     const form = document.querySelector('.grading-submission-form');
+    const submittedAt = form.querySelector('#submitted-at');
+
     form.addEventListener('submit', async event => {
         event.preventDefault();
+        clearFieldErrors(form);
+        if (!form.reportValidity()) return;
         const payload = submissionPayload();
         if (payload.cards.length === 0) {
             renderAlert('Add at least one card', 'error');
             return;
         }
-        const response = await csrfFetch('/grading/submissions/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            renderAlert(`Error: ${data.message || 'Unable to create submission'}`, 'error');
-            return;
+        try {
+            const response = await csrfFetch('/grading/submissions/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                renderServerErrors(data, form, {
+                    grader: '#grader', service_level: '#service-level', status: '#status',
+                    submitted_at: '#submitted-at', notes: '#notes',
+                    outbound_shipping_cost: '#outbound-shipping-cost',
+                    return_shipping_cost: '#return-shipping-cost', insurance_cost: '#insurance-cost',
+                    customs_duty_cost: '#customs-duty-cost', other_shared_cost: '#other-shared-cost',
+                }, 'Unable to create submission');
+                return;
+            }
+            window.location.href = '/grading';
+        } catch (error) {
+            renderAlert(`Error creating grading submission: ${error.message || error}`, 'error');
         }
-        window.location.href = '/grading';
     });
     document.querySelectorAll('.creditnote-receiver input').forEach(input => input.addEventListener('input', updateTotal));
 }

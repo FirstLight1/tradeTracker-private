@@ -1,4 +1,4 @@
-import { renderField, renderAlert, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign, downloadFile, createNewItem } from "./utils/renderUtil.js";
+import { renderField, renderAlert, renderServerErrors, clearFieldErrors, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign, downloadFile, createNewItem } from "./utils/renderUtil.js";
 import { CardStruct, queue, CartLine } from "./utils/classes.js";
 import { escapeHtml, sanitizePlainText, sanitizeAttrValue, sanitizeNumericId, sanitizeClassToken, csrfFetch } from "./utils/sanitizers.js";
 import { searchCard } from "./utils/searchApi.js";
@@ -375,24 +375,26 @@ function gradingModal(cardId) {
         return;
     }
 
+    const restoreFocusTo = document.activeElement;
     const modal = document.createElement('div');
     modal.classList.add('reciever-div', 'grading-modal-overlay');
     modal.dataset.cardId = cardId;
     modal.innerHTML = `
-        <div class="modal-content grading-status-modal" role="dialog" aria-modal="true" aria-labelledby="grading-modal-title">
-            <span class="close-modal" role="button" tabindex="0" aria-label="Close grading modal">&times;</span>
+        <form class="modal-content grading-status-modal direct-grading-form" role="dialog" aria-modal="true" aria-labelledby="grading-modal-title" novalidate>
+            <button class="close-modal" type="button" aria-label="Close grading modal">&times;</button>
             <p id="grading-modal-title">Grade card</p>
             <div>
                 <label for="grading-grader">Grader</label>
-                <input id="grading-grader" name="grader" type="text" autocomplete="organization">
+                <input id="grading-grader" name="grader" type="text" autocomplete="organization" required>
             </div>
             <div>
                 <label for="grading-grade-numeric">Numeric grade</label>
-                <input id="grading-grade-numeric" name="grade_numeric" type="number" min="0" step="0.01">
+                <input id="grading-grade-numeric" name="grade_numeric" type="number" min="0" max="10" step="0.01" aria-describedby="grading-result-help">
             </div>
             <div>
                 <label for="grading-grade-label">Grade label</label>
-                <input id="grading-grade-label" name="grade_label" type="text">
+                <input id="grading-grade-label" name="grade_label" type="text" aria-describedby="grading-result-help">
+                <p id="grading-result-help" class="field-help">Enter a numeric grade or a grade label.</p>
             </div>
             <div>
                 <label for="grading-qualifier">Qualifier</label>
@@ -407,9 +409,9 @@ function gradingModal(cardId) {
                 <input id="grading-market-value" name="post_grade_market_value" type="number" min="0" step="0.01">
             </div>
             <div class="modal-buttons">
-                <button class="grading-confirm-btn" type="button">Confirm</button>
+                <button class="grading-confirm-btn" type="submit">Confirm</button>
             </div>
-        </div>
+        </form>
     `;
 
     document.body.appendChild(modal);
@@ -418,19 +420,41 @@ function gradingModal(cardId) {
     const close = () => {
         document.removeEventListener('keydown', handleKeydown);
         modal.remove();
+        if (restoreFocusTo?.isConnected) restoreFocusTo.focus();
     };
     const handleKeydown = (event) => {
         if (event.key === 'Escape') close();
     };
 
     closeButton.addEventListener('click', close);
-    closeButton.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') close();
-    });
     modal.addEventListener('click', (event) => {
         if (event.target === modal) close();
     });
-    modal.querySelector('.grading-confirm-btn').addEventListener('click', async () => {
+    const gradingForm = modal.querySelector('.direct-grading-form');
+    const gradeNumeric = modal.querySelector('#grading-grade-numeric');
+    const gradeLabel = modal.querySelector('#grading-grade-label');
+    gradingForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        clearFieldErrors(gradingForm);
+        const grader = modal.querySelector('#grading-grader');
+        const marketValue = modal.querySelector('#grading-market-value');
+        const errors = {};
+        if (!grader.value.trim()) errors.grader = 'Grader is required.';
+        if (!gradeNumeric.value && !gradeLabel.value.trim()) {
+            errors.grade_numeric = 'Enter a numeric grade or a grade label.';
+        } else if (gradeNumeric.value && !gradeNumeric.validity.valid) {
+            errors.grade_numeric = 'Numeric grade must be between 0 and 10.';
+        }
+        if (marketValue.value && !marketValue.validity.valid) {
+            errors.post_grade_market_value = 'Market value must be zero or greater.';
+        }
+        if (Object.keys(errors).length) {
+            renderServerErrors({ errors }, gradingForm, {
+                grader: '#grading-grader', grade_numeric: '#grading-grade-numeric',
+                post_grade_market_value: '#grading-market-value',
+            });
+            return;
+        }
         const nullableText = (selector) => {
             const value = modal.querySelector(selector).value.trim();
             return value || null;
@@ -459,7 +483,14 @@ function gradingModal(cardId) {
             });
             const result = await response.json().catch(() => ({}));
             if (!response.ok) {
-                throw new Error(result.message || `request failed with status ${response.status}`);
+                renderServerErrors(result, gradingForm, {
+                    grader: '#grading-grader', grade_numeric: '#grading-grade-numeric',
+                    grade_label: '#grading-grade-label', qualifier: '#grading-qualifier',
+                    cert_number: '#grading-cert-number', post_grade_market_value: '#grading-market-value',
+                }, 'Unable to save card grading');
+                confirmButton.disabled = false;
+                confirmButton.textContent = 'Confirm';
+                return;
             }
             close();
             window.location.reload();

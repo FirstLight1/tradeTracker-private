@@ -9,6 +9,13 @@
     margin-top: 0;
 }
 
+.grading-submission-form .field-help {
+    display: block;
+    margin: 5px 0 0;
+    color: rgba(201, 209, 217, 0.68);
+    font-size: 0.8rem;
+}
+
 .grading-submission-form input,
 .grading-submission-form select,
 .grading-submission-form textarea {

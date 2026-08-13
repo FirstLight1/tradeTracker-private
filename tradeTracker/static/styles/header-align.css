@@ -149,20 +149,39 @@
 }
 
 .sold-report-container {
-    position: absolute;
+    position: fixed;
+    inset: 0;
     z-index: 1000;
-    top: 160px;
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    justify-content: space-evenly;
-    width: 250px;
-    height: 120px;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    height: auto;
     padding: 20px;
+    background: rgba(13, 17, 23, 0.85);
+    backdrop-filter: blur(5px);
+}
+
+.sold-report-content {
+    position: relative;
+    width: 250px;
+    padding: 24px;
     border: 1px solid rgba(127, 255, 212, 0.15);
     background-color: var(--primary-dark);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 30px rgba(147, 112, 219, 0.1);
-    backdrop-filter: blur(10px);
+}
+
+.sold-report-content h2 {
+    margin: 0 0 12px;
+    font-size: 1.1rem;
+}
+
+.sold-report-content .close-report {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    padding: 2px 8px;
+    font-size: 20px;
 }
 
 .sold-report-container form div {
