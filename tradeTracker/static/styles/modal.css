@@ -111,6 +111,59 @@
     outline: none;
 }
 
+.grading-status-modal label {
+    color: var(--accent-cyan);
+    letter-spacing: 0.08em;
+}
+
+.grading-status-modal select,
+.grading-status-modal textarea {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 10px 15px;
+    background: var(--primary-light);
+    color: var(--text-color);
+    border: 1px solid var(--accent-cyan);
+    border-radius: 15px;
+    font: 16px var(--primary-font), serif;
+}
+
+.grading-status-modal textarea {
+    resize: vertical;
+}
+
+.grading-status-modal select:focus,
+.grading-status-modal textarea:focus {
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 18px var(--accent-cyan) inset, 0 0 8px var(--accent-cyan);
+    outline: none;
+}
+
+.grading-status-modal input[type="number"] {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 10px 15px;
+    background: var(--primary-light);
+    color: var(--text-color);
+    border: 1px solid var(--accent-cyan);
+    border-radius: 25px;
+    font: 16px var(--primary-font), serif;
+}
+
+.grading-status-modal .field-help {
+    color: rgba(201, 209, 217, 0.72);
+    font-size: 0.8rem;
+    letter-spacing: normal;
+    text-shadow: none;
+}
+
+.grading-status-modal .field-error {
+    color: #ff9aa4;
+    font-size: 0.82rem;
+    letter-spacing: normal;
+    text-shadow: none;
+}
+
 /* Upload CSV modal */
 .upload-modal {
     gap: 24px;

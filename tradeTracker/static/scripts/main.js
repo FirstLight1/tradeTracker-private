@@ -1,7 +1,8 @@
-import { renderField, renderAlert, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign, downloadFile, createNewItem } from "./utils/renderUtil.js";
+import { renderField, renderAlert, renderServerErrors, clearFieldErrors, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign, downloadFile, createNewItem } from "./utils/renderUtil.js";
 import { CardStruct, queue, CartLine } from "./utils/classes.js";
 import { escapeHtml, sanitizePlainText, sanitizeAttrValue, sanitizeNumericId, sanitizeClassToken, csrfFetch } from "./utils/sanitizers.js";
 import { searchCard } from "./utils/searchApi.js";
+import "./headerActions.js";
 
 
 function paymentTypeSelect(className, defaultValue = '') {
@@ -259,209 +260,6 @@ function isEmpty(obj) {
     return Object.keys(obj).length === 0;
 }
 
-function soldReportBtn() {
-    const salesBtn = document.querySelector('.sales-btn');
-    salesBtn.addEventListener('click', () => {
-        const div = document.createElement('div');
-        div.classList.add('sold-report-container');
-        div.innerHTML = `
-            <div class="sold-report-content">
-                <form class="sold-report-form" method="get">
-                <div>
-                    <label for="sold-month">Month:</label>
-                    <input type="number" id="sold-month" name="sold-month" min="1" max="12" required value=${new Date().getMonth()}>
-                </div>
-                <div>
-                    <label for="sold-year">Year:</label>
-                    <input type="number" id="sold-year" name="sold-year" min="2000" max="2100" required value=${new Date().getFullYear()}>
-                </div>
-                <div class="generate-report-button">
-                    <button type="submit">Generate Report</button>
-                </div>
-                </form>
-            </div>
-    `;
-        document.body.appendChild(div);
-        const form = div.querySelector('.sold-report-form');
-        form.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const month = form.querySelector('#sold-month').value;
-            const year = form.querySelector('#sold-year').value;
-            generateSoldReport(month, year, div);
-        });
-        div.addEventListener('click', (event) => {
-            if (event.target === div) {
-                div.remove();
-            }
-        });
-    });
-}
-
-async function generateSoldReport(month, year, div) {
-    const response = await csrfFetch(`/generateSoldReport?month=${month}&year=${year}`);
-    const contentType = response.headers.get('content-type') || '';
-
-    if (!response.ok || contentType.includes('application/json')) {
-        const err = await response.json();
-        renderAlert(`Error generating sold report: ${err}`, 'error');
-        return;
-    }
-    try {
-        downloadFile(response)
-        div.remove();
-    } catch (e) {
-        renderAlert('Error: ' + e, 'error');
-    }
-}
-
-function uploadCSVModal() {
-    const uploadBtn = document.querySelector('.upload-csv-btn');
-    if (!uploadBtn) return;
-    uploadBtn.addEventListener('click', () => {
-        const div = document.createElement('div');
-        div.classList.add('reciever-div');
-        div.innerHTML = `
-            <div class="modal-content upload-modal">
-                <span class="close-modal">&times;</span>
-                <div class="upload-option upload-option-disabled">
-                    <p>CM sold CSV</p>
-                    <label class="upload-file-label">
-                        <span>Choose file</span>
-                        <input type="file" accept=".csv" class="import-cm-sold-csv" disabled>
-                    </label>
-                </div>
-                <div class="upload-option ">
-                    <p>Sold CSV</p>
-                    <label class="upload-file-label">
-                        <span>Choose files</span>
-                        <input type="file" accept=".csv" class="import-sold-csv" multiple>
-                    </label>
-                </div>
-                <div class="upload-option">
-                    <p>Inventory CSV</p>
-                    <label class="upload-file-label">
-                        <span>Choose file</span>
-                        <input type="file" accept=".csv" class="import-inventory-csv" multiple>
-                    </label>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(div);
-
-        bindImportCSV('.import-inventory-csv', 'inventory', div);
-        bindImportCSV('.import-sold-csv', 'sold', div);
-
-        const close = () => div.remove();
-        div.querySelector('.close-modal').addEventListener('click', close);
-        div.addEventListener('click', (event) => {
-            if (event.target === div) close();
-        });
-    });
-}
-
-function bindImportCSV(selector, type, root = document) {
-    const input = root.querySelector(selector);
-    if (!input) return;
-    input.addEventListener('change', async (event) => {
-        const files = event.target.files;
-        if (files && files.length) {
-            const formData = new FormData();
-            for (const file of files) {
-                formData.append("csv-upload", file);
-            }
-            formData.append("type", type);
-            const spinner = showProcessingSpinner(root);
-            try {
-                const response = await csrfFetch('/importCSV', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-                switch (data.status) {
-                    case "success": {
-                        if (data.download_url) {
-                            const resp = await fetch(data.download_url);
-                            if (!resp.ok) throw new Error("download failed");
-                            const blob = await resp.blob();          // bytes are here now
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = "processed.zip";
-                            a.click();
-                            URL.revokeObjectURL(url);
-                        }
-                        // The 'sold' import reports orders it could not process:
-                        // `failed` (errored during invoicing) and `rejected` (items
-                        // not found in inventory). Surface them instead of silently
-                        // reloading, so the client knows which orders need attention.
-                        const failed = Array.isArray(data.failed) ? data.failed : [];
-                        const rejected = Array.isArray(data.rejected) ? data.rejected : [];
-                        if (failed.length || rejected.length) {
-                            const lines = [];
-                            if (failed.length) {
-                                lines.push(`${failed.length} order(s) failed to process:`);
-                                failed.forEach(f => lines.push(`• #${f.idOrder} ${f.name || ''} — ${f.reason || 'unknown error'}`));
-                            }
-                            if (rejected.length) {
-                                lines.push(`${rejected.length} order(s) skipped (items not in inventory):`);
-                                rejected.forEach(r => lines.push(`• #${r.idOrder} ${r.name || ''}`));
-                            }
-                            // Keep the report on screen; the user can refresh manually.
-                            renderAlert(lines.join('\n'), 'error');
-                        } else {
-                            window.location.reload();
-                        }
-                        break;
-                    }
-                    case "missing":
-                        renderAlert('No file uploaded', 'error')
-                        break;
-                    case "file":
-                        renderAlert('No file selected', 'error')
-                        break;
-                    case "extension":
-                        renderAlert('Please upload valid CSV file', 'error')
-                        break;
-                    case "duplicate":
-                        renderAlert('File already uploaded', 'error')
-                        break;
-                    case "error":
-                        renderAlert('Error processing CSV: ' + (data.message || ''), 'error')
-                        break;
-                }
-            } catch (e) {
-                renderAlert('Error processing CSV: ' + e + ', Error code: Mx18', 'error')
-            } finally {
-                hideProcessingSpinner(spinner);
-            }
-        }
-    })
-}
-
-// Shows a processing spinner over the modal, but only once processing takes
-// longer than `delay` ms so quick uploads don't cause a flash.
-function showProcessingSpinner(root, delay = 400) {
-    const container = (root && root.querySelector && root.querySelector('.modal-content')) || document.body;
-    const handle = { overlay: null, timer: null };
-    handle.timer = setTimeout(() => {
-        const overlay = document.createElement('div');
-        overlay.className = 'processing-spinner-overlay';
-        overlay.innerHTML = `
-            <div class="processing-spinner"></div>
-            <p class="processing-spinner-text">Processing CSV…</p>
-        `;
-        container.appendChild(overlay);
-        handle.overlay = overlay;
-    }, delay);
-    return handle;
-}
-
-function hideProcessingSpinner(handle) {
-    if (!handle) return;
-    clearTimeout(handle.timer);
-    if (handle.overlay) handle.overlay.remove();
-}
-
 function createSealedItemRow() {
     const itemDiv = document.createElement('div');
     itemDiv.classList.add('sealed-item-row');
@@ -570,6 +368,161 @@ function createSealedModal(sid, auctionId, initialValue) {
     });
 }
 
+function gradingModal(cardId) {
+    const existingModal = document.querySelector('.grading-modal-overlay');
+    if (existingModal) {
+        existingModal.querySelector('#grading-grader')?.focus();
+        return;
+    }
+
+    const restoreFocusTo = document.activeElement;
+    const modal = document.createElement('div');
+    modal.classList.add('reciever-div', 'grading-modal-overlay');
+    modal.dataset.cardId = cardId;
+    modal.innerHTML = `
+        <form class="modal-content grading-status-modal direct-grading-form" role="dialog" aria-modal="true" aria-labelledby="grading-modal-title" novalidate>
+            <button class="close-modal" type="button" aria-label="Close grading modal">&times;</button>
+            <p id="grading-modal-title">Grade card</p>
+            <div>
+                <label for="grading-grader">Grader</label>
+                <input id="grading-grader" name="grader" type="text" autocomplete="organization" required>
+            </div>
+            <div>
+                <label for="grading-grade-numeric">Numeric grade</label>
+                <input id="grading-grade-numeric" name="grade_numeric" type="number" min="0" max="10" step="0.01" aria-describedby="grading-result-help">
+            </div>
+            <div>
+                <label for="grading-grade-label">Grade label</label>
+                <input id="grading-grade-label" name="grade_label" type="text" aria-describedby="grading-result-help">
+                <p id="grading-result-help" class="field-help">Enter a numeric grade or a grade label.</p>
+            </div>
+            <div>
+                <label for="grading-qualifier">Qualifier</label>
+                <input id="grading-qualifier" name="qualifier" type="text">
+            </div>
+            <div>
+                <label for="grading-cert-number">Certificate number</label>
+                <input id="grading-cert-number" name="cert_number" type="text">
+            </div>
+            <div>
+                <label for="grading-market-value">Post-grade market value</label>
+                <input id="grading-market-value" name="post_grade_market_value" type="number" min="0" step="0.01">
+            </div>
+            <div class="modal-buttons">
+                <button class="grading-confirm-btn" type="submit">Confirm</button>
+            </div>
+        </form>
+    `;
+
+    document.body.appendChild(modal);
+
+    const closeButton = modal.querySelector('.close-modal');
+    const close = () => {
+        document.removeEventListener('keydown', handleKeydown);
+        modal.remove();
+        if (restoreFocusTo?.isConnected) restoreFocusTo.focus();
+    };
+    const handleKeydown = (event) => {
+        if (event.key === 'Escape') close();
+    };
+
+    closeButton.addEventListener('click', close);
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) close();
+    });
+    const gradingForm = modal.querySelector('.direct-grading-form');
+    const gradeNumeric = modal.querySelector('#grading-grade-numeric');
+    const gradeLabel = modal.querySelector('#grading-grade-label');
+    gradingForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        clearFieldErrors(gradingForm);
+        const grader = modal.querySelector('#grading-grader');
+        const marketValue = modal.querySelector('#grading-market-value');
+        const errors = {};
+        if (!grader.value.trim()) errors.grader = 'Grader is required.';
+        if (!gradeNumeric.value && !gradeLabel.value.trim()) {
+            errors.grade_numeric = 'Enter a numeric grade or a grade label.';
+        } else if (gradeNumeric.value && !gradeNumeric.validity.valid) {
+            errors.grade_numeric = 'Numeric grade must be between 0 and 10.';
+        }
+        if (marketValue.value && !marketValue.validity.valid) {
+            errors.post_grade_market_value = 'Market value must be zero or greater.';
+        }
+        if (Object.keys(errors).length) {
+            renderServerErrors({ errors }, gradingForm, {
+                grader: '#grading-grader', grade_numeric: '#grading-grade-numeric',
+                post_grade_market_value: '#grading-market-value',
+            });
+            return;
+        }
+        const nullableText = (selector) => {
+            const value = modal.querySelector(selector).value.trim();
+            return value || null;
+        };
+        const nullableNumber = (selector) => {
+            const value = modal.querySelector(selector).value;
+            return value === '' ? null : Number(value);
+        };
+        const confirmButton = modal.querySelector('.grading-confirm-btn');
+        confirmButton.disabled = true;
+        confirmButton.textContent = 'Saving...';
+
+        try {
+            const response = await csrfFetch('/gradeCard', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    card_id: Number(modal.dataset.cardId),
+                    grader: nullableText('#grading-grader'),
+                    grade_numeric: nullableNumber('#grading-grade-numeric'),
+                    grade_label: nullableText('#grading-grade-label'),
+                    qualifier: nullableText('#grading-qualifier'),
+                    cert_number: nullableText('#grading-cert-number'),
+                    post_grade_market_value: nullableNumber('#grading-market-value'),
+                }),
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                renderServerErrors(result, gradingForm, {
+                    grader: '#grading-grader', grade_numeric: '#grading-grade-numeric',
+                    grade_label: '#grading-grade-label', qualifier: '#grading-qualifier',
+                    cert_number: '#grading-cert-number', post_grade_market_value: '#grading-market-value',
+                }, 'Unable to save card grading');
+                confirmButton.disabled = false;
+                confirmButton.textContent = 'Confirm';
+                return;
+            }
+            close();
+            window.location.reload();
+        } catch (error) {
+            renderAlert(`Error saving card grading: ${error}`, 'error');
+            confirmButton.disabled = false;
+            confirmButton.textContent = 'Confirm';
+        }
+    });
+    document.addEventListener('keydown', handleKeydown);
+    modal.querySelector('#grading-grader').focus();
+}
+
+function cardConditionDisplay(card) {
+    if (card.grading_state === 'at_grader') {
+        const statusLabels = {
+            preparing: 'Preparing for grading',
+            sent_for_grading: 'Sent for grading',
+            received_by_grader: 'At grader',
+        };
+        const status = statusLabels[card.grading_submission_status] || 'At grader';
+        return [status, card.grader].filter(Boolean).join(' - ');
+    }
+    if (card.grading_state === 'graded') {
+        const fullGrade = [card.grader, card.grade_numeric, card.grade_label, card.qualifier]
+            .filter(value => value !== null && value !== undefined && value !== '')
+            .join(' ');
+        return fullGrade || 'Graded';
+    }
+    return card.condition || 'Unknown';
+}
+
 window.handleSealedInput = function(input, container) {
     window.handleCardInput(input, {
         itemSelector: '.sealed-item-row',
@@ -645,12 +598,16 @@ function renderCartLine(line) {
     line.element = cardDiv;
 
     const updateDisplay = () => {
+        const gradeDisplay = line.grading
+            ? [line.grading.grader, line.grading.grade_numeric, line.grading.grade_label, line.grading.qualifier]
+                .filter(value => value !== null && value !== undefined && value !== '').join(' ') || 'Graded'
+            : line.condition;
         const minusDisabled = line.cardIds.length <= 1 ? 'disabled' : '';
         const plusDisabled = !line.canIncrement ? 'disabled' : '';
         cardDiv.innerHTML = `
             <p class="cart-card-name">${DOMPurify.sanitize(line.cardName)}</p>
             <p class="cart-card-num">${DOMPurify.sanitize(line.cardNum)}</p>
-            <p class="cart-condition">${DOMPurify.sanitize(line.condition)}</p>
+            <p class="cart-condition${line.grading ? ' graded' : ''}">${DOMPurify.sanitize(gradeDisplay)}</p>
             <p class='market-value-invoice'>${DOMPurify.sanitize(line.marketValue)}€</p>
             <div class="qty-controls">
                 <button class="qty-minus" ${minusDisabled}>-</button>
@@ -1547,7 +1504,7 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
         }
 
         // Check if a matching CartLine already exists
-        const existing = cartLines.find(l => l.matches(card.cardName, card.cardNum, card.condition));
+        const existing = cartLines.find(l => l.matches(card.cardName, card.cardNum, card.condition, card.grading));
         if (existing) {
             existing.cardIds.push(cardId);
             existingIDs.add(cardId);
@@ -1565,7 +1522,7 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
             const line = new CartLine(
                 card.cardName, card.cardNum, card.condition,
                 card.auctionName || '', card.marketValue || '',
-                [cardId]
+                [cardId], card.grading
             );
             cartLines.push(line);
             existingIDs.add(cardId);
@@ -1575,7 +1532,7 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
     }
 
     // Entry A: From search results (no cardId)
-    const existing = cartLines.find(l => l.matches(card.cardName, card.cardNum, card.condition));
+    const existing = cartLines.find(l => l.matches(card.cardName, card.cardNum, card.condition, card.grading));
     if (existing) {
         // Try to increment existing line
         if (!existing.canIncrement) {
@@ -1610,6 +1567,8 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
                 card_name: card.cardName,
                 card_num: card.cardNum,
                 condition: card.condition,
+                is_graded: card.grading !== null,
+                ...card.grading,
                 exclude_ids: [...existingIDs]
             })
         });
@@ -1625,7 +1584,7 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
         const line = new CartLine(
             card.cardName, card.cardNum, card.condition,
             card.auctionName || '', card.marketValue || '',
-            data.card_ids
+            data.card_ids, card.grading
         );
         cartLines.push(line);
         existingIDs.add(line.cardIds[0]);
@@ -2075,7 +2034,18 @@ function displaySearchResults(results, resultsQueue, searchInput) {
             card.cardNum = result.card_num;
             card.condition = result.condition;
             card.marketValue = result.market_value;
+            card.grading = result.is_graded ? {
+                grader: result.grader,
+                grade_numeric: result.grade_numeric != null ? String(result.grade_numeric) : null,
+                grade_label: result.grade_label,
+                qualifier: result.qualifier,
+                cert_number: result.cert_number,
+            } : null;
             const safeConditionClass = sanitizeClassToken(result.condition || 'Unknown');
+            const gradeDisplay = card.grading
+                ? [result.grader, result.grade_numeric, result.grade_label, result.qualifier]
+                    .filter(value => value !== null && value !== undefined && value !== '').join(' ') || 'Graded'
+                : result.condition || 'Unknown';
 
             const availableCount = result.available_count ? result.available_count : 1;
             let pendingQty = 1;
@@ -2084,7 +2054,9 @@ function displaySearchResults(results, resultsQueue, searchInput) {
             div.innerHTML = `
                 <p class="result result-card-name">${DOMPurify.sanitize(result.card_name || 'N/A')}</p>
                 <p class="result result-card-num">${DOMPurify.sanitize(result.card_num || 'N/A')}</p>
-                <p class="result result-condition ${safeConditionClass}">${DOMPurify.sanitize(result.condition || 'Unknown')}</p>
+                <p class="result result-condition ${safeConditionClass}${card.grading ? ' graded' : ''}">
+                    ${DOMPurify.sanitize(gradeDisplay)}
+                </p>
                 <p class="result result-market-value">${DOMPurify.sanitize(result.market_value ? result.market_value + '€' : 'N/A')}</p>
                 <p class="result result-quantity">${pendingQty} / ${availableCount}</p>
                 <p class="result result-auction-name">${DOMPurify.sanitize(result.auction_name || result.auction_id - 1)}</p>
@@ -2189,6 +2161,11 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
     box?.remove();
 
     const isSealed = cardId.includes('s');
+    const gradingState = isSealed ? null : (itemLine.dataset.gradingState || 'raw');
+    const canAddToCart = isSealed || gradingState !== 'at_grader';
+    const canDelete = isSealed || gradingState === 'raw';
+    const canGrade = !isSealed && gradingState === 'raw';
+    const canViewGrading = !isSealed && gradingState === 'at_grader';
     box = document.createElement('div');
     box.classList.add("context-menu");
     //TODO: move styles to css
@@ -2199,12 +2176,18 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
                                 ${isSealed ? `<div class="">
                                     <button class="open-sealed-item">Open</button>
                                 </div>` : ''}
-                                <div class="">
+                                ${canAddToCart ? `<div class="">
                                     <button class="add-to-cart">Add to cart</button>
-                                </div>
-                                <div class="">
+                                </div>` : ''}
+                                ${canDelete ? `<div class="">
                                     <button class="delete-card" data-id="${cardId}">Delete</button>
-                                </div>
+                                </div>` : ''}
+                                ${canGrade ? `<div class="">
+                                    <button class="grade-card" data-id="${cardId}">Grade</button>
+                                </div>` : ''}
+                                ${canViewGrading ? `<div class="">
+                                    <button class="view-grading">View grading</button>
+                                </div>` : ''}
                             </div>
                         </div>
                         <span hidden class="card-id">${cardId}</span>
@@ -2216,29 +2199,47 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
         openButton.addEventListener('click', () => {
             const auctionDiv = itemLine.closest('.auction-tab');
             const auctionId = auctionDiv?.getAttribute('data-id');
-            const initialValue = itemLine.querySelector('.sealed-market-value').textContent.replace('€', '');
+            const initialValue = itemLine.querySelector('.sealed-market-value, .market-value-sealed').textContent.replace('€', '');
             createSealedModal(cardId, auctionId, initialValue);
             box?.remove();
             box = null;
         });
     }
 
+    const gradeButton = box.querySelector('.grade-card');
+    if (gradeButton) {
+        gradeButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const gradeCardId = gradeButton.getAttribute('data-id');
+            gradingModal(gradeCardId);
+            box?.remove();
+            box = null;
+        });
+    }
+
+    const viewGradingButton = box.querySelector('.view-grading');
+    if (viewGradingButton) {
+        viewGradingButton.addEventListener('click', () => {
+            window.location.href = '/grading';
+        });
+    }
+
     const button = box.querySelector('.add-to-cart');
     //sealed add
-    if (isSealed) {
+    if (button && isSealed) {
         button.addEventListener('click', () => {
             const auctionDiv = itemLine.closest('.auction-tab');
-            const auctionId = auctionDiv.getAttribute('data-id');
+            const auctionId = auctionDiv?.getAttribute('data-id');
 
             const sealedData = {
                 name: DOMPurify.sanitize(itemLine.querySelector('.sealed-name').textContent),
-                market_value: DOMPurify.sanitize(itemLine.querySelector('.sealed-market-value').textContent.replace('€', ''))
+                market_value: DOMPurify.sanitize(itemLine.querySelector('.sealed-market-value, .market-value-sealed').textContent.replace('€', ''))
             };
 
             const available = Number(itemLine.getAttribute('data-quantity')) || null;
             addSealedToCart(sealedData, cardId, auctionId, 1, available);
         });
-    } else {
+    } else if (button) {
         //cards add
         button.addEventListener('click', async () => {
             const auctionDiv = itemLine.closest('.auction-tab');
@@ -2247,7 +2248,14 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
             const card = new CardStruct();
             card.cardName = itemLine.querySelector('.card-name').textContent;
             card.cardNum = itemLine.querySelector('.card-num').textContent;
-            card.condition = itemLine.querySelector('.condition').textContent;
+            card.condition = itemLine.dataset.condition || itemLine.querySelector('.condition').textContent;
+            card.grading = itemLine.dataset.isGraded === 'true' ? {
+                grader: itemLine.dataset.grader || null,
+                grade_numeric: itemLine.dataset.gradeNumeric || null,
+                grade_label: itemLine.dataset.gradeLabel || null,
+                qualifier: itemLine.dataset.qualifier || null,
+                cert_number: itemLine.dataset.certNumber || null,
+            } : null;
             const marketValueText = itemLine.querySelector('.market-value').textContent;
             card.marketValue = marketValueText ? marketValueText.replace('€', '') : null;
             await addToShoppingCart(card, auctionId, cardId);
@@ -2255,7 +2263,7 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
     }
 
     const deleteButton = box.querySelector('.delete-card');
-    deleteButton.addEventListener('click', async (e) => {
+    if (deleteButton) deleteButton.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (deleteButton.textContent !== 'Confirm') {
             deleteButton.textContent = 'Confirm';
@@ -2269,7 +2277,7 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
         const auctionDiv = itemLine.closest('.auction-tab');
         const auctionId = auctionDiv?.getAttribute('data-id');
 
-        if (cardId.includes('s')) {
+        if (isSealed) {
             try {
                 const response = await csrfFetch(`/deleteSealed/${cardId}`, { method: 'DELETE' });
                 const data = await response.json();
@@ -2344,14 +2352,28 @@ async function loadAuctionContent(button) {
                 `;
                     cards.forEach(card => {
                         const safeCardId = sanitizeNumericId(card.id);
+                        const conditionDisplay = cardConditionDisplay(card);
                         const safeCardConditionClass = sanitizeClassToken(card.condition || 'Unknown');
+                        const gradingClass = card.grading_state === 'graded'
+                            ? ' graded'
+                            : card.grading_state === 'at_grader' ? ' at-grader' : '';
                         const cardDiv = document.createElement('div');
                         cardDiv.classList.add('card');
                         cardDiv.setAttribute('data-id', safeCardId);
+                        cardDiv.dataset.condition = card.condition || '';
+                        cardDiv.dataset.gradingState = card.grading_state || 'raw';
+                        cardDiv.dataset.gradingSubmissionId = card.grading_submission_id ?? '';
+                        cardDiv.dataset.gradingSubmissionStatus = card.grading_submission_status ?? '';
+                        cardDiv.dataset.isGraded = card.grading_state === 'graded' ? 'true' : 'false';
+                        cardDiv.dataset.grader = card.grader ?? '';
+                        cardDiv.dataset.gradeNumeric = card.grade_numeric ?? '';
+                        cardDiv.dataset.gradeLabel = card.grade_label ?? '';
+                        cardDiv.dataset.qualifier = card.qualifier ?? '';
+                        cardDiv.dataset.certNumber = card.cert_number ?? '';
                         cardDiv.innerHTML = `
                         ${renderField(DOMPurify.sanitize(card.card_name), 'text', ['card-info', 'card-name'], 'Card Name', 'card_name')}
                         ${renderField(DOMPurify.sanitize(card.card_num), 'text', ['card-info', 'card-num'], 'Card Number', 'card_num')}
-                        <p class='card-info condition ${safeCardConditionClass}' data-field="condition">${DOMPurify.sanitize(card.condition) ? DOMPurify.sanitize(card.condition) : 'Unknown'}</p>
+                        <p class='card-info condition ${safeCardConditionClass}${gradingClass}' data-field="condition">${DOMPurify.sanitize(conditionDisplay)}</p>
                         ${renderField(card.card_price ? DOMPurify.sanitize(card.card_price) + '€' : null, 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
                         ${renderField(card.market_value ? DOMPurify.sanitize(card.market_value) + '€' : null, 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
                         ${renderField(card.card_price !== null && card.market_value !== null ? (card.market_value - card.card_price).toFixed(2) + '€' : ' ', 'text', ['card-info', 'profit'], 'profit', true)}
@@ -2377,6 +2399,7 @@ async function loadAuctionContent(button) {
                             const cardDiv = event.target.closest('.card');
                             const cardId = cardDiv.getAttribute('data-id');
                             if (event.target.classList.contains('condition')) {
+                                if (event.target.classList.contains('graded')) return;
                                 const value = event.target.textContent.trim();
                                 const select = document.createElement('select');
                                 const options = ['Mint', 'Near Mint', 'Excellent', 'Good', 'Light Played', 'Played', 'Poor'];
@@ -2399,10 +2422,10 @@ async function loadAuctionContent(button) {
                                     p.classList.add('card-info', 'condition', classValue);
                                     p.textContent = selectedValue || value;
                                     select.replaceWith(p);
+                                    cardDiv.dataset.condition = p.textContent;
                                     patchValue(cardId, p.textContent, dataset);
                                 });
-                            }
-                            if (event.target.tagName === "P") {
+                            } else if (event.target.tagName === "P") {
                                 let value = event.target.textContent.replace('€', '');
                                 if (isNaN(value)) {
                                     value = value.toUpperCase();
@@ -2460,7 +2483,7 @@ async function loadAuctionContent(button) {
                             const card = new CardStruct();
                             card.cardName = cardDiv.querySelector('.card-name').textContent;
                             card.cardNum = cardDiv.querySelector('.card-num').textContent;
-                            card.condition = cardDiv.querySelector('.condition').textContent;
+                            card.condition = cardDiv.dataset.condition;
                             const marketValueText = cardDiv.querySelector('.market-value').textContent;
                             card.marketValue = marketValueText ? marketValueText.replace('€', '') : null;
                             await addToShoppingCart(card, auctionId, cardId);
@@ -2538,6 +2561,10 @@ async function loadAuctionContent(button) {
                             `;
 
                         cardsContainer.insertBefore(sealedDiv, cardsContainer.querySelector('.button-container'));
+                        sealedDiv.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                            spawnItemsContextMenu(sealedItem.sid, event, sealedDiv);
+                        });
                     });
 
                     // Sealed "Open" lives in the items context menu (spawnItemsContextMenu)
@@ -2925,6 +2952,9 @@ async function loadSealed(viewButton) {
                     const sealedDiv = document.createElement('div');
                     sealedDiv.classList.add('sealed-item');
                     sealedDiv.setAttribute('sid', sealedData.sid);
+                    if (sealedData.quantity != null) {
+                        sealedDiv.setAttribute('data-quantity', sealedData.quantity);
+                    }
                     const margin = (Number(DOMPurify.sanitize(sealedData.market_value)) - Number(DOMPurify.sanitize(sealedData.price))).toFixed(2);
                     const timeStamp = DOMPurify.sanitize(sealedData.date).replace('Z', '');
                     const date = new Date(timeStamp);
@@ -2937,60 +2967,12 @@ async function loadSealed(viewButton) {
                         <p class='market-value-sealed'>${DOMPurify.sanitize(sealedData.market_value)}</p>
                         <p class='margin'>${margin}</p>
                         <p class='add-date'>${formatedDate}</p>
-                        <div class="item-options">
-                            <span class="item-options-star" title="Show options">&#9733;</span>
-                            <div class="item-options-list">
-                                <div class="item-option">
-                                    <button class='open-sealed'>Open</button>
-                                </div>
-                                <div class="item-option">
-                                    <button class='add-to-cart'>Add to cart</button>
-                                </div>
-                                <div class="item-option">
-                                    <button class='delete-sealed'>Delete</button>
-                                </div>
-                            </div>
-                        </div>
+                        <p></p>
                         `
 
-                    const addToCart = sealedDiv.querySelector('.add-to-cart');
-                    addToCart.addEventListener('click', () => {
-                        const available = sealedData.quantity ? Number(sealedData.quantity) : null;
-                        addSealedToCart(sealedData, sealedData.sid, null, 1, available)
-                    });
-
-                    const openSealedButton = sealedDiv.querySelector('.open-sealed');
-                    openSealedButton.addEventListener('click', () => {
-                        const sid = sealedDiv.getAttribute('sid');
-                        const initialValue = sealedDiv.querySelector('.sealed-market-value').textContent.replace('€', '');
-                        createSealedModal(sid, 0, initialValue);
-                    });
-
-
-                    const removeSealed = sealedDiv.querySelector('.delete-sealed');
-                    removeSealed.addEventListener('click', async () => {
-
-                        if (removeSealed.textContent === 'Confirm') {
-                            const response = await csrfFetch(`/deleteSealed/${sealedData.sid}`, { method: 'DELETE' })
-                            const data = await response.json();
-
-                            if (data.status === 'success') {
-                                sealedDiv.remove();
-                            }
-                        } else {
-                            removeSealed.textContent = 'Confirm';
-                            const timerID = setTimeout(() => {
-                                removeSealed.textContent = 'Delete';
-                            }, 3000);
-                            // Remove confirmation if user clicks elsewhere
-                            document.addEventListener('click', function handler(e) {
-                                if (e.target !== removeSealed) {
-                                    removeSealed.textContent = 'Delete';
-                                    document.removeEventListener('click', handler);
-                                    clearTimeout(timerID);
-                                }
-                            });
-                        }
+                    sealedDiv.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        spawnItemsContextMenu(sealedData.sid, event, sealedDiv);
                     });
                     contentDiv.append(sealedDiv);
                 })
@@ -3580,13 +3562,8 @@ async function loadAuctions() {
 searchBar();
 loadAuctions();
 initializeSealed();
-uploadCSVModal();
-soldReportBtn();
 initializeCart();
 initializeBulkHolo();
 loadCartContentFromSession();
 scrollOnLoad();
-document.addEventListener('DOMContentLoaded', async () => {
-    await updateInventoryValueAndTotalProfit();
-}, false);
 startPolling();

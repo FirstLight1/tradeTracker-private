@@ -1,4 +1,4 @@
-import {updateInventoryValueAndTotalProfit, renderAlert, createNewCard} from "./utils/renderUtil.js";
+import {renderAlert, createNewCard} from "./utils/renderUtil.js";
 import {CardStruct} from './utils/classes.js';
 import { csrfFetch } from "./utils/sanitizers.js";
 
@@ -203,7 +203,3 @@ addPaymentRowBtn.addEventListener('click', () => {
 
 // Attach listener to initial row
 attachRemoveListener(document.querySelector('.payment-row'));
-
-document.addEventListener('DOMContentLoaded', async () => {
-    await updateInventoryValueAndTotalProfit();
-}, false);

@@ -16,11 +16,17 @@ class SaleService:
         self.receipt_service = receipt_service
 
     def process_sale(self, sale_input) -> models.SaleResult:
-        self._check_inventory(sale_input)
-        receipt = self.receipt_service.issue(sale_input, self.db)
-        sale_id = self._insert_sale_header(sale_input, receipt)
-        self._insert_sale_items(sale_id, sale_input)
-        return models.SaleResult(sale_id=sale_id, receipt=receipt)
+        try:
+            self.db.execute("BEGIN IMMEDIATE")
+            self._check_inventory(sale_input)
+            self._prepare_cards(sale_input)
+            receipt = self.receipt_service.issue(sale_input, self.db)
+            sale_id = self._insert_sale_header(sale_input, receipt)
+            self._insert_sale_items(sale_id, sale_input)
+            return models.SaleResult(sale_id=sale_id, receipt=receipt)
+        except Exception:
+            self.db.rollback()
+            raise
 
     def _check_bulk_inventory(self, db, item_type, quantity_needed):
         """Check if sufficient inventory exists for the given item type."""
@@ -57,6 +63,55 @@ class SaleService:
                 ).fetchone()[0]
                 if available < needed:
                     raise ValueError
+
+    def _prepare_cards(self, sale_input):
+        seen_ids = set()
+        for card in sale_input.cards:
+            card_id = card.get("cardId")
+            if card_id is None or card_id in seen_ids:
+                raise ValueError("Card is not available")
+            seen_ids.add(card_id)
+
+            inventory_card = self.db.execute(
+                "SELECT c.card_name, c.card_num, c.condition, c.card_price, "
+                "gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, "
+                "gsc.cert_number, gsc.landed_cost, gsc.submission_id, gs.status "
+                "FROM cards c "
+                "LEFT JOIN sale_items si ON si.card_id = c.id "
+                "LEFT JOIN grading_submission_cards gsc "
+                "ON gsc.card_id = c.id AND gsc.is_current = 1 "
+                "LEFT JOIN grading_submissions gs ON gs.id = gsc.submission_id "
+                "WHERE c.id = ? AND c.sold_date IS NULL AND si.card_id IS NULL",
+                (card_id,),
+            ).fetchone()
+            if not inventory_card or (
+                inventory_card["submission_id"] is not None
+                and inventory_card["status"] != models.GradeStatus.GRADED
+            ):
+                raise ValueError(f"Card with id:{card_id} is not available")
+
+            grade_parts = [
+                inventory_card["grader"],
+                self._format_grade(inventory_card["grade_numeric"]),
+                inventory_card["grade_label"],
+                inventory_card["qualifier"],
+            ]
+            card["cardName"] = inventory_card["card_name"]
+            card["cardNum"] = inventory_card["card_num"] or ""
+            card["condition"] = inventory_card["condition"]
+            card["displayCondition"] = " ".join(filter(None, grade_parts)) or inventory_card["condition"]
+            card["certNumber"] = inventory_card["cert_number"] or None
+            card["internalCost"] = (
+                inventory_card["landed_cost"]
+                if inventory_card["landed_cost"] is not None
+                else inventory_card["card_price"]
+            )
+
+    @staticmethod
+    def _format_grade(grade):
+        if grade is None:
+            return None
+        return str(int(grade)) if float(grade).is_integer() else str(grade)
 
     def _insert_sale_header(self, sale_input, receipt):
         shippingPrice = None
@@ -102,20 +157,32 @@ class SaleService:
         if len(cards) > 0:
             for card in cards:
                 sell_price = float(card.get("marketValue", 0))
-                self.db.execute(
-                    "UPDATE cards SET sold_date = ? WHERE id = ?",
-                    (sale_date, card.get("cardId")),
+                updated = self.db.execute(
+                    "UPDATE cards SET sold_date = ? WHERE id = ? AND sold_date IS NULL "
+                    "AND NOT EXISTS (SELECT 1 FROM sale_items WHERE card_id = ?) "
+                    "AND NOT EXISTS ("
+                    "SELECT 1 FROM grading_submission_cards gsc "
+                    "JOIN grading_submissions gs ON gs.id = gsc.submission_id "
+                    "WHERE gsc.card_id = cards.id AND gsc.is_current = 1 "
+                    "AND gs.status != ?)",
+                    (sale_date, card.get("cardId"), card.get("cardId"), models.GradeStatus.GRADED),
                 )
+                if updated.rowcount != 1:
+                    raise ValueError(f"Card with id:{card.get('cardId')} is not available")
 
                 self.db.execute(
-                    "INSERT INTO sale_items (sale_id, card_id, sell_price, profit) "
-                    "VALUES (?, ?, ?, ? - (SELECT card_price FROM cards WHERE id = ?))",
+                    "INSERT INTO sale_items "
+                    "(sale_id, card_id, sell_price, profit, internal_cost, internal_profit) "
+                    "VALUES (?, ?, ?, ? - (SELECT card_price FROM cards WHERE id = ?), ?, ? - ?)",
                     (
                         sale_id,
                         card.get("cardId"),
                         sell_price,
                         sell_price,
                         card.get("cardId"),
+                        card.get("internalCost"),
+                        sell_price,
+                        card.get("internalCost"),
                     ),
                 )
         sealed = sale_input.sealed

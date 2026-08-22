@@ -9,6 +9,7 @@ export class CardStruct {
         this.marketValue = null;
         this.sellPrice = null;
         this.soldDate = null;
+        this.grading = null;
     }
 }
 
@@ -50,7 +51,7 @@ export class queue {
 }
 
 export class CartLine {
-    constructor(cardName, cardNum, condition, auctionName, marketValue, allIds) {
+    constructor(cardName, cardNum, condition, auctionName, marketValue, allIds, grading = null) {
         this.cardName = cardName;
         this.cardNum = cardNum;
         this.condition = condition;
@@ -58,6 +59,7 @@ export class CartLine {
         this.marketValue = marketValue;
         this.cardIds = [allIds[0]];
         this.reservableIds = allIds.slice(1);
+        this.grading = grading;
         this.element = null;
     }
 
@@ -83,10 +85,11 @@ export class CartLine {
         return [...this.cardIds];
     }
 
-    matches(cardName, cardNum, condition) {
+    matches(cardName, cardNum, condition, grading = null) {
         return this.cardName === cardName
             && this.cardNum === cardNum
-            && this.condition === condition;
+            && this.condition === condition
+            && JSON.stringify(this.grading) === JSON.stringify(grading);
     }
 
     maxQuantity() {
@@ -104,7 +107,8 @@ export class CartLine {
             auctionName: this.auctionName,
             marketValue: this.marketValue,
             cardIds: this.cardIds,
-            reservableIds: this.reservableIds
+            reservableIds: this.reservableIds,
+            grading: this.grading
         };
     }
 
@@ -113,7 +117,8 @@ export class CartLine {
         const line = new CartLine(
             data.cardName, data.cardNum, data.condition,
             data.auctionName, data.marketValue,
-            [...data.cardIds, ...(data.reservableIds || [])]
+            [...data.cardIds, ...(data.reservableIds || [])],
+            data.grading || null
         );
         // Override the constructor's default split
         line.cardIds = data.cardIds;
@@ -128,7 +133,12 @@ export class CartLine {
             cardName: this.cardName,
             cardNum: this.cardNum,
             condition: this.condition,
-            marketValue: this.marketValue
+            marketValue: this.marketValue,
+            displayCondition: this.grading
+                ? [this.grading.grader, this.grading.grade_numeric, this.grading.grade_label, this.grading.qualifier]
+                    .filter(value => value !== null && value !== undefined && value !== '').join(' ')
+                : this.condition,
+            certNumber: this.grading?.cert_number || null
         }));
     }
 
@@ -143,6 +153,8 @@ export class CartLine {
                     card_name: this.cardName,
                     card_num: this.cardNum,
                     condition: this.condition,
+                    is_graded: this.grading !== null,
+                    ...this.grading,
                     exclude_ids: [...excludeIds]
                 })
             });

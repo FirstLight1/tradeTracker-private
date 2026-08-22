@@ -86,6 +86,11 @@ function displayDebitNoteResults(results, resultsQueue, searchInput) {
         const availableCount = result.available_count ? Number(result.available_count) : 1;
         const marketValue = result.market_value != null ? result.market_value : '';
         const safeConditionClass = sanitizeClassToken(condition || '');
+        const gradeDisplay = result.is_graded
+            ? [result.grader, result.grade_numeric, result.grade_label, result.qualifier]
+                .filter(value => value !== null && value !== undefined && value !== '').join(' ') || 'Graded'
+            : condition;
+        const conditionContent = isSealed ? '' : escapeHtml(gradeDisplay);
 
         let pendingQty = 1;
         const div = document.createElement('div');
@@ -94,7 +99,9 @@ function displayDebitNoteResults(results, resultsQueue, searchInput) {
         div.innerHTML = `
             <p class="result result-name">${escapeHtml(name || 'N/A')}</p>
             <p class="result result-num">${escapeHtml(num)}</p>
-            <p class="result result-condition ${safeConditionClass}">${escapeHtml(condition)}</p>
+            <p class="result result-condition ${safeConditionClass}${result.is_graded ? ' graded' : ''}">
+                ${conditionContent}
+            </p>
             <p class="result result-quantity">${pendingQty} / ${availableCount}</p>
             <p class="result result-market-value">${escapeHtml(String(marketValue))}€</p>
         `;

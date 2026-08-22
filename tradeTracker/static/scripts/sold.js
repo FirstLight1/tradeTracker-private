@@ -7,6 +7,16 @@ const BULK_TYPE_BUY_PRICES = {
     ex: 0.15
 };
 
+function cardConditionDisplay(card) {
+    if (card.grading_is_current === 1) {
+        const fullGrade = [card.grader, card.grade_numeric, card.grade_label, card.qualifier]
+            .filter(value => value !== null && value !== undefined && value !== '')
+            .join(' ');
+        return fullGrade || 'Graded';
+    }
+    return card.condition || 'Unknown';
+}
+
 async function loadContent(button, soldDate) {
     const formattedDate = `${soldDate.getDate().toString().padStart(2, '0')}.${(soldDate.getMonth() + 1).toString().padStart(2, '0')}.${soldDate.getFullYear()}`;
     const saleId = button.getAttribute('data-id');
@@ -39,6 +49,8 @@ async function loadContent(button, soldDate) {
 
             soldCards.forEach(card => {
                 const safeConditionClass = sanitizeClassToken(card.condition || 'Unknown');
+                const gradingClass = card.grading_is_current === 1 ? ' graded' : '';
+                const conditionDisplay = cardConditionDisplay(card);
                 const safeCardId = sanitizeNumericId(card.id);
                 const cardElement = document.createElement('div');
                 cardElement.classList.add('card');
@@ -48,7 +60,7 @@ async function loadContent(button, soldDate) {
                 cardElement.innerHTML = `
                     ${renderField(DOMPurify.sanitize(card.card_name), 'text', ['card-info', 'card-name'], 'Card Name', 'card_name')}
                     ${renderField(DOMPurify.sanitize(card.card_num), 'text', ['card-info', 'card-num'], 'Card Number', 'card_num')}
-                    <p class='card-info condition ${safeConditionClass}' data-field="condition">${DOMPurify.sanitize(card.condition) ? DOMPurify.sanitize(card.condition) : 'Unknown'}</p>
+                    <p class='card-info condition ${safeConditionClass}${gradingClass}' data-field="condition">${DOMPurify.sanitize(conditionDisplay)}</p>
                     ${renderField(card.card_price ? DOMPurify.sanitize(card.card_price) + '€' : null, 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
                     ${renderField(card.market_value ? DOMPurify.sanitize(card.market_value) + '€' : null, 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
                     ${renderField(card.invoice_sell_price ? DOMPurify.sanitize(card.invoice_sell_price) + '€' : null, 'text', ['card-info', 'sell-price'], 'Sell Price', 'sell_price')}

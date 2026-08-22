@@ -428,8 +428,16 @@ def addSealed():
 def loadCards(auction_id):
     db = get_db()
     cards = db.execute(
-        'SELECT c.* FROM cards c '
+        'SELECT c.*, gsc.grader, gsc.grade_numeric, gsc.grade_label, '
+        'gsc.qualifier, gsc.cert_number, gsc.is_current AS grading_is_current, '
+        'gsc.submission_id AS grading_submission_id, gs.status AS grading_submission_status, '
+        "CASE WHEN gsc.id IS NULL THEN 'raw' "
+        "WHEN gsc.submission_id IS NULL OR gs.status = 'graded' THEN 'graded' "
+        "ELSE 'at_grader' END AS grading_state FROM cards c "
         'LEFT JOIN sale_items si ON c.id = si.card_id '
+        'LEFT JOIN grading_submission_cards gsc '
+        'ON c.id = gsc.card_id AND gsc.is_current = 1 '
+        'LEFT JOIN grading_submissions gs ON gsc.submission_id = gs.id '
         'WHERE c.auction_id = ? AND si.card_id IS NULL', (auction_id,)).fetchall()
     return jsonify([dict(card) for card in cards]),200
 
@@ -656,10 +664,14 @@ def loadSoldCards(sale_id):
     ).fetchone()
 
     cards = db.execute(
-        'SELECT c.*, si.sell_price as invoice_sell_price, si.sold_cm, si.sold, s.sale_date, s.invoice_number '
+        'SELECT c.*, si.sell_price as invoice_sell_price, si.sold_cm, si.sold, s.sale_date, s.invoice_number, '
+        'gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, gsc.cert_number, '
+        'gsc.is_current AS grading_is_current '
         'FROM cards c '
         'JOIN sale_items si ON c.id = si.card_id '
         'JOIN sales s ON si.sale_id = s.id '
+        'LEFT JOIN grading_submission_cards gsc '
+        'ON c.id = gsc.card_id AND gsc.is_current = 1 '
         'WHERE si.sale_id = ?',
         (sale_id,)
     ).fetchall()
@@ -1125,9 +1137,30 @@ def generateBuyReport():
 @limiter.limit("2 per minute")
 @verify_token
 def generateSoldReport():
+    errors = {}
+    try:
+        month_number = int(request.args.get('month', ''))
+    except (TypeError, ValueError):
+        errors['month'] = 'Month must be a number from 1 to 12.'
+        month_number = None
+    try:
+        year_number = int(request.args.get('year', ''))
+    except (TypeError, ValueError):
+        errors['year'] = 'Year must be a number from 2000 to 2100.'
+        year_number = None
+    if month_number is not None and not 1 <= month_number <= 12:
+        errors['month'] = 'Month must be between 1 and 12.'
+    if year_number is not None and not 2000 <= year_number <= 2100:
+        errors['year'] = 'Year must be between 2000 and 2100.'
+    if errors:
+        return jsonify({
+            'status': 'error',
+            'message': 'Please correct the highlighted fields.',
+            'errors': errors,
+        }), 400
+    month = f'{month_number:02d}'
+    year = str(year_number)
     db = get_db()
-    month = request.args.get('month').zfill(2)
-    year = request.args.get('year')
     cards = db.execute(
         'SELECT c.card_name, c.card_num, c.card_price, si.sell_price, s.sale_date '
         'FROM cards c '
@@ -2219,7 +2252,8 @@ def process_sold_csv(files,db):
                "SELECT c.id as id, card_name as itemName, card_num, 1 as quantity, market_value, auction_id, 'card' as item_type, c.condition as condition, cardMarketID as cardmarketId "
                'FROM cards c '
                'LEFT JOIN sale_items si ON si.card_id = c.id '
-              f'WHERE si.card_id IS NULL AND cardMarketID IN ({placehoders}) '
+               'LEFT JOIN grading_submission_cards gsc ON gsc.card_id = c.id AND gsc.is_current = 1 '
+              f'WHERE si.card_id IS NULL AND gsc.id IS NULL AND cardMarketID IN ({placehoders}) '
                'ORDER BY id ASC ', ids + ids)
     allItems = pd.DataFrame(cur.fetchall(), columns=[c[0] for c in cur.description])
     allItemsExpanded = allItems.loc[allItems.index.repeat(allItems['quantity'])].reset_index(drop=True)
@@ -2560,6 +2594,7 @@ def search():
         card = request.get_json()
         query = card.get("query", "").strip()
         cart_ids = card.get('cartIds', [])
+        individual_cards = card.get('individualCards') is True
         # Split search query into individual words; normalize so diacritics
         # match the accent-stripped normalized_name column (e.g. "Poké" -> "POKE")
         search_terms = [normalize(term) for term in query.split()]
@@ -2592,6 +2627,16 @@ def search():
             placeholders = ",".join(["?"] * len(card_cart_ids))
             card_where_clause += f" AND c.id NOT IN ({placeholders})"
             card_params.extend(card_cart_ids)
+
+        if individual_cards:
+            card_where_clause += " AND gsc.id IS NULL"
+        else:
+            # Cards still away for grading remain unavailable. Completed and
+            # directly graded cards are saleable, but form distinct groups.
+            card_where_clause += (
+                " AND (gsc.id IS NULL OR gsc.submission_id IS NULL "
+                "OR gs.status = 'graded')"
+            )
         
         # Build WHERE clause for SEALED items (alias 's')
         sealed_where_conditions = []
@@ -2611,12 +2656,24 @@ def search():
         db = get_db()
         
         # Search cards
+        card_grouping = "ORDER BY c.id ASC LIMIT 8" if individual_cards else (
+            "GROUP BY UPPER(c.card_name), UPPER(c.card_num), UPPER(c.condition), "
+            "CASE WHEN gsc.id IS NULL THEN 0 ELSE 1 END, "
+            "gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, gsc.cert_number "
+            "ORDER BY c.id ASC LIMIT 8"
+        )
         card_matches = db.execute(
-            f"SELECT c.card_name, c.card_num, c.condition, c.market_value, c.id, c.auction_id,COUNT(*) as available_count, a.auction_name FROM cards c "
+            f"SELECT c.card_name, c.card_num, c.condition, c.market_value, c.id, c.auction_id, "
+            f"{'1' if individual_cards else 'COUNT(*)'} as available_count, a.auction_name, "
+            "CASE WHEN gsc.id IS NULL THEN 0 ELSE 1 END AS is_graded, "
+            "gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, gsc.cert_number FROM cards c "
             "JOIN auctions a ON c.auction_id = a.id "
             "LEFT JOIN sale_items si ON c.id = si.card_id "
+            "LEFT JOIN grading_submission_cards gsc "
+            "ON c.id = gsc.card_id AND gsc.is_current = 1 "
+            "LEFT JOIN grading_submissions gs ON gsc.submission_id = gs.id "
             f"WHERE ({card_where_clause}) AND si.card_id IS NULL "
-            "GROUP BY UPPER(c.card_name), UPPER(c.card_num), UPPER(c.condition) ORDER BY c.id ASC LIMIT 8",
+            f"{card_grouping}",
             card_params
         ).fetchall()
         
@@ -2653,6 +2710,7 @@ def getCardIds():
         card_num = data.get('card_num')
         condition = data.get('condition')
         exclude_ids = data.get('exclude_ids', [])
+        is_graded = data.get('is_graded') is True
 
         if not card_name or not condition:
             return jsonify({'status': 'error', 'message': 'Missing required fields, Error code: Ax21'}), 400
@@ -2661,20 +2719,41 @@ def getCardIds():
 
         if card_num is None:
             query = ('SELECT c.id FROM cards c '
-                     'LEFT JOIN sale_items si ON c.id = si.card_id '
-                     'WHERE c.card_name = ? '
+                      'LEFT JOIN sale_items si ON c.id = si.card_id '
+                     'LEFT JOIN grading_submission_cards gsc '
+                     'ON c.id = gsc.card_id AND gsc.is_current = 1 '
+                     'LEFT JOIN grading_submissions gs ON gsc.submission_id = gs.id '
+                      'WHERE c.card_name = ? '
                      'AND c.card_num IS NULL '
                      'AND c.condition = ? '
                      'AND si.card_id IS NULL')
             params = [card_name, condition]
         else:
             query = ('SELECT c.id FROM cards c '
-                     'LEFT JOIN sale_items si ON c.id = si.card_id '
-                     'WHERE c.card_name = ? '
+                      'LEFT JOIN sale_items si ON c.id = si.card_id '
+                     'LEFT JOIN grading_submission_cards gsc '
+                     'ON c.id = gsc.card_id AND gsc.is_current = 1 '
+                     'LEFT JOIN grading_submissions gs ON gsc.submission_id = gs.id '
+                      'WHERE c.card_name = ? '
                      'AND c.card_num = ? '
                      'AND c.condition = ? '
                      'AND si.card_id IS NULL')
             params = [card_name, card_num, condition]
+
+        if is_graded:
+            query += (
+                ' AND gsc.id IS NOT NULL '
+                "AND (gsc.submission_id IS NULL OR gs.status = 'graded') "
+                'AND gsc.grader IS ? AND gsc.grade_numeric IS ? '
+                'AND gsc.grade_label IS ? AND gsc.qualifier IS ? '
+                "AND COALESCE(gsc.cert_number, '') = COALESCE(?, '')"
+            )
+            params.extend([
+                data.get('grader'), data.get('grade_numeric'),
+                data.get('grade_label'), data.get('qualifier'), data.get('cert_number'),
+            ])
+        else:
+            query += ' AND gsc.id IS NULL'
 
         if exclude_ids:
             placeholders = ','.join('?' for _ in exclude_ids)

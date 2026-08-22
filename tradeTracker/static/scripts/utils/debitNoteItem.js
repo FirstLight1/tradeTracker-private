@@ -2,12 +2,13 @@ import { csrfFetch, escapeHtml, sanitizeNumericId, sanitizeClassToken } from "./
 import { renderAlert } from "./renderUtil.js";
 
 export class DebitNoteItem {
-    constructor({ type, cardName, cardNum, condition, marketValue, sid, cardIds, quantity, auctionId, addedIds }) {
+    constructor({ type, cardName, cardNum, condition, marketValue, grading, sid, cardIds, quantity, auctionId, addedIds }) {
         this.type = type;
         this.cardName = cardName;
         this.cardNum = cardNum;
         this.condition = condition;
         this.marketValue = marketValue;
+        this.grading = grading || null;
         this.sid = sid;
         this.cardIds = cardIds;
         this.quantity = quantity;
@@ -40,12 +41,16 @@ export class DebitNoteItem {
                 row.classList.add('card', 'creditnote-item-row', 'debitnote-item-row');
                 row.setAttribute('data-id', sanitizeNumericId(id));
                 const condClass = sanitizeClassToken(this.condition || '');
+                const conditionDisplay = this.grading
+                    ? [this.grading.grader, this.grading.grade_numeric, this.grading.grade_label, this.grading.qualifier]
+                        .filter(value => value !== null && value !== undefined && value !== '').join(' ') || 'Graded'
+                    : this.condition;
                 row.innerHTML = `
                     <div class="item-info">
                         <p class="item-name">${escapeHtml(this.cardName || '')}</p>
                         <p class="item-number">${escapeHtml(this.cardNum || '')}</p>
                     </div>
-                    <p class="item-condition ${condClass}">${escapeHtml(this.condition || '')}</p>
+                    <p class="item-condition ${condClass}${this.grading ? ' graded' : ''}">${escapeHtml(conditionDisplay || '')}</p>
                     <div class="market-value">
                         <input class="market-value-input" type="number" min="0" step="0.01" value="${escapeHtml(String(this.marketValue ?? ''))}">
                         <span class="currency">€</span>
@@ -126,6 +131,12 @@ export class DebitNoteItem {
             cardNum: result.card_num,
             condition: result.condition,
             marketValue: result.market_value,
+            grading: result.is_graded ? {
+                grader: result.grader,
+                grade_numeric: result.grade_numeric,
+                grade_label: result.grade_label,
+                qualifier: result.qualifier,
+            } : null,
             cardIds: taken,
             addedIds,
         });
@@ -139,6 +150,11 @@ export class DebitNoteItem {
                 card_name: result.card_name,
                 card_num: result.card_num,
                 condition: result.condition,
+                is_graded: result.is_graded === 1,
+                grader: result.grader,
+                grade_numeric: result.grade_numeric,
+                grade_label: result.grade_label,
+                qualifier: result.qualifier,
                 exclude_ids: excludeIds,
             }),
         });

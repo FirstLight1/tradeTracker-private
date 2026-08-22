@@ -7,16 +7,15 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="stylesheet" href="../static/styles/auctions-aligment.css">
     <link rel="stylesheet" href="../static/styles/auctions-hollowKnightStyle.css">
-    <link rel="stylesheet" href="../static/styles/creditnote-style.css">
     <link rel="stylesheet" href="../static/styles/header-align.css">
     <link rel="stylesheet" href="/static/styles/modal.css">
-    <title>Trade Tracker</title>
+    <title>Grading - Trade Tracker</title>
     <link rel="icon" type="image/x-icon" href="../static/images/cardanvil.ico">
 </head>
 
 <body>
     <main>
-        <h1>Debit<span class="shadow"></span> Note</h1>
+        <h1>Grading<span class="shadow"></span> Submissions</h1>
         <header class="header">
             <nav class="nav-bar compact-nav" aria-label="Main navigation">
                 <a class="nav-page-link" href="{{ url_for('renderers.renderAuctions') }}">Home</a>
@@ -43,45 +42,29 @@
                 </div>
             </nav>
         </header>
-        <div class="back-btn-container">
-            <button class="back-btn"><a href="{{ url_for('renderers.sold') }}"><img class="back-arrow-img"
-                        src="../static/images/back-arrow.svg" alt="back arrow">Back</a></button>
+        <div class="grading-actions">
+            <a class="create-submission-button" href="{{ url_for('grading.create_submission') }}">Create new submission</a>
         </div>
         <div id="alert-div"></div>
-        <div class="creditnote-grid">
-            <section class="creditnote-box creditnote-sale-info">
-                <p class="creditnote-box-title">Provider</p>
-                <div class="creditnote-box-content"></div>
-            </section>
-            <section class="creditnote-box creditnote-receiver">
-                <p class="creditnote-box-title">Receiver</p>
-                <div class="creditnote-reciver-content"></div>
-            </section>
-            <section class="creditnote-box creditnote-items">
-                <p class="creditnote-box-title">Items</p>
-                <div class="debit-note-search">
-                    <input type="text" class="search-field">
-                    <button class="search-btn">Search</button>
-                    <div class="search-results"></div>
+        <div class="content-container">
+            <div class="auction-container">
+                <div class="grading-header auction-tab">
+                    <p>Grader</p>
+                    <p>Service level</p>
+                    <p>Status</p>
+                    <p>Submitted</p>
+                    <p>Returned</p>
+                    <p>Shared costs</p>
+                    <p></p>
                 </div>
-                <div class="creditnote-item-content"></div>
-            </section>
-            <section class="creditnote-box creditnote-total">
-                <p>Total price</p>
-                <div class="total-price">
-                    <p class="total-amount">0.00</p><span>€</span>
-                </div>
-            </section>
-            <section class="creditnote-box creditnote-confirm">
-                <button class="confirm-btn">Confirm</button>
-            </section>
+                <div class="grading-submissions-container" aria-live="polite"></div>
+            </div>
         </div>
     </main>
     <script type="module" src="../static/scripts/utils/sanitizers.js"></script>
     <script type="module" src="../static/scripts/utils/renderUtil.js"></script>
-    <script type="module" src="../static/scripts/createDebitNote.js"></script>
+    <script type="module" src="../static/scripts/grading.js"></script>
     <script type="module" src="/static/scripts/headerActions.js"></script>
-    <script src="../static/vendor/purify.min.js"></script>
 </body>
 
 </html>

@@ -1,4 +1,3 @@
-
 from decimal import Decimal
 from itertools import count
 import os
@@ -113,11 +112,17 @@ def generate_invoice(reciever, invoice_num, items=None, sealed=None , bulk=None,
             if mv is None or str(mv) == "":
                 continue
             market_value_decimal = Decimal(str(mv))
+            description_parts = [item.get("cardName"), item.get("cardNum")]
+            display_condition = item.get("displayCondition")
+            if display_condition:
+                description_parts.append(display_condition)
+            if item.get("certNumber"):
+                description_parts.append(f"Cert {item['certNumber']}")
             invoice.add_item(Item(
                 count=1,
                 price=market_value_decimal,
                 unit="ks",
-                description=item.get("cardName") + " " + item.get("cardNum"),
+                description=" | ".join(str(part) for part in description_parts if part),
                 tax=Decimal("0") # Neplatiteľ DPH (Non-VAT payer)
                 ))
            

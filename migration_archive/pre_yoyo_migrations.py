@@ -73,6 +73,8 @@ def migrate_database(db_path):
         createSalesCorrectionTable(db_path)
         addUniqueIndexOnSalesCorrectionRecord(db_path)
         addSellPriceToSealedTable(db_path)
+        createGradingTables(db_path)
+        addGradedSaleCostColumns(db_path)
         print("Database migration check complete.")
     except sqlite3.Error as e:
         print(f"Database migration failed: {e}")
@@ -889,4 +891,95 @@ def addSellPriceToSealedTable(db_path):
     finally:
         if conn:
             conn.close()
+
+
+def createGradingTables(db_path):
+    """Create the grading submission schema for existing databases."""
+    conn = sqlite3.connect(db_path)
+    try:
+        with conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS grading_submissions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    grader TEXT NOT NULL,
+                    service_level TEXT,
+                    status TEXT NOT NULL DEFAULT 'DRAFT',
+                    outbound_shipping_cost REAL NOT NULL DEFAULT 0,
+                    return_shipping_cost REAL NOT NULL DEFAULT 0,
+                    insurance_cost REAL NOT NULL DEFAULT 0,
+                    customs_duty_cost REAL NOT NULL DEFAULT 0,
+                    other_shared_cost REAL NOT NULL DEFAULT 0,
+                    submitted_at TEXT,
+                    returned_at TEXT,
+                    notes TEXT
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS grading_submission_cards (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    submission_id INTEGER,
+                    card_id INTEGER NOT NULL,
+                    grader TEXT NOT NULL,
+                    is_current INTEGER NOT NULL DEFAULT 1,
+                    submitted_value REAL NOT NULL DEFAULT 0,
+                    grading_fee REAL NOT NULL DEFAULT 0,
+                    prep_fee REAL DEFAULT 0,
+                    upcharge_fee REAL DEFAULT 0,
+                    allocated_shared_cost REAL DEFAULT 0,
+                    total_grading_cost REAL NOT NULL DEFAULT 0,
+                    landed_cost REAL,
+                    grade_numeric REAL,
+                    grade_label TEXT,
+                    qualifier TEXT,
+                    cert_number TEXT COLLATE NOCASE DEFAULT '',
+                    post_grade_market_value REAL,
+                    notes TEXT,
+                    FOREIGN KEY (submission_id) REFERENCES grading_submissions(id) ON DELETE RESTRICT,
+                    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE RESTRICT,
+                    UNIQUE (submission_id, card_id),
+                    UNIQUE (grader, cert_number)
+                )
+            """)
+            conn.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_grading_current_card
+                ON grading_submission_cards(card_id)
+                WHERE is_current = 1
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_grading_submission_cards_submission
+                ON grading_submission_cards(submission_id)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_grading_submission_cards_card
+                ON grading_submission_cards(card_id)
+            """)
+    finally:
+        conn.close()
+
+
+def addGradedSaleCostColumns(db_path):
+    """Add internal landed-cost snapshots to sales without changing tax profit."""
+    conn = sqlite3.connect(db_path)
+    try:
+        with conn:
+            columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(sale_items)")
+            }
+            if not columns:
+                return
+            added_internal_cost = "internal_cost" not in columns
+            added_internal_profit = "internal_profit" not in columns
+            if "internal_cost" not in columns:
+                conn.execute("ALTER TABLE sale_items ADD COLUMN internal_cost REAL")
+            if "internal_profit" not in columns:
+                conn.execute("ALTER TABLE sale_items ADD COLUMN internal_profit REAL")
+            if added_internal_cost:
+                conn.execute(
+                    "UPDATE sale_items SET internal_cost = "
+                    "(SELECT card_price FROM cards WHERE cards.id = sale_items.card_id)"
+                )
+            if added_internal_profit:
+                conn.execute("UPDATE sale_items SET internal_profit = profit")
+    finally:
+        conn.close()
 
