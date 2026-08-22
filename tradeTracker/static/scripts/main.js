@@ -2344,6 +2344,7 @@ async function loadAuctionContent(button) {
                         <p>Card name</p>
                         <p>Card number</p>
                         <p>Condition</p>
+                        <p>Lang</p>
                         <p>Buy price</p>
                         <p>Market value</p>
                         <p>Margin</p>
@@ -2376,6 +2377,7 @@ async function loadAuctionContent(button) {
                         ${renderField(DOMPurify.sanitize(card.card_name), 'text', ['card-info', 'card-name'], 'Card Name', 'card_name')}
                         ${renderField(DOMPurify.sanitize(card.card_num), 'text', ['card-info', 'card-num'], 'Card Number', 'card_num')}
                         <p class='card-info condition ${safeCardConditionClass}${gradingClass}' data-field="condition">${DOMPurify.sanitize(conditionDisplay)}</p>
+                        ${renderField(DOMPurify.sanitize(card.language), 'text', ['card-info', 'language'], 'Lang', 'language')}
                         ${renderField(card.card_price ? DOMPurify.sanitize(card.card_price) + '€' : null, 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
                         ${renderField(card.market_value ? DOMPurify.sanitize(card.market_value) + '€' : null, 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
                         ${renderField(card.card_price !== null && card.market_value !== null ? (card.market_value - card.card_price).toFixed(2) + '€' : ' ', 'text', ['card-info', 'profit'], 'profit', true)}
