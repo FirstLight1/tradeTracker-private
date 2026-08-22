@@ -1162,7 +1162,11 @@ def generateSoldReport():
     year = str(year_number)
     db = get_db()
     cards = db.execute(
-        'SELECT c.card_name, c.card_num, c.card_price, si.sell_price, s.sale_date '
+        'SELECT c.card_name, c.card_num, c.card_price, si.sell_price, s.sale_date, '
+        'CASE WHEN EXISTS ('
+        'SELECT 1 FROM grading_submission_cards gsc '
+        'WHERE gsc.card_id = c.id AND gsc.is_current = 1'
+        ') THEN 1 ELSE 0 END AS is_graded '
         'FROM cards c '
         'JOIN sale_items si ON c.id = si.card_id '
         'JOIN sales s ON si.sale_id = s.id '
@@ -1383,8 +1387,9 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
     
     # Table header
     pdf.set_font(font_family, '', 10)
-    pdf.cell(45, 10, 'Card Name', 1, 0, 'C')
-    pdf.cell(30, 10, 'Card Number', 1, 0, 'C')
+    pdf.cell(35, 10, 'Card Name', 1, 0, 'C')
+    pdf.cell(20, 10, 'Card Number', 1, 0, 'C')
+    pdf.cell(20, 10, 'Graded', 1, 0, 'C')
     pdf.cell(25, 10, 'Buy Price', 1, 0, 'C')
     pdf.cell(25, 10, 'Sell Price', 1, 0, 'C')
     pdf.cell(25, 10, 'Margin', 1, 0, 'C')
@@ -1396,14 +1401,15 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
     for card in cards:
         card_name = card['card_name'] or 'N/A'
         card_num = card['card_num'] or 'N/A'
+        is_graded = 'Yes' if card['is_graded'] else 'No'
         buy_price = f"{card['card_price']:.2f}€" if card['card_price'] else 'N/A'
         sell_price = f"{card['sell_price']:.2f}€" if card['sell_price'] else 'N/A'
         card_profit = f"{(card['sell_price'] - card['card_price']):.2f}€" if card['sell_price'] and card['card_price'] else 'N/A'
         sold_date = format_iso_date(card['sale_date'])
 
         # Estimate height needed for card name (more conservative)
-        # With font size 9 and line height 4, approximately 22 chars per line in 45mm width
-        chars_per_line = 22
+        # With font size 9 and line height 4, approximately 17 chars per line in 35mm width
+        chars_per_line = 17
         estimated_lines = max(1, (len(card_name) + chars_per_line - 1) // chars_per_line)
         estimated_height = estimated_lines * 4
 
@@ -1412,8 +1418,9 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
             pdf.add_page()
             # Redraw table header on new page
             pdf.set_font(font_family, '', 10)
-            pdf.cell(45, 10, 'Card Name', 1, 0, 'C')
-            pdf.cell(30, 10, 'Card Number', 1, 0, 'C')
+            pdf.cell(35, 10, 'Card Name', 1, 0, 'C')
+            pdf.cell(20, 10, 'Card Number', 1, 0, 'C')
+            pdf.cell(20, 10, 'Graded', 1, 0, 'C')
             pdf.cell(25, 10, 'Buy Price', 1, 0, 'C')
             pdf.cell(25, 10, 'Sell Price', 1, 0, 'C')
             pdf.cell(25, 10, 'Margin', 1, 0, 'C')
@@ -1426,15 +1433,16 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
         y_start = pdf.get_y()
 
         # Draw card name with multi_cell
-        pdf.multi_cell(45, 4, card_name, border=1, align='L')
+        pdf.multi_cell(35, 4, card_name, border=1, align='L')
 
         # Calculate actual height used
         y_after_name = pdf.get_y()
         actual_height = y_after_name - y_start
 
         # Draw other cells aligned with the card name
-        pdf.set_xy(x_start + 45, y_start)
-        pdf.cell(30, actual_height, card_num, 1, 0, 'C')
+        pdf.set_xy(x_start + 35, y_start)
+        pdf.cell(20, actual_height, card_num, 1, 0, 'C')
+        pdf.cell(20, actual_height, is_graded, 1, 0, 'C')
         pdf.cell(25, actual_height, buy_price, 1, 0, 'R')
         pdf.cell(25, actual_height, sell_price, 1, 0, 'R')
         pdf.cell(25, actual_height, card_profit, 1, 0, 'R')
