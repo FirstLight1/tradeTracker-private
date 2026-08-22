@@ -2665,13 +2665,13 @@ def search():
         
         # Search cards
         card_grouping = "ORDER BY c.id ASC LIMIT 8" if individual_cards else (
-            "GROUP BY UPPER(c.card_name), UPPER(c.card_num), UPPER(c.condition), "
+            "GROUP BY UPPER(c.card_name), UPPER(c.card_num), UPPER(c.condition), c.language, "
             "CASE WHEN gsc.id IS NULL THEN 0 ELSE 1 END, "
             "gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, gsc.cert_number "
             "ORDER BY c.id ASC LIMIT 8"
         )
         card_matches = db.execute(
-            f"SELECT c.card_name, c.card_num, c.condition, c.market_value, c.id, c.auction_id, "
+            f"SELECT c.card_name, c.card_num, c.condition, c.market_value, c.id, c.auction_id, c.language, "
             f"{'1' if individual_cards else 'COUNT(*)'} as available_count, a.auction_name, "
             "CASE WHEN gsc.id IS NULL THEN 0 ELSE 1 END AS is_graded, "
             "gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, gsc.cert_number FROM cards c "

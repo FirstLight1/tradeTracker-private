@@ -1956,7 +1956,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
     const searchContainer = document.querySelector('.search-results');
     searchContainer.innerHTML = ''; // Clear previous results
 
-    if (!results || results.length === 0) {
+    if (!results) {
         const div = document.createElement('div');
         div.classList.add('search-result-item');
         div.innerHTML = '<p>No results found</p>';
@@ -2029,6 +2029,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
 
         } else {
             // Handle card display
+            div.classList.add('card-search-result');
             let card = new CardStruct();
             card.cardName = result.card_name;
             card.cardNum = result.card_num;
@@ -2057,6 +2058,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
                 <p class="result result-condition ${safeConditionClass}${card.grading ? ' graded' : ''}">
                     ${DOMPurify.sanitize(gradeDisplay)}
                 </p>
+                <p class="result result-language">${DOMPurify.sanitize(result.language || 'N/A')}</p>
                 <p class="result result-market-value">${DOMPurify.sanitize(result.market_value ? result.market_value + '€' : 'N/A')}</p>
                 <p class="result result-quantity">${pendingQty} / ${availableCount}</p>
                 <p class="result result-auction-name">${DOMPurify.sanitize(result.auction_name || result.auction_id - 1)}</p>
