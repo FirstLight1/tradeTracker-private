@@ -1065,7 +1065,7 @@ def generateBuyReport():
         elements.append(Paragraph(f"Sales Report - {auctionName} - Added: {dateCreated}", styles["Heading1"]))
         elements.append(Spacer(1, 12))
 
-        curr.execute("SELECT card_name, card_num, condition, card_price AS 'buy price', market_value as 'market value', sold_date as 'sold' "
+        curr.execute("SELECT card_name, card_num, condition, language, card_price AS 'buy price', market_value as 'market value', sold_date as 'sold' "
                                 "FROM cards WHERE auction_id = ?", (auctionId,))
 
         cardsDesc = [desc[0] for desc in curr.description]
@@ -1162,7 +1162,7 @@ def generateSoldReport():
     year = str(year_number)
     db = get_db()
     cards = db.execute(
-        'SELECT c.card_name, c.card_num, c.card_price, si.sell_price, s.sale_date, '
+        'SELECT c.card_name, c.card_num, c.card_price, c.language, si.sell_price, s.sale_date, '
         'CASE WHEN EXISTS ('
         'SELECT 1 FROM grading_submission_cards gsc '
         'WHERE gsc.card_id = c.id AND gsc.is_current = 1'
@@ -1388,8 +1388,9 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
     # Table header
     pdf.set_font(font_family, '', 10)
     pdf.cell(35, 10, 'Card Name', 1, 0, 'C')
-    pdf.cell(20, 10, 'Card Number', 1, 0, 'C')
-    pdf.cell(20, 10, 'Graded', 1, 0, 'C')
+    pdf.cell(24, 10, 'Card Number', 1, 0, 'C')
+    pdf.cell(14, 10, 'Lang.', 1, 0, 'C')
+    pdf.cell(17, 10, 'Graded', 1, 0, 'C')
     pdf.cell(25, 10, 'Buy Price', 1, 0, 'C')
     pdf.cell(25, 10, 'Sell Price', 1, 0, 'C')
     pdf.cell(25, 10, 'Margin', 1, 0, 'C')
@@ -1401,6 +1402,7 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
     for card in cards:
         card_name = card['card_name'] or 'N/A'
         card_num = card['card_num'] or 'N/A'
+        language = card['language'] or 'N/A'
         is_graded = 'Yes' if card['is_graded'] else 'No'
         buy_price = f"{card['card_price']:.2f}€" if card['card_price'] else 'N/A'
         sell_price = f"{card['sell_price']:.2f}€" if card['sell_price'] else 'N/A'
@@ -1419,8 +1421,9 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
             # Redraw table header on new page
             pdf.set_font(font_family, '', 10)
             pdf.cell(35, 10, 'Card Name', 1, 0, 'C')
-            pdf.cell(20, 10, 'Card Number', 1, 0, 'C')
-            pdf.cell(20, 10, 'Graded', 1, 0, 'C')
+            pdf.cell(24, 10, 'Card Number', 1, 0, 'C')
+            pdf.cell(14, 10, 'Lang.', 1, 0, 'C')
+            pdf.cell(17, 10, 'Graded', 1, 0, 'C')
             pdf.cell(25, 10, 'Buy Price', 1, 0, 'C')
             pdf.cell(25, 10, 'Sell Price', 1, 0, 'C')
             pdf.cell(25, 10, 'Margin', 1, 0, 'C')
@@ -1441,8 +1444,9 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
 
         # Draw other cells aligned with the card name
         pdf.set_xy(x_start + 35, y_start)
-        pdf.cell(20, actual_height, card_num, 1, 0, 'C')
-        pdf.cell(20, actual_height, is_graded, 1, 0, 'C')
+        pdf.cell(24, actual_height, card_num, 1, 0, 'C')
+        pdf.cell(14, actual_height, language, 1, 0, 'C')
+        pdf.cell(17, actual_height, is_graded, 1, 0, 'C')
         pdf.cell(25, actual_height, buy_price, 1, 0, 'R')
         pdf.cell(25, actual_height, sell_price, 1, 0, 'R')
         pdf.cell(25, actual_height, card_profit, 1, 0, 'R')
@@ -1454,7 +1458,7 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
     # Table header
     pdf.set_font(font_family, '', 10)
     pdf.cell(60, 10, 'Product Name', 1, 0, 'C')
-    pdf.cell(10, 10, 'Quantity', 1, 0, 'C')
+    pdf.cell(10, 10, 'Qty', 1, 0, 'C')
     pdf.cell(30, 10, 'Buy Price', 1, 0, 'C')
     pdf.cell(30, 10, 'Sell Price', 1, 0, 'C')
     pdf.cell(20, 10, 'Margin', 1, 0, 'C')
