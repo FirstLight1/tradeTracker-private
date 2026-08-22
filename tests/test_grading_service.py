@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from tradeTracker.migration import createGradingTables
+from tradeTracker import apply_database_migrations
 from tradeTracker.services.grading_service import GradingService
 from tradeTracker.services.models import (
     GradeStatus,
@@ -25,10 +25,15 @@ def db(tmp_path):
             market_value REAL,
             sold_date TEXT
         );
+        CREATE TABLE sale_items (
+            id INTEGER PRIMARY KEY,
+            card_id INTEGER,
+            profit REAL
+        );
         """
     )
     connection.close()
-    createGradingTables(db_path)
+    apply_database_migrations(db_path)
 
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row

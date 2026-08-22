@@ -1,6 +1,6 @@
 import sqlite3
 
-from tradeTracker.migration import addGradedSaleCostColumns, createGradingTables
+from tradeTracker import apply_database_migrations
 
 
 def test_create_grading_tables_is_idempotent(tmp_path):
@@ -9,8 +9,8 @@ def test_create_grading_tables_is_idempotent(tmp_path):
     conn.execute("CREATE TABLE cards (id INTEGER PRIMARY KEY)")
     conn.close()
 
-    createGradingTables(db_path)
-    createGradingTables(db_path)
+    apply_database_migrations(db_path)
+    apply_database_migrations(db_path)
 
     conn = sqlite3.connect(db_path)
     try:
@@ -61,7 +61,7 @@ def test_create_grading_tables_completes_partial_migration(tmp_path):
     conn.commit()
     conn.close()
 
-    createGradingTables(db_path)
+    apply_database_migrations(db_path)
 
     conn = sqlite3.connect(db_path)
     try:
@@ -88,8 +88,8 @@ def test_add_graded_sale_cost_columns_backfills_existing_sales(tmp_path):
     """)
     conn.close()
 
-    addGradedSaleCostColumns(db_path)
-    addGradedSaleCostColumns(db_path)
+    apply_database_migrations(db_path)
+    apply_database_migrations(db_path)
 
     conn = sqlite3.connect(db_path)
     try:
