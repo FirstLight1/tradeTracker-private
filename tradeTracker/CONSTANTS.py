@@ -40,6 +40,32 @@ CONDITION_DICT = {
     'PO' : "POOR"
 }
 
+ALLOWED_LANGUAGES = {
+    'en',
+    'jp',
+    'de',
+    'fr',
+    'it',
+    'es',
+    'kr',
+    'cn',
+    'pt',
+}
+
+LANGUAGE_DICT = {
+        'english': 'en',
+        'japanese': 'jp',
+        'german': 'de',
+        'french': 'fr',
+        'italian': 'it',
+        'spanish': 'es',
+        'korean': 'kr',
+        'chinese': 'cn',
+        'simplified chinese': 'cn',
+        's-chinese': 'cn',
+        'portuguese': 'pt',
+}
+
 PARCEL_CATEGORIES = {
         "registered letter": "r",
         "letter": "olz",
