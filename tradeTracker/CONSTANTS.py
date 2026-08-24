@@ -52,7 +52,7 @@ ALLOWED_LANGUAGES = {
     'pt',
 }
 
-LANGUAGE_DICT = {
+LANGUAGE_FULL_TO_ABB = {
         'english': 'en',
         'japanese': 'jp',
         'german': 'de',
@@ -65,6 +65,21 @@ LANGUAGE_DICT = {
         's-chinese': 'cn',
         'portuguese': 'pt',
 }
+
+LANGUAGE_ABB_TO_FULL = {
+    'en': 'english',
+    'jp': 'japanese',
+    'de': 'german',
+    'fr': 'french',
+    'it': 'italian',
+    'es': 'spanish',
+    'kr': 'korean',
+    'cn': 'chinese',
+    'cn': 'simplified chinese',
+    'cn': 's-chinese',
+    'pt': 'portuguese',
+}
+
 
 PARCEL_CATEGORIES = {
         "registered letter": "r",

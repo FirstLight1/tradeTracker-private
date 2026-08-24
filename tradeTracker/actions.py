@@ -542,11 +542,9 @@ def update(card_id):
     value = data.get("value")
     allowed_fields = {"card_name", "card_num", "condition", "language", "card_price", "market_value"}
 
-    if field == 'sold' or field == 'sold_cm':
-        db.execute(f'UPDATE sale_items SET {field} = ? WHERE card_id = ?', (value, card_id))
-        db.commit()
-        return jsonify({'status': 'success'}),200
-
+    if field == 'language' and value not in CONSTANTS.ALLOWED_LANGUAGES:
+            return jsonify({'status': 'error', 'message': 'Invalid language code, Error code: Ax27'}), 400
+    
     if field in allowed_fields:
         db.execute(f'UPDATE cards SET {field} = ? WHERE id = ?', (value, card_id))
         db.commit()
