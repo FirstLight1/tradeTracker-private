@@ -20,19 +20,20 @@ function paymentTypeSelect(className, defaultValue = '') {
     `
 }
 
-function languageSelect(className = 'language-select', dataField = '') {
+function languageSelect(className = 'language-select', dataField = '', defaultValue = 'en') {
     const dataAttribute = dataField ? ` data-field="${dataField}"` : '';
+    const selectedValue = String(defaultValue || 'en').toLowerCase();
     return `
     <select class="${className}"${dataAttribute}>
-        <option value="en" selected>English</option>
-        <option value="jp">Japanese</option>
-        <option value="de">German</option>
-        <option value="fr">French</option>
-        <option value="it">Italian</option>
-        <option value="es">Spanish</option>
-        <option value="kr">Korean</option>
-        <option value="cn">Chinese</option>
-        <option value="pt">Portuguese</option>
+        <option value="en" ${selectedValue === 'en' ? 'selected' : ''}>English</option>
+        <option value="jp" ${selectedValue === 'jp' ? 'selected' : ''}>Japanese</option>
+        <option value="de" ${selectedValue === 'de' ? 'selected' : ''}>German</option>
+        <option value="fr" ${selectedValue === 'fr' ? 'selected' : ''}>French</option>
+        <option value="it" ${selectedValue === 'it' ? 'selected' : ''}>Italian</option>
+        <option value="es" ${selectedValue === 'es' ? 'selected' : ''}>Spanish</option>
+        <option value="kr" ${selectedValue === 'kr' ? 'selected' : ''}>Korean</option>
+        <option value="cn" ${selectedValue === 'cn' ? 'selected' : ''}>Chinese</option>
+        <option value="pt" ${selectedValue === 'pt' ? 'selected' : ''}>Portuguese</option>
     </select>`;
 }
 
@@ -2422,7 +2423,7 @@ async function loadAuctionContent(button) {
                         if (event.target.closest('.card') && !(event.target.tagName === "DIV")) {
                             const cardDiv = event.target.closest('.card');
                             const cardId = cardDiv.getAttribute('data-id');
-                            const editableFields = new Set(['card_name', 'card_num', 'language', 'card_price', 'market_value']);
+                            const editableFields = new Set(['card_name', 'card_num', 'card_price', 'market_value']);
                             if (event.target.classList.contains('condition')) {
                                 if (event.target.classList.contains('graded')) return;
                                 const value = event.target.textContent.trim();
@@ -2449,6 +2450,23 @@ async function loadAuctionContent(button) {
                                     select.replaceWith(p);
                                     cardDiv.dataset.condition = p.textContent;
                                     patchValue(cardId, p.textContent, dataset);
+                                });
+                            } else if (event.target.classList.contains('language')) {
+                                const value = event.target.textContent.trim();
+                                const dataset = event.target.dataset.field;
+                                const container = document.createElement('div');
+                                container.innerHTML = languageSelect('card-info language select-language', dataset, value);
+                                const select = container.firstElementChild;
+                                event.target.replaceWith(select);
+                                select.focus();
+                                select.addEventListener('change', () => {
+                                    const selectedValue = select.value;
+                                    const p = document.createElement('p');
+                                    p.classList.add('card-info', 'language');
+                                    p.dataset.field = dataset;
+                                    p.textContent = selectedValue;
+                                    select.replaceWith(p);
+                                    patchValue(cardId, selectedValue, dataset);
                                 });
                             } else if (event.target.tagName === "P" && editableFields.has(event.target.dataset.field)) {
                                 let value = event.target.textContent.replace('€', '');
