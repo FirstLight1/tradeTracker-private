@@ -2132,17 +2132,21 @@ def _process_inventory_csv(file):
 
     dataList = []
     for row in reader:
-        item = {
-            'card_name': row['name'],
-            'card_num': row['setCode'] + ' ' + row['cn'] if row['cn'] else '',
-            'condition': CONSTANTS.CONDITION_DICT.get(row['condition']),
-            'buy_price': round(float(row['price']) * 0.8, 2),
-            'market_value': row['price'],
-            'quantity': row['quantity'],
-            'date': datetime.datetime.strptime(row['listedAt'], "%d-%m-%Y %H:%M:%S").strftime("%Y-%m-%dT%H:%M:%SZ"),
-            'cardmarketId': row['cardmarketId'],
-        }
-        dataList.append(item)
+        try:
+            item = {
+                'card_name': row['name'],
+                'card_num': row['setCode'] + ' ' + row['cn'] if row['cn'] else '',
+                'condition': CONSTANTS.CONDITION_DICT.get(row['condition']),
+                'language': CONSTANTS.LANGUAGE_DICT.get(row['language']),
+                'buy_price': round(float(row['price']) * 0.8, 2),
+                'market_value': row['price'],
+                'quantity': row['quantity'],
+                'date': datetime.datetime.strptime(row['listedAt'], "%d-%m-%Y %H:%M:%S").strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'cardmarketId': row['cardmarketId'],
+            }
+            dataList.append(item)
+        except Exception as e:
+            raise Exception(f"Error processing CSV structure: {e}")
     return dataList
 
 # TODO: merge with the add endpoint
@@ -2192,13 +2196,14 @@ def _create_inventory(db, dataList=None):
             for i in range(quantity):
                 try:
                     buyPrice = round(float(item.get('market_value')) * 0.8, 2)
-                    db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
+                    db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id, cardmarketId)'
                         'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                         (
                             item.get('card_name'),
                             normalize(item.get('card_name')),
                             item.get('card_num'),
                             item.get('condition'),
+                            item.get('language'),
                             buyPrice,
                             item.get('market_value'),
                             auctionId,
@@ -2249,17 +2254,18 @@ def process_sold_csv(files,db):
     orders = checkIdOrder(db, orders)
     merged = articlesExpanded.merge(orders, on='idOrder', how='left', suffixes=('_art', '_ord'), validate='many_to_one')
 
+    #TODO: improve naming
     merged = merged[merged['status_ord'].isin(['sent', 'received', 'evaluated'])]
     merged['cardmarketId'] = merged['cardmarketId'].astype('Int64').astype('string')
 
     ids = merged['cardmarketId'].dropna().tolist()
     placehoders = ','.join(['?'] * len(ids))
 
-    cur = db.execute("SELECT id, name as itemName, NULL as card_num, quantity, market_value, auction_id, 'sealed' as item_type, 'NM' as condition, cardMarketID as cardmarketId "
+    cur = db.execute("SELECT id, name as itemName, NULL as card_num, quantity, market_value, auction_id, 'sealed' as item_type, 'NM' as condition, language, cardMarketID as cardmarketId "
                'FROM sealed '
               f'WHERE sale_id IS NULL AND opened = 0 AND cardMarketID IN ({placehoders}) '
                'UNION ALL '
-               "SELECT c.id as id, card_name as itemName, card_num, 1 as quantity, market_value, auction_id, 'card' as item_type, c.condition as condition, cardMarketID as cardmarketId "
+               "SELECT c.id as id, card_name as itemName, card_num, 1 as quantity, market_value, auction_id, 'card' as item_type, c.condition as condition, language, cardMarketID as cardmarketId "
                'FROM cards c '
                'LEFT JOIN sale_items si ON si.card_id = c.id '
                'LEFT JOIN grading_submission_cards gsc ON gsc.card_id = c.id AND gsc.is_current = 1 '
@@ -2273,8 +2279,9 @@ def process_sold_csv(files,db):
     allItemsExpanded['_match_seq'] = allItemsExpanded.groupby('cardmarketId').cumcount()
     merged['condition'] = merged['condition'].replace(CONSTANTS.CONDITION_DICT)
     allItemsExpanded['condition'] = allItemsExpanded['condition'].replace(CONSTANTS.CONDITION_DICT)
+    merged['language'] = merged['language'].replace(CONSTANTS.LANGUAGE_FULL_TO_ABB)
 
-    wantedItems = merged.merge(allItemsExpanded, on=['cardmarketId', 'condition' ,'_match_seq'], how='left', suffixes=('_mer', '_db'), validate='one_to_one')
+    wantedItems = merged.merge(allItemsExpanded, on=['cardmarketId', 'condition', 'language' ,'_match_seq'], how='left', suffixes=('_mer', '_db'), validate='one_to_one')
     wantedItems = wantedItems.drop(columns='_match_seq')
     wantedItems['matched'] = wantedItems['item_type'].notna()
 
