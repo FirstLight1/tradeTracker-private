@@ -7,14 +7,14 @@
 
 .cards-header{
     display: grid;
-    grid-template-columns: 200px 120px 150px 80px 100px 80px 90px 90px 100px;
+    grid-template-columns: 200px 120px 150px 110px 80px 100px 80px;
     gap: 17px;
     text-align:center;
 }
 
 .card{
     display: grid;
-    grid-template-columns: 200px 120px 150px 80px 100px 80px 90px 90px 100px;
+    grid-template-columns: 200px 120px 150px 110px 80px 100px 80px;
     gap: 17px;
     text-align:center;
     padding: 0px;
