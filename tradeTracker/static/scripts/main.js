@@ -2402,6 +2402,7 @@ async function loadAuctionContent(button) {
                         if (event.target.closest('.card') && !(event.target.tagName === "DIV")) {
                             const cardDiv = event.target.closest('.card');
                             const cardId = cardDiv.getAttribute('data-id');
+                            const editableFields = new Set(['card_name', 'card_num', 'language', 'card_price', 'market_value']);
                             if (event.target.classList.contains('condition')) {
                                 if (event.target.classList.contains('graded')) return;
                                 const value = event.target.textContent.trim();
@@ -2429,7 +2430,7 @@ async function loadAuctionContent(button) {
                                     cardDiv.dataset.condition = p.textContent;
                                     patchValue(cardId, p.textContent, dataset);
                                 });
-                            } else if (event.target.tagName === "P") {
+                            } else if (event.target.tagName === "P" && editableFields.has(event.target.dataset.field)) {
                                 let value = event.target.textContent.replace('€', '');
                                 if (isNaN(value)) {
                                     value = value.toUpperCase();

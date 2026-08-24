@@ -540,7 +540,7 @@ def update(card_id):
     data = request.get_json()
     field = data.get("field")
     value = data.get("value")
-    allowed_fields = {"card_name", "card_num", "condition", "card_price", "market_value"}
+    allowed_fields = {"card_name", "card_num", "condition", "language", "card_price", "market_value"}
 
     if field == 'sold' or field == 'sold_cm':
         db.execute(f'UPDATE sale_items SET {field} = ? WHERE card_id = ?', (value, card_id))
