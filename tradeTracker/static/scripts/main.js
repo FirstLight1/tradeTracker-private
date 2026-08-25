@@ -225,15 +225,31 @@ function enableSealedLanguageEditing(sealedDiv) {
         languageElement.replaceWith(select);
         select.focus();
 
-        select.addEventListener('click', (selectEvent) => selectEvent.stopPropagation());
-        select.addEventListener('change', async () => {
-            const selectedValue = select.value;
-            const saved = await patchSealedLanguage(sealedDiv.getAttribute('sid'), selectedValue);
+        let saving = false;
+        let finished = false;
+        const finishEditing = (value) => {
+            if (finished) return;
+            finished = true;
             const replacement = document.createElement('p');
             replacement.classList.add('sealed-language');
-            replacement.textContent = saved ? selectedValue : previousValue;
+            replacement.textContent = value;
             select.replaceWith(replacement);
+        };
+
+        select.addEventListener('click', (selectEvent) => selectEvent.stopPropagation());
+        select.addEventListener('change', async () => {
+            saving = true;
+            select.disabled = true;
+            const selectedValue = select.value;
+            const saved = await patchSealedLanguage(sealedDiv.getAttribute('sid'), selectedValue);
+            finishEditing(saved ? selectedValue : previousValue);
         }, { once: true });
+        select.addEventListener('blur', () => {
+            if (!saving) finishEditing(previousValue);
+        });
+        select.addEventListener('keydown', (keyEvent) => {
+            if (keyEvent.key === 'Escape') finishEditing(previousValue);
+        });
     });
 }
 
