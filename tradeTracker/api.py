@@ -145,12 +145,12 @@ def cardMarketOrder():
                     count = 1
 
                 available = db.execute(
-                    'SELECT COALESCE(SUM(quantity), 0) FROM sealed WHERE lower(name) = ? AND sale_id IS NULL',
-                    (item['name'].lower(),)
+                    'SELECT COALESCE(SUM(quantity), 0) FROM sealed WHERE lower(name) = ? AND language = ? AND sale_id IS NULL',
+                    (item['name'].lower(), item['language'].lower())
                 ).fetchone()[0]
                 first = db.execute(
-                    'SELECT id FROM sealed WHERE lower(name) = ? AND sale_id IS NULL ORDER BY id ASC LIMIT 1',
-                    (item['name'].lower(),)
+                    'SELECT id FROM sealed WHERE lower(name) = ? language = ? AND sale_id IS NULL ORDER BY id ASC LIMIT 1',
+                    (item['name'].lower(), item['language'].lower())
                 ).fetchone()
                 if first is not None and available > 0:
                     item['id'] = [first[0]]

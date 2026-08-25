@@ -411,7 +411,7 @@ def loadAuctions():
 def loadSealed():
     db = get_db()
 
-    sealed_products =  db.execute("SELECT 's' || id as sid, name, quantity, price, market_value, date FROM sealed WHERE sale_id is NULL AND auction_id is NULL AND opened = 0").fetchall()
+    sealed_products =  db.execute("SELECT 's' || id as sid, name, quantity, language, price, market_value, date FROM sealed WHERE sale_id is NULL AND auction_id is NULL AND opened = 0").fetchall()
     return jsonify({'status':'success', 'data' : [dict(product) for product in sealed_products]})
 
 @bp.route('/addSealed', methods=('POST',))
@@ -480,7 +480,7 @@ def loadBulk(auction_id):
 def loadSealedByAuction(auction_id):
     db = get_db()
     sealed_items = db.execute(
-        "SELECT 's' || id as sid, name, price, market_value, date, quantity FROM sealed "
+        "SELECT 's' || id as sid, name, language, price, market_value, date, quantity FROM sealed "
         "WHERE auction_id = ? AND sale_id is NULL AND opened = 0", 
         (auction_id,)
     ).fetchall()
@@ -881,7 +881,7 @@ def load_sale(saleId):
                        "JOIN sale_items si ON c.id = si.card_id "
                        "WHERE si.sale_id = ? ",(saleId,)).fetchall()
 
-    sealed = db.execute("SELECT s.name, s.price, s.market_value, s.date, s.id, s.auction_id, s.quantity FROM sealed s "
+    sealed = db.execute("SELECT s.name, s.language, s.price, s.market_value, s.date, s.id, s.auction_id, s.quantity FROM sealed s "
                         "WHERE s.sale_id = ? ",(saleId,)).fetchall()
 
     data = {
