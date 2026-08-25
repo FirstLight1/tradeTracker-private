@@ -741,6 +741,7 @@ function saveCartContentToSession() {
                 sid: item.getAttribute('sid'),
                 auctionId: item.getAttribute('auction_id'),
                 name: item.querySelector('.sealed-name').textContent,
+                language: item.getAttribute('data-language') || 'en',
                 marketValue: item.querySelector('.sealed-price').textContent.replace('€', '').replace(',', '.').trim(),
                 quantity: item.querySelector('.sealed-qty-display')?.textContent || '1',
                 available: item.getAttribute('data-available') || ''
@@ -815,7 +816,7 @@ function loadCartContentFromSession() {
                     ? item.marketValue
                     : (item.price ? item.price.replace('€', '').replace(',', '.').trim() : '');
                 addSealedToCart(
-                    { name: item.name, market_value: marketValue },
+                    { name: item.name, language: item.language || 'en', market_value: marketValue },
                     item.sid,
                     item.auctionId || null,
                     Number(item.quantity) || 1,
@@ -1285,6 +1286,7 @@ function shoppingCart() {
                     sid: sid,
                     auctionId: auctionId,
                     sealedName: item.querySelector('.sealed-name')?.textContent || '',
+                    language: item.getAttribute('data-language') || 'en',
                     marketValue: item.querySelector('.sealed-price')?.textContent.replace('€', '').replace(',', '.').trim() || '',
                     quantity: Number(item.querySelector('.sealed-qty-display')?.textContent) || 1
                 };
@@ -1630,6 +1632,8 @@ function addSealedToCart(sealed, sid, auctionId = null, quantity = 1, available 
         const itemDiv = document.createElement('div');
         itemDiv.setAttribute('sid', sid);
         itemDiv.classList.add('sealed-item-cart');
+        const language = sealed.language || 'en';
+        itemDiv.setAttribute('data-language', language);
         if (auctionId != null) {
             itemDiv.setAttribute('auction_id', auctionId)
         }
@@ -1643,6 +1647,7 @@ function addSealedToCart(sealed, sid, auctionId = null, quantity = 1, available 
             const plusDisabled = qty >= max ? 'disabled' : '';
             itemDiv.innerHTML = `
             <p class='sealed-name'>${DOMPurify.sanitize(sealed.name)}</p>
+            <p class='sealed-language'>${DOMPurify.sanitize(language)}</p>
             <p class='sealed-price'>${DOMPurify.sanitize(sealed.market_value)}€</p>
             <div class="qty-controls">
                 <button class="sealed-qty-minus" ${minusDisabled}>-</button>
@@ -1875,7 +1880,7 @@ function startPolling() {
                     }
                     const qty = Number(item.quantity) || item.count || 1;
                     const available = item.available != null ? Number(item.available) : null;
-                    addSealedToCart({ name: item.name, market_value: item.market_value }, sealedIds[0], null, qty, available);
+                    addSealedToCart({ name: item.name, language: item.language || 'en', market_value: item.market_value }, sealedIds[0], null, qty, available);
                 });
             }
         } catch (error) {
@@ -1997,6 +2002,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
             div.classList.add('sealed-search-result');
             const sealed = {
                 name: result.name,
+                language: result.language || 'en',
                 market_value: result.market_value
             };
 
@@ -2256,6 +2262,7 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
 
             const sealedData = {
                 name: DOMPurify.sanitize(itemLine.querySelector('.sealed-name').textContent),
+                language: DOMPurify.sanitize(itemLine.querySelector('.sealed-language')?.textContent || 'en'),
                 market_value: DOMPurify.sanitize(itemLine.querySelector('.sealed-market-value, .market-value-sealed').textContent.replace('€', ''))
             };
 
@@ -2625,6 +2632,7 @@ async function loadAuctionContent(button) {
 
                             const sealedData = {
                                 name: DOMPurify.sanitize(sealedDiv.querySelector('.sealed-name').textContent),
+                                language: DOMPurify.sanitize(sealedDiv.querySelector('.sealed-language')?.textContent || 'en'),
                                 market_value: DOMPurify.sanitize(sealedDiv.querySelector('.sealed-market-value').textContent.replace('€', ''))
                             };
 

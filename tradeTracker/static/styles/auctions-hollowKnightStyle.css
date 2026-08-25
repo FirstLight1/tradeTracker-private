@@ -710,6 +710,23 @@ input[type="file"] {
     pointer-events: auto;
 }
 
+.sealed-item-cart {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 35px 65px auto auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.sealed-item-cart .sealed-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.sealed-item-cart .sealed-language,
+.sealed-item-cart .sealed-price {
+    white-space: nowrap;
+}
+
 .delete-cart{
     margin-left: 45px;
 }
