@@ -429,6 +429,12 @@
     width: 100%;
 }
 
+.modal-content .sealed-source-context {
+    margin: 0 0 18px;
+    color: var(--accent-cyan);
+    text-align: center;
+}
+
 .modal-content .sealed-item-row {
     display: flex;
     flex-direction: row;

@@ -195,6 +195,48 @@ async function patchValue(id, value, dataset) {
     }
 }
 
+async function patchSealedLanguage(sid, language) {
+    try {
+        const response = await csrfFetch(`/updateSealed/${sid}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ field: 'language', value: language })
+        });
+        const data = await response.json();
+        if (response.ok && data.status === 'success') return true;
+        renderAlert('Failed to update sealed language', 'error');
+    } catch (error) {
+        renderAlert('Error updating sealed language: ' + error, 'error');
+    }
+    return false;
+}
+
+function enableSealedLanguageEditing(sealedDiv) {
+    sealedDiv.addEventListener('dblclick', (event) => {
+        if (!event.target.classList.contains('sealed-language')) return;
+        event.preventDefault();
+        event.stopPropagation();
+
+        const languageElement = event.target;
+        const previousValue = languageElement.textContent.trim() || 'en';
+        const container = document.createElement('div');
+        container.innerHTML = languageSelect('sealed-language-select', '', previousValue);
+        const select = container.firstElementChild;
+        languageElement.replaceWith(select);
+        select.focus();
+
+        select.addEventListener('click', (selectEvent) => selectEvent.stopPropagation());
+        select.addEventListener('change', async () => {
+            const selectedValue = select.value;
+            const saved = await patchSealedLanguage(sealedDiv.getAttribute('sid'), selectedValue);
+            const replacement = document.createElement('p');
+            replacement.classList.add('sealed-language');
+            replacement.textContent = saved ? selectedValue : previousValue;
+            select.replaceWith(replacement);
+        }, { once: true });
+    });
+}
+
 function deleteAuction(id, div) {
     csrfFetch(`/deleteAuction/${id}`, {
         method: 'DELETE',
@@ -299,7 +341,7 @@ function createSealedItemRow() {
     return itemDiv;
 }
 
-function createSealedModal(sid, auctionId, initialValue) {
+function createSealedModal(sid, auctionId, initialValue, sourceName, sourceLanguage) {
     const modal = document.createElement('div');
     modal.classList.add('reciever-div');
     const contentDiv = document.createElement('div');
@@ -311,6 +353,11 @@ function createSealedModal(sid, auctionId, initialValue) {
     closeButton.classList.add('close-modal');
     closeButton.innerHTML = '&times;';
     contentDiv.appendChild(closeButton);
+
+    const sourceContext = document.createElement('p');
+    sourceContext.classList.add('sealed-source-context');
+    sourceContext.textContent = `Opening ${sourceName} (${sourceLanguage || 'en'})`;
+    contentDiv.appendChild(sourceContext);
 
     const rowsContainer = document.createElement('div');
     rowsContainer.classList.add('sealed-rows-container');
@@ -2229,7 +2276,9 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
             const auctionDiv = itemLine.closest('.auction-tab');
             const auctionId = auctionDiv?.getAttribute('data-id');
             const initialValue = itemLine.querySelector('.sealed-market-value, .market-value-sealed').textContent.replace('€', '');
-            createSealedModal(cardId, auctionId, initialValue);
+            const sourceName = itemLine.querySelector('.sealed-name').textContent;
+            const sourceLanguage = itemLine.querySelector('.sealed-language')?.textContent || 'en';
+            createSealedModal(cardId, auctionId, initialValue, sourceName, sourceLanguage);
             box?.remove();
             box = null;
         });
@@ -2612,9 +2661,14 @@ async function loadAuctionContent(button) {
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
                             <p></p>
                             `;
+                        enableSealedLanguageEditing(sealedDiv);
 
                         cardsContainer.insertBefore(sealedDiv, cardsContainer.querySelector('.button-container'));
                         sealedDiv.addEventListener('click', (event) => {
+                            if (event.target.closest('.sealed-language, .sealed-language-select')) {
+                                event.stopPropagation();
+                                return;
+                            }
                             event.stopPropagation();
                             spawnItemsContextMenu(sealedItem.sid, event, sealedDiv);
                         });
@@ -3030,8 +3084,13 @@ async function loadSealed(viewButton) {
                         <p></p>
                         <p></p>
                         `
+                    enableSealedLanguageEditing(sealedDiv);
 
                     sealedDiv.addEventListener('click', (event) => {
+                        if (event.target.closest('.sealed-language, .sealed-language-select')) {
+                            event.stopPropagation();
+                            return;
+                        }
                         event.stopPropagation();
                         spawnItemsContextMenu(sealedData.sid, event, sealedDiv);
                     });
