@@ -156,8 +156,22 @@ h1 {
   column-gap: clamp(8px, 1.1vw, 18px);
 }
 
+.search-results .sealed-search-result {
+  grid-template-columns:
+    minmax(160px, 1.8fr)
+    45px
+    80px
+    minmax(85px, 0.8fr)
+    minmax(100px, 1fr)
+    90px
+    70px;
+  column-gap: clamp(8px, 1.1vw, 18px);
+}
+
 .card-search-result .add-to-cart-btn,
-.card-search-result .view-auction {
+.card-search-result .view-auction,
+.sealed-search-result .add-to-cart-btn,
+.sealed-search-result .view-auction {
   white-space: nowrap;
 }
 

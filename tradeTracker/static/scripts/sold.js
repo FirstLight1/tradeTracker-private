@@ -82,7 +82,7 @@ async function loadContent(button, soldDate) {
                     <p class='card-info card-name'>${DOMPurify.sanitize(item.name)}</p>
                     <p class='card-info card-num'></p>
                     <p class='card-info condition'></p>
-                    <p class='card-info language'></p>
+                    ${renderField(DOMPurify.sanitize(item.language || 'en'), 'text', ['card-info', 'language'], 'Lang', 'language')}
                     <p class='card-info card-price'></p>
                     <p class='card-info market-value'>${DOMPurify.sanitize(item.market_value)}</p>
                     <p class='card-info sell-price'>${DOMPurify.sanitize(item.sell_price ?? item.market_value)}</p>

@@ -427,7 +427,7 @@ p {
 .sealed-header,
 .sealed-item {
     display: grid;
-    grid-template-columns: 60px 280px 100px 100px 100px 80px 100px 80px 110px 80px;
+    grid-template-columns: 60px 280px 70px 100px 100px 100px 80px 100px 80px 80px;
     gap: 5px;
     text-align: center;
     align-items: center;

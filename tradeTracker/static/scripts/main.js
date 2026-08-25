@@ -1994,6 +1994,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
 
         if (isSealed) {
             // Handle sealed item display
+            div.classList.add('sealed-search-result');
             const sealed = {
                 name: result.name,
                 market_value: result.market_value
@@ -2001,10 +2002,10 @@ function displaySearchResults(results, resultsQueue, searchInput) {
 
             div.innerHTML = `
                 <p class="result result-sealed-name">${DOMPurify.sanitize(result.name || 'N/A')}</p>
+                <p class="result result-language">${DOMPurify.sanitize(result.language || 'en')}</p>
                 <p class="result result-market-value">${DOMPurify.sanitize(result.market_value ? result.market_value + '€' : 'N/A')}</p>
-                <p class="result result-auction-name">${DOMPurify.sanitize(result.auction_name || (result.auction_id ? result.auction_id - 1 : 'Unassigned'))}</p>
                 <span class="result-type-badge sealed-badge">Sealed${result.available_count ? ' ·' + result.available_count : ''}</span>
-                ${result.auction_id || result.auction_name ? `<p class="result result-auction-name">${DOMPurify.sanitize(result.auction_name || result.auction_id - 1)}</p>` : `<p></p>`}
+                <p class="result result-auction-name">${DOMPurify.sanitize(result.auction_name || (result.auction_id ? result.auction_id - 1 : 'Unassigned'))}</p>
                 <button class="add-to-cart-btn">Add to cart</button>
                 ${safeAuctionId ? `<button class="view-auction" data-id="${safeAuctionId}">View</button>` : ''}
             `;
@@ -2597,6 +2598,7 @@ async function loadAuctionContent(button) {
                         sealedDiv.innerHTML = `
                             <p class='sealed-quantity'>${DOMPurify.sanitize(sealedItem.quantity)}</p>
                             <p class="sealed-name">${DOMPurify.sanitize(sealedItem.name)}</p>
+                            <p class="sealed-language">${DOMPurify.sanitize(sealedItem.language || 'en')}</p>
                             <p class="sealed-price">${DOMPurify.sanitize(sealedItem.price)}€</p>
                             <p class="VAT-sealed">${(Number(DOMPurify.sanitize(sealedItem.price)) / 1.23).toFixed(2)}</p>
                             <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
@@ -3011,11 +3013,13 @@ async function loadSealed(viewButton) {
                     sealedDiv.innerHTML = `
                         <p class='sealed-quantity'>${DOMPurify.sanitize(sealedData.quantity)}</p>
                         <p class='sealed-name'>${DOMPurify.sanitize(sealedData.name)}</p>
+                        <p class='sealed-language'>${DOMPurify.sanitize(sealedData.language || 'en')}</p>
                         <p class='unit-price'>${DOMPurify.sanitize(sealedData.price)}</p>
                         <p class='VAT-sealed sealed-market-VAT-value'>${(DOMPurify.sanitize(sealedData.price) / 1.23).toFixed(2)}</p>
                         <p class='market-value-sealed'>${DOMPurify.sanitize(sealedData.market_value)}</p>
                         <p class='margin'>${margin}</p>
                         <p class='add-date'>${formatedDate}</p>
+                        <p></p>
                         <p></p>
                         `
 
