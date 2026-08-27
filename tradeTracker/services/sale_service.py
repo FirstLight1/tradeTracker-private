@@ -58,7 +58,8 @@ class SaleService:
                 needed = int(item.get("quantity", 1))
                 available = self.db.execute(
                     "SELECT COALESCE(SUM(quantity), 0) FROM sealed "
-                    "WHERE lower(name) = lower(?) AND sale_id IS NULL AND opened = 0",
+                    "WHERE lower(name) = lower(?) AND sale_id IS NULL AND opened = 0 "
+                    "GROUP BY language",
                     (name,),
                 ).fetchone()[0]
                 if available < needed:
@@ -190,6 +191,7 @@ class SaleService:
             for item in sealed:
                 self._deduct_sealed_fifo(
                     item.get("sealedName"),
+                    item.get("language", "en"),
                     int(item.get("quantity", 1)),
                     sale_id,
                     float(item.get("marketValue") or 0),
@@ -284,7 +286,7 @@ class SaleService:
                 )
                 remaining = 0
 
-    def _deduct_sealed_fifo(self, name, sell_qty, sale_id, sell_price=None):
+    def _deduct_sealed_fifo(self, name,language, sell_qty, sale_id, sell_price=None):
         """Deduct sealed units for a product using FIFO (oldest rows first).
 
         When a row is only partially sold it is split: the inventory row's
@@ -297,9 +299,9 @@ class SaleService:
         remaining = sell_qty
 
         rows = self.db.execute(
-            "SELECT id, name, quantity, price, market_value, date, auction_id FROM sealed "
-            "WHERE lower(name) = lower(?) AND sale_id IS NULL AND opened = 0 ORDER BY id ASC",
-            (name,),
+            "SELECT id, name, language, quantity, price, market_value, date, auction_id FROM sealed "
+            "WHERE lower(name) = lower(?) AND language = ? AND sale_id IS NULL AND opened = 0 ORDER BY id ASC ",
+            (name,language),
         ).fetchall()
 
         for row in rows:
@@ -320,11 +322,12 @@ class SaleService:
                     (remaining, row["id"]),
                 )
                 self.db.execute(
-                    "INSERT INTO sealed(name, normalized_name, quantity, price, market_value, sell_price, date, auction_id, sale_id) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO sealed(name, normalized_name, language, quantity, price, market_value, sell_price, date, auction_id, sale_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         row["name"],
                         normalize(row["name"]),
+                        language,
                         remaining,
                         row["price"],
                         row["market_value"],
