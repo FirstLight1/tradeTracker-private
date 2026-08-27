@@ -12,7 +12,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from tradeTracker import create_app
-from tradeTracker.db import get_db, init_db
+from tradeTracker.db import get_db
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.models import SaleInput
 from tradeTracker.actions import normalize
@@ -35,11 +35,6 @@ class SealedFIFOTestCase(unittest.TestCase):
             'WTF_CSRF_ENABLED': False,
         })
         with self.app.app_context():
-            # create_app runs migrations on the (empty) temp DB which pre-creates
-            # `barter`; init_db()'s schema re-creates it without a DROP, so clear it
-            # first. (Same stale-harness issue affects the bulk suite.)
-            get_db().executescript('DROP TABLE IF EXISTS barter;')
-            init_db()
             self._setup_test_data()
 
     def tearDown(self):
@@ -76,7 +71,7 @@ class SealedFIFOTestCase(unittest.TestCase):
         """Sell 2 of a 5-unit row -> inventory row drops to 3, sold row of 2 created."""
         with self.app.app_context():
             db = get_db()
-            self._svc(db)._deduct_sealed_fifo("Booster Box", 2, 999)
+            self._svc(db)._deduct_sealed_fifo("Booster Box", "en", 2, 999)
             db.commit()
 
             # Original inventory row reduced and still unsold
@@ -100,7 +95,7 @@ class SealedFIFOTestCase(unittest.TestCase):
         """Sell exactly 5 of a 5-unit row -> row stamped sold, no new row."""
         with self.app.app_context():
             db = get_db()
-            self._svc(db)._deduct_sealed_fifo("Booster Box", 5, 999)
+            self._svc(db)._deduct_sealed_fifo("Booster Box", "en", 5, 999)
             db.commit()
 
             row = db.execute('SELECT quantity, sale_id FROM sealed WHERE id = 10').fetchone()
@@ -115,7 +110,7 @@ class SealedFIFOTestCase(unittest.TestCase):
         """Sell 7 -> consume all 5 from oldest row, split 2 from the next."""
         with self.app.app_context():
             db = get_db()
-            self._svc(db)._deduct_sealed_fifo("Booster Box", 7, 999)
+            self._svc(db)._deduct_sealed_fifo("Booster Box", "en", 7, 999)
             db.commit()
 
             # Oldest row fully sold (whole row, quantity kept)
@@ -160,6 +155,7 @@ class SealedFIFOTestCase(unittest.TestCase):
                     'cardName': 'Pikachu',
                     'cardNum': '25',
                     'condition': 'NM',
+                    'language': 'en',
                     'marketValue': 120.0,
                     'cardmarketId': '900100',
                 }],
