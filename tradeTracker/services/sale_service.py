@@ -55,12 +55,20 @@ class SaleService:
         if sealed:
             for item in sealed:
                 name = item.get("sealedName")
-                needed = int(item.get("quantity", 1))
+                language = item.get("language", "en")
+                if language not in CONSTANTS.ALLOWED_LANGUAGES:
+                    raise ValueError("Invalid language code")
+                try:
+                    needed = int(item.get("quantity", 1))
+                except (TypeError, ValueError) as error:
+                    raise ValueError("Invalid sealed quantity") from error
+                if needed <= 0:
+                    raise ValueError("Invalid sealed quantity")
                 available = self.db.execute(
                     "SELECT COALESCE(SUM(quantity), 0) FROM sealed "
-                    "WHERE lower(name) = lower(?) AND sale_id IS NULL AND opened = 0 "
-                    "GROUP BY language",
-                    (name,),
+                    "WHERE lower(name) = lower(?) AND language = ? "
+                    "AND sale_id IS NULL AND opened = 0",
+                    (name, language),
                 ).fetchone()[0]
                 if available < needed:
                     raise ValueError
@@ -286,7 +294,7 @@ class SaleService:
                 )
                 remaining = 0
 
-    def _deduct_sealed_fifo(self, name,language, sell_qty, sale_id, sell_price=None):
+    def _deduct_sealed_fifo(self, name, language, sell_qty, sale_id, sell_price=None):
         """Deduct sealed units for a product using FIFO (oldest rows first).
 
         When a row is only partially sold it is split: the inventory row's
@@ -301,7 +309,7 @@ class SaleService:
         rows = self.db.execute(
             "SELECT id, name, language, quantity, price, market_value, date, auction_id FROM sealed "
             "WHERE lower(name) = lower(?) AND language = ? AND sale_id IS NULL AND opened = 0 ORDER BY id ASC ",
-            (name,language),
+            (name, language),
         ).fetchall()
 
         for row in rows:

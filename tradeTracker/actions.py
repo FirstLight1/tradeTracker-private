@@ -2181,12 +2181,13 @@ def _process_inventory_csv(file):
     dataList = []
     for row in reader:
         try:
+            language = row['language'].strip().lower() or 'english'
             item = {
                 'card_name': row['name'],
                 'card_num': row['setCode'] + ' ' + row['cn'] if row['cn'] else '',
                 'condition': CONSTANTS.CONDITION_DICT.get(row['condition']),
                 'language': CONSTANTS.LANGUAGE_FULL_TO_ABB.get(
-                    row['language'].strip().lower(), row['language'].strip().lower()
+                    language, language
                 ),
                 'buy_price': round(float(row['price']) * 0.8, 2),
                 'market_value': row['price'],
@@ -2329,11 +2330,17 @@ def process_sold_csv(files,db):
     allItemsExpanded = allItems.loc[allItems.index.repeat(allItems['quantity'])].reset_index(drop=True)
     allItemsExpanded['quantity'] = 1
 
-    merged['_match_seq'] = merged.groupby('cardmarketId').cumcount()
-    allItemsExpanded['_match_seq'] = allItemsExpanded.groupby('cardmarketId').cumcount()
     merged['condition'] = merged['condition'].replace(CONSTANTS.CONDITION_DICT)
     allItemsExpanded['condition'] = allItemsExpanded['condition'].replace(CONSTANTS.CONDITION_DICT)
-    merged['language'] = merged['language'].replace(CONSTANTS.LANGUAGE_FULL_TO_ABB)
+    merged['language'] = (
+        merged['language'].str.strip().str.lower()
+        .replace(CONSTANTS.LANGUAGE_FULL_TO_ABB)
+    )
+    allItemsExpanded['language'] = allItemsExpanded['language'].str.strip().str.lower()
+
+    match_identity = ['cardmarketId', 'condition', 'language']
+    merged['_match_seq'] = merged.groupby(match_identity).cumcount()
+    allItemsExpanded['_match_seq'] = allItemsExpanded.groupby(match_identity).cumcount()
 
     wantedItems = merged.merge(allItemsExpanded, on=['cardmarketId', 'condition', 'language' ,'_match_seq'], how='left', suffixes=('_mer', '_db'), validate='one_to_one')
     wantedItems = wantedItems.drop(columns='_match_seq')
