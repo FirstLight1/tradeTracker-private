@@ -574,6 +574,32 @@ def update(card_id):
         db.commit()
     return jsonify({'status': 'success'}),200
 
+@bp.route('/updateSealed/<string:sid>', methods=('PATCH',))
+@verify_token
+def update_sealed(sid):
+    data = request.get_json() or {}
+    if data.get('field') != 'language':
+        return jsonify({'status': 'error', 'message': 'Invalid field'}), 400
+
+    language = data.get('value')
+    if language not in CONSTANTS.ALLOWED_LANGUAGES:
+        return jsonify({'status': 'error', 'message': 'Invalid language code, Error code: Ax27'}), 400
+
+    sealed_id = sid.removeprefix('s')
+    if not sealed_id or any(character not in '0123456789' for character in sealed_id):
+        return jsonify({'status': 'error', 'message': 'Invalid sealed ID'}), 400
+
+    db = get_db()
+    updated = db.execute(
+        'UPDATE sealed SET language = ? WHERE id = ?',
+        (language, int(sealed_id)),
+    )
+    if updated.rowcount != 1:
+        db.rollback()
+        return jsonify({'status': 'error', 'message': 'Sealed item not found'}), 404
+    db.commit()
+    return jsonify({'status': 'success'}), 200
+
 @bp.route('/addToExistingAuction/<int:auction_id>', methods=('POST',))
 @verify_token
 def addToExistingAuction(auction_id):
