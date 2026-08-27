@@ -2750,10 +2750,10 @@ def search():
         
         # Search sealed items
         sealed_matches = db.execute(
-            f"SELECT 's' || s.id as sid, s.name, s.market_value, s.auction_id,SUM(s.quantity) as available_count, a.auction_name FROM sealed s "
+            f"SELECT 's' || s.id as sid, s.name, s.language, s.market_value, s.auction_id,SUM(s.quantity) as available_count, a.auction_name FROM sealed s "
             "LEFT JOIN auctions a ON s.auction_id = a.id "
             f"WHERE ({sealed_where_clause}) AND s.sale_id IS NULL AND s.opened = 0 "
-            f"GROUP BY UPPER(s.name) ORDER BY s.id ASC LIMIT 8",
+            f"GROUP BY UPPER(s.name), s.language ORDER BY s.id ASC LIMIT 8",
             sealed_params
         ).fetchall()
         
