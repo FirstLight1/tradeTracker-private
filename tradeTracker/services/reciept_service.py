@@ -11,7 +11,7 @@ class RecieptService(ABC):
 class InvoiceReceiptService(RecieptService):
     def issue(self, sale_input, db) -> models.ReceiptResult:
         latest_invoice = db.execute(
-            'SELECT invoice_number FROM sales '
+            "SELECT invoice_number FROM sales "
             "WHERE invoice_number GLOB '[0-9]*' "
             "AND invoice_number NOT GLOB '*[^0-9]*' ORDER BY id DESC LIMIT 1"
         ).fetchone()
@@ -29,9 +29,7 @@ class InvoiceReceiptService(RecieptService):
             shipping=sale_input.shipping,
             type="invoice",
         )
-        return models.ReceiptResult(
-            kind="invoice", number=invoice_num, raw=pdf
-        )
+        return models.ReceiptResult(kind="invoice", number=invoice_num, raw=pdf)
 
 
 class EKasaReceiptService(RecieptService):

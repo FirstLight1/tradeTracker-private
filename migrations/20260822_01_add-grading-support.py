@@ -7,9 +7,7 @@ __depends__ = {"20260812_01_u4Gpx-baseline-migrations"}
 
 
 def add_graded_sale_costs(connection):
-    columns = {
-        row[1] for row in connection.execute("PRAGMA table_info(sale_items)")
-    }
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(sale_items)")}
     if not columns:
         return
 

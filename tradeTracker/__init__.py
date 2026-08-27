@@ -10,11 +10,14 @@ from pathlib import Path
 from yoyo import get_backend, read_migrations
 from werkzeug.exceptions import HTTPException
 from .logging_config import configure_logging
+
 limiter = Limiter(key_func=get_remote_address)
 csrf = CSRFProtect()
 
+
 def abort_secret_key():
     raise RuntimeError
+
 
 def apply_database_migrations(db_path):
     if not os.path.exists(db_path):
@@ -26,6 +29,7 @@ def apply_database_migrations(db_path):
         with backend.lock():
             backend.apply_migrations(backend.to_apply(migrations))
 
+
 def create_app(test_config=None):
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
@@ -34,18 +38,21 @@ def create_app(test_config=None):
 
     if os.environ.get("FLASK_ENV") != "production":
         from dotenv import load_dotenv
+
         load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
     ALLOWED_ORIGINS = [
         "https://app.cardanvil.sk",
         f"chrome-extension://{os.environ['CHROME_EXTENSION_ID']}",
-        "https://www.cardmarket.com"
+        "https://www.cardmarket.com",
     ]
-    CORS(app, 
-         origins=ALLOWED_ORIGINS, 
-         supports_credentials=True, 
-         allow_headers=["Content-Type", "X-CSRF-Token", "Authorization"],
-         methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"])
+    CORS(
+        app,
+        origins=ALLOWED_ORIGINS,
+        supports_credentials=True,
+        allow_headers=["Content-Type", "X-CSRF-Token", "Authorization"],
+        methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    )
 
     csp = {
         "default-src": ["'self'"],
@@ -64,7 +71,7 @@ def create_app(test_config=None):
     app.config.update(
         SESSION_COOKIE_SECURE=True,
         SESSION_COOKIE_HTTPONLY=True,
-        SESSION_COOKIE_SAMESITE='Lax',
+        SESSION_COOKIE_SAMESITE="Lax",
     )
     # Use DATA_DIR for database storage in production
     if os.getenv("FLASK_ENV") == "prod":
@@ -77,14 +84,14 @@ def create_app(test_config=None):
 
     app.config.from_mapping(
         DATABASE=db_path,
-        SECRET_KEY=os.environ.get('SECRET_KEY') or abort_secret_key(),
+        SECRET_KEY=os.environ.get("SECRET_KEY") or abort_secret_key(),
         WTF_CSRF_TIME_LIMIT=86400,
     )
 
-    #I dont even need this I think
+    # I dont even need this I think
     if test_config is None:
         # load the instance config, if it exists, when not testing
-        app.config.from_pyfile("config.py", silent=True) 
+        app.config.from_pyfile("config.py", silent=True)
     else:
         # load the test config if passed in
         app.config.from_mapping(test_config)
@@ -103,17 +110,17 @@ def create_app(test_config=None):
     with app.app_context():
         connection = db.get_db()
         existing_tables = {
-            row['name'] for row in connection.execute(
-                "SELECT name FROM sqlite_master "
-                "WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            row["name"]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
             ).fetchall()
         }
-        baseline_tables = {'auctions', 'cards', 'sealed'}
+        baseline_tables = {"auctions", "cards", "sealed"}
         if not existing_tables:
             db.init_db()
             print("Database initialized automatically on first run")
         elif not baseline_tables <= existing_tables:
-            raise RuntimeError('Database has an incomplete baseline schema')
+            raise RuntimeError("Database has an incomplete baseline schema")
 
     apply_database_migrations(app.config["DATABASE"])
 
@@ -139,12 +146,12 @@ def create_app(test_config=None):
 
     @app.before_request
     def restrict_by_host():
-        host = request.host.split(':')[0]
-        endpoint = request.endpoint or ''
-        is_api_endpoint = endpoint.startswith('api.')
-        if host == 'api.cardanvil.sk' and not is_api_endpoint:
+        host = request.host.split(":")[0]
+        endpoint = request.endpoint or ""
+        is_api_endpoint = endpoint.startswith("api.")
+        if host == "api.cardanvil.sk" and not is_api_endpoint:
             abort(404)
-        if host == 'app.cardanvil.sk' and is_api_endpoint:
+        if host == "app.cardanvil.sk" and is_api_endpoint:
             abort(404)
 
     return app

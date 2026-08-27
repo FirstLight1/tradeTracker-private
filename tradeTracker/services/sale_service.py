@@ -8,7 +8,9 @@ from Crypto.Cipher import AES
 
 if os.environ.get("FLASK_ENV") != "production":
     from dotenv import load_dotenv
+
     load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
 
 class SaleService:
     def __init__(self, db, receipt_service):
@@ -108,7 +110,9 @@ class SaleService:
             card["cardName"] = inventory_card["card_name"]
             card["cardNum"] = inventory_card["card_num"] or ""
             card["condition"] = inventory_card["condition"]
-            card["displayCondition"] = " ".join(filter(None, grade_parts)) or inventory_card["condition"]
+            card["displayCondition"] = (
+                " ".join(filter(None, grade_parts)) or inventory_card["condition"]
+            )
             card["certNumber"] = inventory_card["cert_number"] or None
             card["internalCost"] = (
                 inventory_card["landed_cost"]
@@ -124,20 +128,19 @@ class SaleService:
 
     def _insert_sale_header(self, sale_input, receipt):
         shippingPrice = None
-        if sale_input.shipping is not  None:
+        if sale_input.shipping is not None:
             shippingPrice = sale_input.shipping.get("shippingPrice", None)
 
         recieverInfoJson = json.dumps(sale_input.reciever).encode("utf-8")
-        key = base64.b64decode(os.environ['KEY'])
-        cipher = AES.new(key,AES.MODE_GCM)
-        recieverInfoCrypt, tag = cipher.encrypt_and_digest(recieverInfoJson) 
+        key = base64.b64decode(os.environ["KEY"])
+        cipher = AES.new(key, AES.MODE_GCM)
+        recieverInfoCrypt, tag = cipher.encrypt_and_digest(recieverInfoJson)
         nonce = cipher.nonce
 
-        result ={
+        result = {
             "nonce": base64.b64encode(nonce).decode(),
             "ciphertext": base64.b64encode(recieverInfoCrypt).decode(),
-            "tag": base64.b64encode(tag).decode()
-
+            "tag": base64.b64encode(tag).decode(),
         }
         result = json.dumps(result)
 
@@ -145,9 +148,7 @@ class SaleService:
             shippingPrice = 0
 
         sale_date = datetime.date.today().isoformat()
-        total_amount = round(
-            float(sale_input.reciever.get("total")) + float(shippingPrice), 2
-        )
+        total_amount = round(float(sale_input.reciever.get("total")) + float(shippingPrice), 2)
         invoice_num = receipt.number
 
         idOrder = None if sale_input.idOrder is None else str(sale_input.idOrder)

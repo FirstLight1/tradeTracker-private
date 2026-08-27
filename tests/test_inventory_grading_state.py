@@ -7,11 +7,13 @@ from tradeTracker.db import get_db
 def app(tmp_path):
     from tradeTracker import create_app
 
-    app = create_app({
-        "TESTING": True,
-        "DATABASE": str(tmp_path / "inventory-grading-state.sqlite"),
-        "WTF_CSRF_ENABLED": False,
-    })
+    app = create_app(
+        {
+            "TESTING": True,
+            "DATABASE": str(tmp_path / "inventory-grading-state.sqlite"),
+            "WTF_CSRF_ENABLED": False,
+        }
+    )
     with app.app_context():
         db = get_db()
         db.execute("INSERT INTO auctions (id, auction_name) VALUES (2, 'Inventory')")

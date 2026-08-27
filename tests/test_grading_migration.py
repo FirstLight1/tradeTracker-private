@@ -15,10 +15,7 @@ def test_create_grading_tables_is_idempotent(tmp_path):
     conn = sqlite3.connect(db_path)
     try:
         tables = {
-            row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            )
+            row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
         indexes = {
             row[0]
@@ -29,9 +26,7 @@ def test_create_grading_tables_is_idempotent(tmp_path):
         }
         foreign_keys = {
             row[3]: (row[2], row[6])
-            for row in conn.execute(
-                "PRAGMA foreign_key_list(grading_submission_cards)"
-            )
+            for row in conn.execute("PRAGMA foreign_key_list(grading_submission_cards)")
         }
     finally:
         conn.close()
@@ -66,8 +61,7 @@ def test_create_grading_tables_completes_partial_migration(tmp_path):
     conn = sqlite3.connect(db_path)
     try:
         child_exists = conn.execute(
-            "SELECT 1 FROM sqlite_master "
-            "WHERE type = 'table' AND name = 'grading_submission_cards'"
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'grading_submission_cards'"
         ).fetchone()
     finally:
         conn.close()

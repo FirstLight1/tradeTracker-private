@@ -5,94 +5,90 @@ CENT = Decimal("0.01")
 
 
 ALLOWED_PAYMENT_TYPES = {
-    'Hotovosť',
-    'Karta',
-    'Barter',
-    'Bankový prevod',
-    'Online platba',
-    'Dobierka',
-    'Online platobný systém'
+    "Hotovosť",
+    "Karta",
+    "Barter",
+    "Bankový prevod",
+    "Online platba",
+    "Dobierka",
+    "Online platobný systém",
 }
 
-BULK_ITEM_UNIT_PRICES = {
-    'bulk': 0.01,
-    'holo': 0.03,
-    'ex': 0.15
-}
+BULK_ITEM_UNIT_PRICES = {"bulk": 0.01, "holo": 0.03, "ex": 0.15}
 
-COlLUMN_MAP ={
-    'name': 'card_name',
-    'setCode': 'set_code',
-    'cn': 'set_number',
-    'condition': 'condition',
-    'price': 'market_value',
-    'listedAt': 'date_created',
-    'quantity': 'quantity',
+COlLUMN_MAP = {
+    "name": "card_name",
+    "setCode": "set_code",
+    "cn": "set_number",
+    "condition": "condition",
+    "price": "market_value",
+    "listedAt": "date_created",
+    "quantity": "quantity",
 }
 
 CONDITION_DICT = {
-    'MT' : "MINT",
-    'NM' : "NEAR MINT",
-    'EX' : "EXCELLENT",
-    'GD' : "GOOD",
-    'LP' : "LIGHT PLAYED",
-    'PL' : "PLAYED",
-    'PO' : "POOR"
+    "MT": "MINT",
+    "NM": "NEAR MINT",
+    "EX": "EXCELLENT",
+    "GD": "GOOD",
+    "LP": "LIGHT PLAYED",
+    "PL": "PLAYED",
+    "PO": "POOR",
 }
 
 ALLOWED_LANGUAGES = {
-    'en',
-    'jp',
-    'de',
-    'fr',
-    'it',
-    'es',
-    'kr',
-    'cn',
-    'pt',
+    "en",
+    "jp",
+    "de",
+    "fr",
+    "it",
+    "es",
+    "kr",
+    "cn",
+    "pt",
 }
 
 LANGUAGE_FULL_TO_ABB = {
-        'english': 'en',
-        'japanese': 'jp',
-        'german': 'de',
-        'french': 'fr',
-        'italian': 'it',
-        'spanish': 'es',
-        'korean': 'kr',
-        'chinese': 'cn',
-        'simplified chinese': 'cn',
-        's-chinese': 'cn',
-        'portuguese': 'pt',
+    "english": "en",
+    "japanese": "jp",
+    "german": "de",
+    "french": "fr",
+    "italian": "it",
+    "spanish": "es",
+    "korean": "kr",
+    "chinese": "cn",
+    "simplified chinese": "cn",
+    "s-chinese": "cn",
+    "portuguese": "pt",
 }
 
 LANGUAGE_ABB_TO_FULL = {
-    'en': 'english',
-    'jp': 'japanese',
-    'de': 'german',
-    'fr': 'french',
-    'it': 'italian',
-    'es': 'spanish',
-    'kr': 'korean',
-    'cn': 'chinese',
-    'cn': 'simplified chinese',
-    'cn': 's-chinese',
-    'pt': 'portuguese',
+    "en": "english",
+    "jp": "japanese",
+    "de": "german",
+    "fr": "french",
+    "it": "italian",
+    "es": "spanish",
+    "kr": "korean",
+    "cn": "chinese",
+    "cn": "simplified chinese",
+    "cn": "s-chinese",
+    "pt": "portuguese",
 }
 
 
 PARCEL_CATEGORIES = {
-        "registered letter": "r",
-        "letter": "olz",
-        "insured letter": "pl",
-        "parcel":"b"
+    "registered letter": "r",
+    "letter": "olz",
+    "insured letter": "pl",
+    "parcel": "b",
 }
 
-HEAVY_ARTICLE_CATEGORIES= {
-    'Booster',
-    'Display',
-    'Box Set',
-    'Elite Trainer Boxes',
+HEAVY_ARTICLE_CATEGORIES = {
+    "Booster",
+    "Display",
+    "Box Set",
+    "Elite Trainer Boxes",
 }
 
 EUROPE_COUNTRY_CODES = {
@@ -145,5 +141,3 @@ EUROPE_COUNTRY_CODES = {
     "united kingdom": "GB",
     "vatican city": "VA",
 }
-
-

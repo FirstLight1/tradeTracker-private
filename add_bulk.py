@@ -2,6 +2,7 @@ import sqlite3
 import os
 import shutil
 
+
 def add_bulk_sales_table(db_path):
     """
     Adds the bulk_sales and bulk_counter tables to the database if they don't exist.
@@ -10,7 +11,7 @@ def add_bulk_sales_table(db_path):
     if not os.path.exists(db_path):
         print(f"Database not found at {db_path}")
         return False
-    
+
     try:
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
@@ -36,7 +37,7 @@ def add_bulk_sales_table(db_path):
 
         if bulk_counter_exists:
             print("Bulk tables already exist, skipping addition.")
-        else:            
+        else:
             print("Adding bulk_sales and bulk_counter tables...")
 
             cursor.execute("""
@@ -59,7 +60,7 @@ def add_bulk_sales_table(db_path):
             INSERT OR IGNORE INTO bulk_counter (counter_name, counter)
             VALUES ('ex', 0)
         """)
-        
+
         if not bulk_sales_exists:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS bulk_sales (
@@ -104,18 +105,18 @@ def add_bulk_sales_table(db_path):
         conn.commit()
         conn.close()
         return True
-    
+
     except sqlite3.Error as e:
         print(f"SQLite error during bulk tables addition: {e}")
         return False
     except Exception as e:
         print(f"Unexpected error during bulk tables addition: {e}")
         return False
-    
+
+
 if __name__ == "__main__":
     db_path = "trade_tracker.db"  # Update with your actual database path
     if add_bulk_sales_table(db_path):
         print("Bulk tables added or already exist.")
     else:
         print("Failed to add bulk tables.")
-    

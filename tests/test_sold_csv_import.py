@@ -17,6 +17,7 @@ Orders covered:
   1002  rejected         : references a cardMarketID not present in inventory
   1003  complete, card   : single card
 """
+
 import io
 import os
 import sys
@@ -25,7 +26,7 @@ import tempfile
 import unittest
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from tradeTracker import create_app
 from tradeTracker.db import get_db
@@ -86,7 +87,7 @@ def _articles_csv():
         ARTICLES_HEADER,
         # Order 1001 - everything matchable
         _article_row(1001, "Cetoddle", "1/4", 1, "1.50 €", 900001),
-        _article_row(1001, "Frigibax", "2/4", 2, "2.00 €", 900002),   # 2 units -> expansion
+        _article_row(1001, "Frigibax", "2/4", 2, "2.00 €", 900002),  # 2 units -> expansion
         _article_row(1001, "Booster Bundle", "3/4", 1, "5.00 €", 900003),  # sealed
         # Order 1002 - cmid 900099 not in inventory -> rejected
         _article_row(1002, "Unknown Card", "1/1", 1, "3.00 €", 900099),
@@ -99,11 +100,13 @@ def _articles_csv():
 class SoldCSVImportTestCase(unittest.TestCase):
     def setUp(self):
         self.db_fd, self.db_path = tempfile.mkstemp()
-        self.app = create_app({
-            'TESTING': True,
-            'DATABASE': self.db_path,
-            'WTF_CSRF_ENABLED': False,
-        })
+        self.app = create_app(
+            {
+                "TESTING": True,
+                "DATABASE": self.db_path,
+                "WTF_CSRF_ENABLED": False,
+            }
+        )
         with self.app.app_context():
             self._seed()
         self.client = self.app.test_client()
@@ -118,50 +121,52 @@ class SoldCSVImportTestCase(unittest.TestCase):
 
         def add_card(cmid, name, num, price, mv):
             db.execute(
-                'INSERT INTO cards (auction_id, card_name, normalized_name, card_num, condition, '
-                'card_price, market_value, cardMarketID) VALUES (2,?,?,?,?,?,?,?)',
-                (name, normalize(name), num, 'NM', price, mv, str(cmid)),
+                "INSERT INTO cards (auction_id, card_name, normalized_name, card_num, condition, "
+                "card_price, market_value, cardMarketID) VALUES (2,?,?,?,?,?,?,?)",
+                (name, normalize(name), num, "NM", price, mv, str(cmid)),
             )
 
-        add_card(900001, 'Cetoddle', '1', 1.0, 1.5)
+        add_card(900001, "Cetoddle", "1", 1.0, 1.5)
         # Two copies for the 2-unit (items=2) article line -> tests _match_seq
-        add_card(900002, 'Frigibax', '2', 1.5, 2.0)
-        add_card(900002, 'Frigibax', '2', 1.5, 2.0)
-        add_card(900004, 'Pikachu', '58', 3.0, 4.0)
+        add_card(900002, "Frigibax", "2", 1.5, 2.0)
+        add_card(900002, "Frigibax", "2", 1.5, 2.0)
+        add_card(900004, "Pikachu", "58", 3.0, 4.0)
 
         # Sealed product matched by cardMarketID; FIFO/inventory check is by name.
         db.execute(
-            'INSERT INTO sealed (name, normalized_name, quantity, price, market_value, date, '
+            "INSERT INTO sealed (name, normalized_name, quantity, price, market_value, date, "
             'auction_id, cardMarketID) VALUES (?, ?, 3, 4.0, 5.0, "2026-01-01", 2, "900003")',
-            ('Booster Bundle', normalize('Booster Bundle')),
+            ("Booster Bundle", normalize("Booster Bundle")),
         )
         db.commit()
 
     def _post(self):
         data = {
-            'type': 'sold',
-            'csv-upload': [
-                (io.BytesIO(_orders_csv()), 'orders-test.csv'),
-                (io.BytesIO(_articles_csv()), 'articles-test.csv'),
+            "type": "sold",
+            "csv-upload": [
+                (io.BytesIO(_orders_csv()), "orders-test.csv"),
+                (io.BytesIO(_articles_csv()), "articles-test.csv"),
             ],
         }
         # Talisman forces HTTPS; drive the client over https to avoid a 302.
         return self.client.post(
-            '/importCSV', data=data, content_type='multipart/form-data',
-            base_url='https://localhost',
+            "/importCSV",
+            data=data,
+            content_type="multipart/form-data",
+            base_url="https://localhost",
         )
 
     # PacketaService is disabled in actions.py (commented out), so there is
     # nothing left to patch for it here.
-    @patch('tradeTracker.actions.EPHService')
+    @patch("tradeTracker.actions.EPHService")
     def test_sold_import_end_to_end(self, mock_eph_service):
         # Stub the carrier services so the test does not hit live APIs.
         mock_eph = MagicMock()
-        mock_eph.createSheet.return_value = 'sheet-1'
-        mock_eph.addParcel.return_value = {'id': 'parcel-1'}
+        mock_eph.createSheet.return_value = "sheet-1"
+        mock_eph.addParcel.return_value = {"id": "parcel-1"}
 
         def _fake_download_label(parcel_id, sheet_id, filename):
-            return MagicMock(filename=f'label_{filename}', bytes=b'%PDF-fake')
+            return MagicMock(filename=f"label_{filename}", bytes=b"%PDF-fake")
 
         mock_eph.download_label.side_effect = _fake_download_label
         mock_eph_service.return_value = mock_eph
@@ -171,56 +176,56 @@ class SoldCSVImportTestCase(unittest.TestCase):
         print("\nRESPONSE", resp.status_code, json.dumps(body, indent=2, default=str))
 
         self.assertEqual(resp.status_code, 200, body)
-        self.assertEqual(body['status'], 'success')
+        self.assertEqual(body["status"], "success")
 
         # --- rejected: order 1002 only, complete orders excluded ---
-        rejected_ids = {int(r['idOrder']) for r in body['rejected']}
+        rejected_ids = {int(r["idOrder"]) for r in body["rejected"]}
         self.assertEqual(rejected_ids, {1002})
 
         # --- failed: none of the complete orders should error ---
-        self.assertEqual(body['failed'], [])
+        self.assertEqual(body["failed"], [])
 
         # --- a download was produced for the completed invoices ---
-        self.assertIsNotNone(body['download_url'])
+        self.assertIsNotNone(body["download_url"])
 
         with self.app.app_context():
             db = get_db()
             # Two sales (orders 1001 and 1003), each with a fresh invoice number.
             sales = db.execute(
-                'SELECT invoice_number, total_amount FROM sales ORDER BY id'
+                "SELECT invoice_number, total_amount FROM sales ORDER BY id"
             ).fetchall()
             self.assertEqual(len(sales), 2)
 
             # Order 1001: 1 + 2 = 3 cards sold; Order 1003: 1 card sold => 4 sale_items.
-            n_items = db.execute('SELECT COUNT(*) FROM sale_items').fetchone()[0]
+            n_items = db.execute("SELECT COUNT(*) FROM sale_items").fetchone()[0]
             self.assertEqual(n_items, 4)
 
             # All four sold cards now carry a sold_date.
             sold_cards = db.execute(
-                'SELECT COUNT(*) FROM cards WHERE sold_date IS NOT NULL'
+                "SELECT COUNT(*) FROM cards WHERE sold_date IS NOT NULL"
             ).fetchone()[0]
             self.assertEqual(sold_cards, 4)
 
             # Sealed "Booster Bundle": 1 unit deducted via FIFO and attached to a sale.
             sold_sealed = db.execute(
-                'SELECT COALESCE(SUM(quantity),0) FROM sealed WHERE sale_id IS NOT NULL'
+                "SELECT COALESCE(SUM(quantity),0) FROM sealed WHERE sale_id IS NOT NULL"
             ).fetchone()[0]
             self.assertEqual(sold_sealed, 1)
             remaining_sealed = db.execute(
-                'SELECT COALESCE(SUM(quantity),0) FROM sealed WHERE sale_id IS NULL'
+                "SELECT COALESCE(SUM(quantity),0) FROM sealed WHERE sale_id IS NULL"
             ).fetchone()[0]
             self.assertEqual(remaining_sealed, 2)
 
         # --- the one-shot download link serves a zip and then 404s ---
-        token = body['download_url'].rsplit('/', 1)[-1]
-        dl = self.client.get(f'/download/{token}', base_url='https://localhost')
+        token = body["download_url"].rsplit("/", 1)[-1]
+        dl = self.client.get(f"/download/{token}", base_url="https://localhost")
         self.assertEqual(dl.status_code, 200)
-        self.assertEqual(dl.mimetype, 'application/zip')
+        self.assertEqual(dl.mimetype, "application/zip")
         self.assertEqual(
-            self.client.get(f'/download/{token}', base_url='https://localhost').status_code,
+            self.client.get(f"/download/{token}", base_url="https://localhost").status_code,
             404,
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main(verbosity=2)

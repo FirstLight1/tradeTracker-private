@@ -65,8 +65,10 @@ def norm_condition(value):
 def card_key(name, num, condition):
     return (norm_text(name), norm_text(num), norm_condition(condition))
 
+
 def whole_number(set, num):
     return set + " " + num
+
 
 # --- Per-table behaviour. Picked by --table. ----------------------------------
 # Each spec knows which CSV columns it needs, how to read the matching rows out
@@ -108,14 +110,22 @@ def build_index(conn, spec):
 
 def main():
     parser = argparse.ArgumentParser(description="Backfill cardMarketID from a CSV.")
-    parser.add_argument("--table", choices=sorted(TABLE_SPECS), default="cards",
-                        help="Which table to backfill (default: cards).")
+    parser.add_argument(
+        "--table",
+        choices=sorted(TABLE_SPECS),
+        default="cards",
+        help="Which table to backfill (default: cards).",
+    )
     parser.add_argument("--csv", required=True, help="Path to the source CSV.")
     parser.add_argument("--db", required=True, help="Path to the SQLite DB file.")
-    parser.add_argument("--commit", action="store_true",
-                        help="Actually write changes. Without this it's a dry run.")
-    parser.add_argument("--overwrite", action="store_true",
-                        help="Also overwrite rows that already have a cardMarketID.")
+    parser.add_argument(
+        "--commit", action="store_true", help="Actually write changes. Without this it's a dry run."
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Also overwrite rows that already have a cardMarketID.",
+    )
     args = parser.parse_args()
 
     spec = TABLE_SPECS[args.table]
@@ -131,14 +141,14 @@ def main():
 
         # Which rows already have an ID, so we can skip unless --overwrite.
         already_set = {
-            row[0] for row in conn.execute(
-                f"SELECT id FROM {args.table} "
-                "WHERE cardMarketID IS NOT NULL AND cardMarketID != ''"
+            row[0]
+            for row in conn.execute(
+                f"SELECT id FROM {args.table} WHERE cardMarketID IS NOT NULL AND cardMarketID != ''"
             )
         }
 
-        updates = {}          # row_id -> cardMarketID (dict de-dups shared rows)
-        not_found = []        # csv row number
+        updates = {}  # row_id -> cardMarketID (dict de-dups shared rows)
+        not_found = []  # csv row number
         skipped_existing = 0
         missing_id = 0
 

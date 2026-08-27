@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 slow_log = logging.getLogger("tradetracker.db.slow")
 SLOW_QUERY_THRESHOLD_MS = 200
 
+
 class LoggingCursor:
     def __init__(self, cursor):
         self._cursor = cursor
@@ -20,21 +21,21 @@ class LoggingCursor:
 
             if duration_ms > SLOW_QUERY_THRESHOLD_MS:
                 slow_log.warning(
-                        "Slow query | %.2fms | %s | params: %s",
-                        duration_ms, query, params,
-                        )
+                    "Slow query | %.2fms | %s | params: %s",
+                    duration_ms,
+                    query,
+                    params,
+                )
             else:
                 pass
             # logger.debug(
-                    #     "Query OK | %.2fms | %s", duration_ms, query
-                    # )
+            #     "Query OK | %.2fms | %s", duration_ms, query
+            # )
 
-            return self   # ← important: lets cursor.lastrowid work
+            return self  # ← important: lets cursor.lastrowid work
 
         except Exception:
-            logger.exception(
-                    "Query failed | %s | params: %s", query, params
-                    )
+            logger.exception("Query failed | %s | params: %s", query, params)
             raise
 
     def executemany(self, query, params_list):
@@ -45,22 +46,23 @@ class LoggingCursor:
 
             if duration_ms > SLOW_QUERY_THRESHOLD_MS:
                 slow_log.warning(
-                        "Slow executemany | %.2fms | %s | %d rows",
-                        duration_ms, query, len(params_list),
-                        )
+                    "Slow executemany | %.2fms | %s | %d rows",
+                    duration_ms,
+                    query,
+                    len(params_list),
+                )
             else:
                 logger.debug(
-                        "Executemany OK | %.2fms | %s | %d rows",
-                        duration_ms, query, len(params_list),
-                        )
+                    "Executemany OK | %.2fms | %s | %d rows",
+                    duration_ms,
+                    query,
+                    len(params_list),
+                )
 
             return self
 
         except Exception:
-            logger.exception(
-                    "Executemany failed | %s | %d rows",
-                    query, len(params_list)
-                    )
+            logger.exception("Executemany failed | %s | %d rows", query, len(params_list))
             raise
 
     @property
@@ -91,7 +93,7 @@ class LoggingConnection:
         return LoggingCursor(self._conn.cursor()).execute(query, params)
 
     def commit(self):
-        #logger.debug("Transaction committed")
+        # logger.debug("Transaction committed")
         self._conn.commit()
 
     def rollback(self):
@@ -104,33 +106,33 @@ class LoggingConnection:
     def __getattr__(self, name):
         return getattr(self._conn, name)
 
+
 def get_db():
-    if 'db' not in g:
-        conn  = sqlite3.connect(
-            current_app.config['DATABASE'],
-            detect_types=sqlite3.PARSE_DECLTYPES
-        )
+    if "db" not in g:
+        conn = sqlite3.connect(current_app.config["DATABASE"], detect_types=sqlite3.PARSE_DECLTYPES)
         conn.row_factory = sqlite3.Row
         g.db = LoggingConnection(conn)
-        g.db.execute('PRAGMA foreign_keys = ON')
-        g.db.execute('PRAGMA journal_mode = WAL')
-        g.db.execute('PRAGMA busy_timeout = 5000')   # wait up to 5s before failing
-        g.db.execute('PRAGMA synchronous = NORMAL')  # safe with WAL, faster than FULL
+        g.db.execute("PRAGMA foreign_keys = ON")
+        g.db.execute("PRAGMA journal_mode = WAL")
+        g.db.execute("PRAGMA busy_timeout = 5000")  # wait up to 5s before failing
+        g.db.execute("PRAGMA synchronous = NORMAL")  # safe with WAL, faster than FULL
     return g.db
 
+
 def close_db(e=None):
-    db = g.pop('db', None)
+    db = g.pop("db", None)
 
     if db is not None:
-        db.execute('PRAGMA wal_checkpoint(PASSIVE)')
+        db.execute("PRAGMA wal_checkpoint(PASSIVE)")
         db.close()
+
 
 def init_db():
     db = get_db()
 
     try:
         # Schema is included directly in the code to avoid file access issues
-        schema = '''
+        schema = """
 DROP TABLE IF EXISTS info;
 DROP TABLE IF EXISTS sale_items;
 DROP TABLE IF EXISTS sales;
@@ -342,17 +344,19 @@ CREATE TABLE grading_submissions(
 
     CREATE INDEX idx_grading_submission_cards_card
     ON grading_submission_cards(card_id);
-'''
+"""
         db.executescript(schema)
     except Exception as e:
         print(f"Error initializing database: {e}")
         raise
 
-@click.command('init-db')
+
+@click.command("init-db")
 def init_db_command():
     """Clear the existing data and create new tables."""
     init_db()
-    click.echo('Initialized the database.')
+    click.echo("Initialized the database.")
+
 
 def init_app(app):
     app.teardown_appcontext(close_db)

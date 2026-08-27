@@ -4,8 +4,8 @@ from typing import Any, Iterable, Literal, overload
 
 from tradeTracker.CONSTANTS import CENT
 
-class ValidationError(ValueError):
 
+class ValidationError(ValueError):
     def __init__(self, errors: dict[str, str] | list[str] | str):
         if isinstance(errors, dict):
             self.errors = errors
@@ -82,9 +82,13 @@ def decimal_value(
         try:
             quantized = result.quantize(quantum)
         except InvalidOperation:
-            raise ValidationError({field: f"{field} is outside the supported numeric range"}) from None
+            raise ValidationError(
+                {field: f"{field} is outside the supported numeric range"}
+            ) from None
         if result != quantized:
-            raise ValidationError({field: f"{field} can have at most {decimal_places} decimal places"})
+            raise ValidationError(
+                {field: f"{field} can have at most {decimal_places} decimal places"}
+            )
     return result
 
 

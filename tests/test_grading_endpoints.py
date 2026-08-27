@@ -43,14 +43,16 @@ def submission_payload():
             "customs_duty_cost": 2,
             "other_shared_cost": 1,
         },
-        "cards": [{
-            "card_id": 7,
-            "grader": None,
-            "grading_fee": 20,
-            "submitted_value": 100,
-            "prep_fee": 2,
-            "upcharge": 1,
-        }],
+        "cards": [
+            {
+                "card_id": 7,
+                "grader": None,
+                "grading_fee": 20,
+                "submitted_value": 100,
+                "prep_fee": 2,
+                "upcharge": 1,
+            }
+        ],
     }
 
 
@@ -107,9 +109,7 @@ def test_get_submission_returns_its_cards(app, service):
 def test_create_submission_builds_models_from_json(app, service):
     service.create_submission.return_value = None
 
-    response = app.test_client().post(
-        "/grading/submissions/create", json=submission_payload()
-    )
+    response = app.test_client().post("/grading/submissions/create", json=submission_payload())
 
     assert response.status_code == 200
     assert response.get_json() == {"status": "success"}
@@ -124,9 +124,7 @@ def test_create_submission_builds_models_from_json(app, service):
 def test_create_submission_returns_service_error(app, service):
     service.create_submission.return_value = "database rejected submission"
 
-    response = app.test_client().post(
-        "/grading/submissions/create", json=submission_payload()
-    )
+    response = app.test_client().post("/grading/submissions/create", json=submission_payload())
 
     assert response.status_code == 400
     assert response.get_json() == {
@@ -178,9 +176,7 @@ def test_complete_submission_passes_every_item_to_service(app, service):
         },
     ]
 
-    response = app.test_client().post(
-        "/grading/submissions/3/complete", json=payload
-    )
+    response = app.test_client().post("/grading/submissions/3/complete", json=payload)
 
     assert response.status_code == 200
     completed_items = service.complete_submission.call_args.args[1]
@@ -194,14 +190,16 @@ def test_complete_submission_passes_nullable_fields_to_service_for_domain_valida
 
     response = app.test_client().post(
         "/grading/submissions/3/complete",
-        json=[{
-            "card_id": 7,
-            "grade_numeric": None,
-            "grade_label": None,
-            "qualifier": None,
-            "cert_number": None,
-            "post_grade_market_value": None,
-        }],
+        json=[
+            {
+                "card_id": 7,
+                "grade_numeric": None,
+                "grade_label": None,
+                "qualifier": None,
+                "cert_number": None,
+                "post_grade_market_value": None,
+            }
+        ],
     )
 
     assert response.status_code == 400
@@ -215,17 +213,20 @@ def test_complete_submission_returns_service_error(app, service):
 
     response = app.test_client().post(
         "/grading/submissions/3/complete",
-        json=[{
-            "card_id": 7,
-            "grade_numeric": 9,
-            "grade_label": "Black Gem",
-            "cert_number": "CERT-7",
-            "post_grade_market_value": 180,
-        }],
+        json=[
+            {
+                "card_id": 7,
+                "grade_numeric": 9,
+                "grade_label": "Black Gem",
+                "cert_number": "CERT-7",
+                "post_grade_market_value": 180,
+            }
+        ],
     )
 
     assert response.status_code == 400
     assert response.get_json()["message"] == "completion failed, Error code: Gx04"
+
 
 def test_update_submission_status_returns_service_error(app, service):
     service.update_submission_status.return_value = "status update failed"
@@ -328,14 +329,16 @@ def test_create_submission_rejects_reversed_dates(app, service):
         ),
         (
             "/grading/submissions/3/complete",
-            [{
-                "card_id": 7,
-                "grade_numeric": 9,
-                "grade_label": "Mint",
-                "qualifier": None,
-                "cert_number": None,
-                "post_grade_market_value": "1e100000",
-            }],
+            [
+                {
+                    "card_id": 7,
+                    "grade_numeric": 9,
+                    "grade_label": "Mint",
+                    "qualifier": None,
+                    "cert_number": None,
+                    "post_grade_market_value": "1e100000",
+                }
+            ],
             "post_grade_market_value",
         ),
         (

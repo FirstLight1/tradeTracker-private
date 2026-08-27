@@ -12,11 +12,13 @@ from tradeTracker.services.sale_service import SaleService
 def app(tmp_path):
     from tradeTracker import create_app
 
-    app = create_app({
-        "TESTING": True,
-        "DATABASE": str(tmp_path / "graded-sale.sqlite"),
-        "WTF_CSRF_ENABLED": False,
-    })
+    app = create_app(
+        {
+            "TESTING": True,
+            "DATABASE": str(tmp_path / "graded-sale.sqlite"),
+            "WTF_CSRF_ENABLED": False,
+        }
+    )
     with app.app_context():
         db = get_db()
         db.execute("INSERT INTO auctions (id, auction_name) VALUES (2, 'Graded')")
@@ -32,13 +34,20 @@ def app(tmp_path):
 def sale_input():
     return SaleInput(
         reciever={"total": 450},
-        cards=[{
-            "cardId": 10,
-            "cardName": "untrusted name",
-            "cardNum": "untrusted number",
-            "marketValue": 450,
-        }],
-        sealed=[], bulk=None, holo=None, ex=None, shipping=None, payments=[],
+        cards=[
+            {
+                "cardId": 10,
+                "cardName": "untrusted name",
+                "cardNum": "untrusted number",
+                "marketValue": 450,
+            }
+        ],
+        sealed=[],
+        bulk=None,
+        holo=None,
+        ex=None,
+        shipping=None,
+        payments=[],
     )
 
 
@@ -72,16 +81,19 @@ def test_card_at_grader_cannot_be_sold(app):
 def test_completed_graded_card_sale_snapshots_costs_and_invoice_identity(app):
     receipt_service = MagicMock()
     receipt_service.issue.return_value = ReceiptResult(kind="invoice", number="1")
-    with app.app_context(), patch.dict(
-        "os.environ", {"KEY": base64.b64encode(b"0" * 16).decode()}
-    ):
+    with app.app_context(), patch.dict("os.environ", {"KEY": base64.b64encode(b"0" * 16).decode()}):
         add_grading(get_db(), "graded")
 
         result = SaleService(get_db(), receipt_service).process_sale(sale_input())
-        sold = get_db().execute(
-            "SELECT sell_price, profit, internal_cost, internal_profit "
-            "FROM sale_items WHERE sale_id = ?", (result.sale_id,)
-        ).fetchone()
+        sold = (
+            get_db()
+            .execute(
+                "SELECT sell_price, profit, internal_cost, internal_profit "
+                "FROM sale_items WHERE sale_id = ?",
+                (result.sale_id,),
+            )
+            .fetchone()
+        )
         get_db().commit()
 
     issued_card = receipt_service.issue.call_args.args[0].cards[0]

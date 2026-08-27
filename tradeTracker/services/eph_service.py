@@ -6,6 +6,7 @@ import io
 import time
 from datetime import datetime
 
+
 class EPHService:
     def __init__(self):
         self.api_key = os.environ.get("EPH_API_KEY")
@@ -29,8 +30,7 @@ class EPHService:
             "email": os.environ["SENDER_EMAIL"],
         }
 
-
-    def createSheet(self, parcel_category, reception_method = 'post', payment_type = "h" ) -> str:
+    def createSheet(self, parcel_category, reception_method="post", payment_type="h") -> str:
         payload = {
             "sheet": {
                 "parcel_category": parcel_category,
@@ -38,19 +38,17 @@ class EPHService:
                 "reception_method": reception_method,
                 "sender": self._getSender(),
             }
-
         }
 
         r = requests.put(f"{self.baseurl}/sheets", json=payload, headers=self._headers())
         r.raise_for_status()
         return r.json()["sheet"]["id"]
 
-    #TODO: add service categories
-    def addParcel(self, order, sheet_id, insurance_value = None, weight = 0.5):
+    # TODO: add service categories
+    def addParcel(self, order, sheet_id, insurance_value=None, weight=0.5):
         country = order.get("state", "") or ""
         if country == "D":
             country = "DE"
-
 
         parcel = {
             "recipient": {
@@ -61,7 +59,7 @@ class EPHService:
                 "country": country.lower(),
                 "phone": order.get("phone", ""),
                 "email": order.get("email", ""),
-            }, 
+            },
             "weight": weight,
         }
 
@@ -96,10 +94,8 @@ class EPHService:
     def register_sheet(self, sheet_id):
         r = requests.post(
             f"{self.baseurl}/sheets/{sheet_id}/register",
-            json = {},
+            json={},
             headers=self._headers(),
         )
         r.raise_for_status()
         return r.json()["sheet"]["state"]
-
-
