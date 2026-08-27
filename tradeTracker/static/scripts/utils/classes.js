@@ -5,6 +5,7 @@ export class CardStruct {
         this.cardName = null;
         this.cardNum = null;
         this.condition = null;
+        this.language = 'en';
         this.buyPrice = null;
         this.marketValue = null;
         this.sellPrice = null;

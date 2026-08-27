@@ -20,6 +20,23 @@ function paymentTypeSelect(className, defaultValue = '') {
     `
 }
 
+function languageSelect(className = 'language-select', dataField = '', defaultValue = 'en') {
+    const dataAttribute = dataField ? ` data-field="${dataField}"` : '';
+    const selectedValue = String(defaultValue || 'en').toLowerCase();
+    return `
+    <select class="${className}"${dataAttribute}>
+        <option value="en" ${selectedValue === 'en' ? 'selected' : ''}>English</option>
+        <option value="jp" ${selectedValue === 'jp' ? 'selected' : ''}>Japanese</option>
+        <option value="de" ${selectedValue === 'de' ? 'selected' : ''}>German</option>
+        <option value="fr" ${selectedValue === 'fr' ? 'selected' : ''}>French</option>
+        <option value="it" ${selectedValue === 'it' ? 'selected' : ''}>Italian</option>
+        <option value="es" ${selectedValue === 'es' ? 'selected' : ''}>Spanish</option>
+        <option value="kr" ${selectedValue === 'kr' ? 'selected' : ''}>Korean</option>
+        <option value="cn" ${selectedValue === 'cn' ? 'selected' : ''}>Chinese</option>
+        <option value="pt" ${selectedValue === 'pt' ? 'selected' : ''}>Portuguese</option>
+    </select>`;
+}
+
 function paymentTypeRow(type = '', amount = 0, className = 'payment-row') {
     return `
     <div class="${className}">
@@ -178,6 +195,64 @@ async function patchValue(id, value, dataset) {
     }
 }
 
+async function patchSealedLanguage(sid, language) {
+    try {
+        const response = await csrfFetch(`/updateSealed/${sid}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ field: 'language', value: language })
+        });
+        const data = await response.json();
+        if (response.ok && data.status === 'success') return true;
+        renderAlert('Failed to update sealed language', 'error');
+    } catch (error) {
+        renderAlert('Error updating sealed language: ' + error, 'error');
+    }
+    return false;
+}
+
+function enableSealedLanguageEditing(sealedDiv) {
+    sealedDiv.addEventListener('dblclick', (event) => {
+        if (!event.target.classList.contains('sealed-language')) return;
+        event.preventDefault();
+        event.stopPropagation();
+
+        const languageElement = event.target;
+        const previousValue = languageElement.textContent.trim() || 'en';
+        const container = document.createElement('div');
+        container.innerHTML = languageSelect('sealed-language-select', '', previousValue);
+        const select = container.firstElementChild;
+        languageElement.replaceWith(select);
+        select.focus();
+
+        let saving = false;
+        let finished = false;
+        const finishEditing = (value) => {
+            if (finished) return;
+            finished = true;
+            const replacement = document.createElement('p');
+            replacement.classList.add('sealed-language');
+            replacement.textContent = value;
+            select.replaceWith(replacement);
+        };
+
+        select.addEventListener('click', (selectEvent) => selectEvent.stopPropagation());
+        select.addEventListener('change', async () => {
+            saving = true;
+            select.disabled = true;
+            const selectedValue = select.value;
+            const saved = await patchSealedLanguage(sealedDiv.getAttribute('sid'), selectedValue);
+            finishEditing(saved ? selectedValue : previousValue);
+        }, { once: true });
+        select.addEventListener('blur', () => {
+            if (!saving) finishEditing(previousValue);
+        });
+        select.addEventListener('keydown', (keyEvent) => {
+            if (keyEvent.key === 'Escape') finishEditing(previousValue);
+        });
+    });
+}
+
 function deleteAuction(id, div) {
     csrfFetch(`/deleteAuction/${id}`, {
         method: 'DELETE',
@@ -275,13 +350,14 @@ function createSealedItemRow() {
         <option value="PLAYED">Played</option>
         <option value="POOR">Poor</option>
     </select>
+    ${languageSelect('sealed-language-select')}
     <input type="text" class="sealed-price-input" placeholder="price">
     <input type="text" class="sealed-market-value-input" placeholder="market value">
     `;
     return itemDiv;
 }
 
-function createSealedModal(sid, auctionId, initialValue) {
+function createSealedModal(sid, auctionId, initialValue, sourceName, sourceLanguage) {
     const modal = document.createElement('div');
     modal.classList.add('reciever-div');
     const contentDiv = document.createElement('div');
@@ -293,6 +369,11 @@ function createSealedModal(sid, auctionId, initialValue) {
     closeButton.classList.add('close-modal');
     closeButton.innerHTML = '&times;';
     contentDiv.appendChild(closeButton);
+
+    const sourceContext = document.createElement('p');
+    sourceContext.classList.add('sealed-source-context');
+    sourceContext.textContent = `Opening ${sourceName} (${sourceLanguage || 'en'})`;
+    contentDiv.appendChild(sourceContext);
 
     const rowsContainer = document.createElement('div');
     rowsContainer.classList.add('sealed-rows-container');
@@ -330,6 +411,7 @@ function createSealedModal(sid, auctionId, initialValue) {
             item.cardName = DOMPurify.sanitize(div.querySelector('.sealed-name-input').value);
             item.cardNum = DOMPurify.sanitize(div.querySelector('.sealed-number-input').value);
             item.condition = DOMPurify.sanitize(div.querySelector('.sealed-condition-select').value);
+            item.language = DOMPurify.sanitize(div.querySelector('.sealed-language-select').value);
             item.buyPrice = Number(DOMPurify.sanitize(div.querySelector('.sealed-price-input').value.replace('€', '')));
             item.marketValue = Number(DOMPurify.sanitize(div.querySelector('.sealed-market-value-input').value.replace('€', '')));
             item.soldDate = null;
@@ -722,6 +804,7 @@ function saveCartContentToSession() {
                 sid: item.getAttribute('sid'),
                 auctionId: item.getAttribute('auction_id'),
                 name: item.querySelector('.sealed-name').textContent,
+                language: item.getAttribute('data-language') || 'en',
                 marketValue: item.querySelector('.sealed-price').textContent.replace('€', '').replace(',', '.').trim(),
                 quantity: item.querySelector('.sealed-qty-display')?.textContent || '1',
                 available: item.getAttribute('data-available') || ''
@@ -796,7 +879,7 @@ function loadCartContentFromSession() {
                     ? item.marketValue
                     : (item.price ? item.price.replace('€', '').replace(',', '.').trim() : '');
                 addSealedToCart(
-                    { name: item.name, market_value: marketValue },
+                    { name: item.name, language: item.language || 'en', market_value: marketValue },
                     item.sid,
                     item.auctionId || null,
                     Number(item.quantity) || 1,
@@ -1266,6 +1349,7 @@ function shoppingCart() {
                     sid: sid,
                     auctionId: auctionId,
                     sealedName: item.querySelector('.sealed-name')?.textContent || '',
+                    language: item.getAttribute('data-language') || 'en',
                     marketValue: item.querySelector('.sealed-price')?.textContent.replace('€', '').replace(',', '.').trim() || '',
                     quantity: Number(item.querySelector('.sealed-qty-display')?.textContent) || 1
                 };
@@ -1611,6 +1695,8 @@ function addSealedToCart(sealed, sid, auctionId = null, quantity = 1, available 
         const itemDiv = document.createElement('div');
         itemDiv.setAttribute('sid', sid);
         itemDiv.classList.add('sealed-item-cart');
+        const language = sealed.language || 'en';
+        itemDiv.setAttribute('data-language', language);
         if (auctionId != null) {
             itemDiv.setAttribute('auction_id', auctionId)
         }
@@ -1624,6 +1710,7 @@ function addSealedToCart(sealed, sid, auctionId = null, quantity = 1, available 
             const plusDisabled = qty >= max ? 'disabled' : '';
             itemDiv.innerHTML = `
             <p class='sealed-name'>${DOMPurify.sanitize(sealed.name)}</p>
+            <p class='sealed-language'>${DOMPurify.sanitize(language)}</p>
             <p class='sealed-price'>${DOMPurify.sanitize(sealed.market_value)}€</p>
             <div class="qty-controls">
                 <button class="sealed-qty-minus" ${minusDisabled}>-</button>
@@ -1856,7 +1943,7 @@ function startPolling() {
                     }
                     const qty = Number(item.quantity) || item.count || 1;
                     const available = item.available != null ? Number(item.available) : null;
-                    addSealedToCart({ name: item.name, market_value: item.market_value }, sealedIds[0], null, qty, available);
+                    addSealedToCart({ name: item.name, language: item.language || 'en', market_value: item.market_value }, sealedIds[0], null, qty, available);
                 });
             }
         } catch (error) {
@@ -1956,7 +2043,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
     const searchContainer = document.querySelector('.search-results');
     searchContainer.innerHTML = ''; // Clear previous results
 
-    if (!results || results.length === 0) {
+    if (!results) {
         const div = document.createElement('div');
         div.classList.add('search-result-item');
         div.innerHTML = '<p>No results found</p>';
@@ -1975,17 +2062,19 @@ function displaySearchResults(results, resultsQueue, searchInput) {
 
         if (isSealed) {
             // Handle sealed item display
+            div.classList.add('sealed-search-result');
             const sealed = {
                 name: result.name,
+                language: result.language || 'en',
                 market_value: result.market_value
             };
 
             div.innerHTML = `
                 <p class="result result-sealed-name">${DOMPurify.sanitize(result.name || 'N/A')}</p>
+                <p class="result result-language">${DOMPurify.sanitize(result.language || 'en')}</p>
                 <p class="result result-market-value">${DOMPurify.sanitize(result.market_value ? result.market_value + '€' : 'N/A')}</p>
-                <p class="result result-auction-name">${DOMPurify.sanitize(result.auction_name || (result.auction_id ? result.auction_id - 1 : 'Unassigned'))}</p>
                 <span class="result-type-badge sealed-badge">Sealed${result.available_count ? ' ·' + result.available_count : ''}</span>
-                ${result.auction_id || result.auction_name ? `<p class="result result-auction-name">${DOMPurify.sanitize(result.auction_name || result.auction_id - 1)}</p>` : `<p></p>`}
+                <p class="result result-auction-name">${DOMPurify.sanitize(result.auction_name || (result.auction_id ? result.auction_id - 1 : 'Unassigned'))}</p>
                 <button class="add-to-cart-btn">Add to cart</button>
                 ${safeAuctionId ? `<button class="view-auction" data-id="${safeAuctionId}">View</button>` : ''}
             `;
@@ -2029,10 +2118,12 @@ function displaySearchResults(results, resultsQueue, searchInput) {
 
         } else {
             // Handle card display
+            div.classList.add('card-search-result');
             let card = new CardStruct();
             card.cardName = result.card_name;
             card.cardNum = result.card_num;
             card.condition = result.condition;
+            card.language = result.language || 'en';
             card.marketValue = result.market_value;
             card.grading = result.is_graded ? {
                 grader: result.grader,
@@ -2057,6 +2148,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
                 <p class="result result-condition ${safeConditionClass}${card.grading ? ' graded' : ''}">
                     ${DOMPurify.sanitize(gradeDisplay)}
                 </p>
+                <p class="result result-language">${DOMPurify.sanitize(result.language || 'N/A')}</p>
                 <p class="result result-market-value">${DOMPurify.sanitize(result.market_value ? result.market_value + '€' : 'N/A')}</p>
                 <p class="result result-quantity">${pendingQty} / ${availableCount}</p>
                 <p class="result result-auction-name">${DOMPurify.sanitize(result.auction_name || result.auction_id - 1)}</p>
@@ -2200,7 +2292,9 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
             const auctionDiv = itemLine.closest('.auction-tab');
             const auctionId = auctionDiv?.getAttribute('data-id');
             const initialValue = itemLine.querySelector('.sealed-market-value, .market-value-sealed').textContent.replace('€', '');
-            createSealedModal(cardId, auctionId, initialValue);
+            const sourceName = itemLine.querySelector('.sealed-name').textContent;
+            const sourceLanguage = itemLine.querySelector('.sealed-language')?.textContent || 'en';
+            createSealedModal(cardId, auctionId, initialValue, sourceName, sourceLanguage);
             box?.remove();
             box = null;
         });
@@ -2233,6 +2327,7 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
 
             const sealedData = {
                 name: DOMPurify.sanitize(itemLine.querySelector('.sealed-name').textContent),
+                language: DOMPurify.sanitize(itemLine.querySelector('.sealed-language')?.textContent || 'en'),
                 market_value: DOMPurify.sanitize(itemLine.querySelector('.sealed-market-value, .market-value-sealed').textContent.replace('€', ''))
             };
 
@@ -2249,6 +2344,7 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
             card.cardName = itemLine.querySelector('.card-name').textContent;
             card.cardNum = itemLine.querySelector('.card-num').textContent;
             card.condition = itemLine.dataset.condition || itemLine.querySelector('.condition').textContent;
+            card.language = itemLine.querySelector('.language')?.textContent || 'en';
             card.grading = itemLine.dataset.isGraded === 'true' ? {
                 grader: itemLine.dataset.grader || null,
                 grade_numeric: itemLine.dataset.gradeNumeric || null,
@@ -2342,6 +2438,7 @@ async function loadAuctionContent(button) {
                         <p>Card name</p>
                         <p>Card number</p>
                         <p>Condition</p>
+                        <p>Lang</p>
                         <p>Buy price</p>
                         <p>Market value</p>
                         <p>Margin</p>
@@ -2374,6 +2471,7 @@ async function loadAuctionContent(button) {
                         ${renderField(DOMPurify.sanitize(card.card_name), 'text', ['card-info', 'card-name'], 'Card Name', 'card_name')}
                         ${renderField(DOMPurify.sanitize(card.card_num), 'text', ['card-info', 'card-num'], 'Card Number', 'card_num')}
                         <p class='card-info condition ${safeCardConditionClass}${gradingClass}' data-field="condition">${DOMPurify.sanitize(conditionDisplay)}</p>
+                        ${renderField(DOMPurify.sanitize(card.language), 'text', ['card-info', 'language'], 'Lang', 'language')}
                         ${renderField(card.card_price ? DOMPurify.sanitize(card.card_price) + '€' : null, 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
                         ${renderField(card.market_value ? DOMPurify.sanitize(card.market_value) + '€' : null, 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
                         ${renderField(card.card_price !== null && card.market_value !== null ? (card.market_value - card.card_price).toFixed(2) + '€' : ' ', 'text', ['card-info', 'profit'], 'profit', true)}
@@ -2398,6 +2496,7 @@ async function loadAuctionContent(button) {
                         if (event.target.closest('.card') && !(event.target.tagName === "DIV")) {
                             const cardDiv = event.target.closest('.card');
                             const cardId = cardDiv.getAttribute('data-id');
+                            const editableFields = new Set(['card_name', 'card_num', 'card_price', 'market_value']);
                             if (event.target.classList.contains('condition')) {
                                 if (event.target.classList.contains('graded')) return;
                                 const value = event.target.textContent.trim();
@@ -2425,7 +2524,24 @@ async function loadAuctionContent(button) {
                                     cardDiv.dataset.condition = p.textContent;
                                     patchValue(cardId, p.textContent, dataset);
                                 });
-                            } else if (event.target.tagName === "P") {
+                            } else if (event.target.classList.contains('language')) {
+                                const value = event.target.textContent.trim();
+                                const dataset = event.target.dataset.field;
+                                const container = document.createElement('div');
+                                container.innerHTML = languageSelect('card-info language select-language', dataset, value);
+                                const select = container.firstElementChild;
+                                event.target.replaceWith(select);
+                                select.focus();
+                                select.addEventListener('change', () => {
+                                    const selectedValue = select.value;
+                                    const p = document.createElement('p');
+                                    p.classList.add('card-info', 'language');
+                                    p.dataset.field = dataset;
+                                    p.textContent = selectedValue;
+                                    select.replaceWith(p);
+                                    patchValue(cardId, selectedValue, dataset);
+                                });
+                            } else if (event.target.tagName === "P" && editableFields.has(event.target.dataset.field)) {
                                 let value = event.target.textContent.replace('€', '');
                                 if (isNaN(value)) {
                                     value = value.toUpperCase();
@@ -2484,6 +2600,7 @@ async function loadAuctionContent(button) {
                             card.cardName = cardDiv.querySelector('.card-name').textContent;
                             card.cardNum = cardDiv.querySelector('.card-num').textContent;
                             card.condition = cardDiv.dataset.condition;
+                            card.language = cardDiv.querySelector('.language')?.textContent || 'en';
                             const marketValueText = cardDiv.querySelector('.market-value').textContent;
                             card.marketValue = marketValueText ? marketValueText.replace('€', '') : null;
                             await addToShoppingCart(card, auctionId, cardId);
@@ -2553,15 +2670,21 @@ async function loadAuctionContent(button) {
                         sealedDiv.innerHTML = `
                             <p class='sealed-quantity'>${DOMPurify.sanitize(sealedItem.quantity)}</p>
                             <p class="sealed-name">${DOMPurify.sanitize(sealedItem.name)}</p>
+                            <p class="sealed-language">${DOMPurify.sanitize(sealedItem.language || 'en')}</p>
                             <p class="sealed-price">${DOMPurify.sanitize(sealedItem.price)}€</p>
                             <p class="VAT-sealed">${(Number(DOMPurify.sanitize(sealedItem.price)) / 1.23).toFixed(2)}</p>
                             <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
                             <p></p>
                             `;
+                        enableSealedLanguageEditing(sealedDiv);
 
                         cardsContainer.insertBefore(sealedDiv, cardsContainer.querySelector('.button-container'));
                         sealedDiv.addEventListener('click', (event) => {
+                            if (event.target.closest('.sealed-language, .sealed-language-select')) {
+                                event.stopPropagation();
+                                return;
+                            }
                             event.stopPropagation();
                             spawnItemsContextMenu(sealedItem.sid, event, sealedDiv);
                         });
@@ -2579,6 +2702,7 @@ async function loadAuctionContent(button) {
 
                             const sealedData = {
                                 name: DOMPurify.sanitize(sealedDiv.querySelector('.sealed-name').textContent),
+                                language: DOMPurify.sanitize(sealedDiv.querySelector('.sealed-language')?.textContent || 'en'),
                                 market_value: DOMPurify.sanitize(sealedDiv.querySelector('.sealed-market-value').textContent.replace('€', ''))
                             };
 
@@ -2710,6 +2834,7 @@ async function loadAuctionContent(button) {
                     <option value="Played">Played</option>
                     <option value="Poor">Poor</option>
                 </select>
+                ${languageSelect('card-info language select-language', 'language')}
                 ${renderField(null, 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
                 ${renderField(null, 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
                 ${renderField(null, 'text', ['card-info', 'sell-price'], 'Sell Price', 'sell_price')}`;
@@ -2747,6 +2872,7 @@ async function loadAuctionContent(button) {
                 <input type="text" class="sealed-name-input" placeholder="Sealed item name">
                 <input type="number" class="sealed-price-input" placeholder="Price" step="0.01" min="0">
                 <input type="number" class="sealed-market-value-input" placeholder="Market value" step="0.01" min="0">
+                ${languageSelect('sealed-language-select')}
                 <input type="date" class="sealed-date-input" value="${currentDate}" max="${currentDate}">
                 <button class="remove-sealed-input">×</button>
             `;
@@ -2815,6 +2941,7 @@ async function loadAuctionContent(button) {
                     cardObj.cardName = DOMPurify.sanitize(card.querySelector('input.card-name').value.trim().toUpperCase()) || null;
                     cardObj.cardNum = DOMPurify.sanitize(card.querySelector('input.card-num').value.trim().toUpperCase()) || null;
                     cardObj.condition = DOMPurify.sanitize(card.querySelector('select.condition').value) || null;
+                    cardObj.language = DOMPurify.sanitize(card.querySelector('select.language').value);
                     cardObj.buyPrice = DOMPurify.sanitize(card.querySelector('input.card-price').value.replace(',', '.').trim()) || null;
                     cardObj.marketValue = DOMPurify.sanitize(card.querySelector('input.market-value').value.replace(',', '.').trim()) || null;
                     cardObj.sellPrice = DOMPurify.sanitize(card.querySelector('input.sell-price').value.replace(',', '.').trim()) || null;
@@ -2835,7 +2962,7 @@ async function loadAuctionContent(button) {
                 for (let i = 0; i < cardsArray.length; i++) {
                     let j = 0;
                     for (const [key, value] of Object.entries(cardsArray[i])) {
-                        if (key === 'soldDate') continue;
+                        if (key === 'soldDate' || key === 'grading') continue;
                         const cardElement = newCards[i].children;
                         replaceWithPElement(cardElement[j].dataset.field, value, cardElement[j]);
                         j++;
@@ -2877,6 +3004,7 @@ async function loadAuctionContent(button) {
                         const name = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-name-input').value.trim()) || null;
                         const price = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-price-input').value.trim()) || null;
                         const marketValue = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-market-value-input').value.trim()) || null;
+                        const language = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-language-select').value);
                         const date = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-date-input').value) || null;
 
                         if (name !== null && marketValue !== null) {
@@ -2884,6 +3012,7 @@ async function loadAuctionContent(button) {
                                 name: name,
                                 price: price,
                                 market_value: marketValue,
+                                language: language,
                                 date: date
                             });
                         }
@@ -2962,15 +3091,22 @@ async function loadSealed(viewButton) {
                     sealedDiv.innerHTML = `
                         <p class='sealed-quantity'>${DOMPurify.sanitize(sealedData.quantity)}</p>
                         <p class='sealed-name'>${DOMPurify.sanitize(sealedData.name)}</p>
+                        <p class='sealed-language'>${DOMPurify.sanitize(sealedData.language || 'en')}</p>
                         <p class='unit-price'>${DOMPurify.sanitize(sealedData.price)}</p>
                         <p class='VAT-sealed sealed-market-VAT-value'>${(DOMPurify.sanitize(sealedData.price) / 1.23).toFixed(2)}</p>
                         <p class='market-value-sealed'>${DOMPurify.sanitize(sealedData.market_value)}</p>
                         <p class='margin'>${margin}</p>
                         <p class='add-date'>${formatedDate}</p>
                         <p></p>
+                        <p></p>
                         `
+                    enableSealedLanguageEditing(sealedDiv);
 
                     sealedDiv.addEventListener('click', (event) => {
+                        if (event.target.closest('.sealed-language, .sealed-language-select')) {
+                            event.stopPropagation();
+                            return;
+                        }
                         event.stopPropagation();
                         spawnItemsContextMenu(sealedData.sid, event, sealedDiv);
                     });
@@ -2989,7 +3125,7 @@ async function loadSealed(viewButton) {
                             <input type='text' placeholder='name'></input>
                             <input type='number' placeholder='price'></input>
                             <input type='number' placeholder='market value'></input>
-                            <p></p>
+                            ${languageSelect('sealed-language-select')}
                             <input type='date' value=${date} max=${date} ></input>
                         `
                     contentDiv.append(div);
@@ -3010,6 +3146,7 @@ async function loadSealed(viewButton) {
                         row.price = inputs[1].value || null;
                         row.market_value = inputs[2].value || null;
                         row.dateAdded = inputs[3].value || null;
+                        row.language = div.querySelector('.sealed-language-select').value;
                         if (row.name !== null && row.market_value !== null) {
                             inputValues.push(row);
                         }

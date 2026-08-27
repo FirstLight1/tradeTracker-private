@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from tradeTracker import create_app
 from tradeTracker import actions
-from tradeTracker.db import get_db, init_db
+from tradeTracker.db import get_db
 from tradeTracker.services.models import ReceiptResult, SaleInput
 from tradeTracker.services.sale_service import SaleService
 
@@ -26,8 +26,6 @@ class SoldSummaryTestCase(unittest.TestCase):
             'WTF_CSRF_ENABLED': False,
         })
         with self.app.app_context():
-            get_db().executescript('DROP TABLE IF EXISTS barter;')
-            init_db()
             db = get_db()
             db.execute('INSERT INTO auctions (id, auction_name) VALUES (2, "A2")')
             db.execute(

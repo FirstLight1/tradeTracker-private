@@ -105,6 +105,7 @@ async function loadContent() {
                     <input type="checkbox" class="item-checkbox" checked>
                     <p class="item-quantity">1</p>
                     <p class="item-name">${item.name}</p>
+                    <p class="item-language">${DOMPurify.sanitize(item.language || 'en')}</p>
                     <p class="market-value">${item.market_value * -1}<span class="currency">€</span></p>
                 `;
 

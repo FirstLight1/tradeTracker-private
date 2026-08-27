@@ -28,7 +28,7 @@ from unittest.mock import patch, MagicMock
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from tradeTracker import create_app
-from tradeTracker.db import get_db, init_db
+from tradeTracker.db import get_db
 from tradeTracker.actions import normalize
 
 
@@ -105,10 +105,6 @@ class SoldCSVImportTestCase(unittest.TestCase):
             'WTF_CSRF_ENABLED': False,
         })
         with self.app.app_context():
-            # migrate_database (run by create_app) pre-creates `barter`; init_db's
-            # schema re-creates it without a DROP, so clear it first.
-            get_db().executescript('DROP TABLE IF EXISTS barter;')
-            init_db()
             self._seed()
         self.client = self.app.test_client()
 

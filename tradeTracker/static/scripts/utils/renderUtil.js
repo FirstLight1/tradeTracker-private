@@ -187,7 +187,8 @@ export function createNewItem(node, { triggerSelector = '.marketValue', onTrigge
         el.value = '';
     });
     node.querySelectorAll('select').forEach(sel => {
-        sel.selectedIndex = 1;
+        const defaultOption = sel.querySelector('option[selected]');
+        sel.value = defaultOption?.value ?? sel.options[0]?.value ?? '';
     });
     const trigger = node.querySelector(triggerSelector);
     if (trigger) {

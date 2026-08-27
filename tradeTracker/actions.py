@@ -213,25 +213,33 @@ def add():
                 return jsonify({'status': 'error', 'message': f'{error_msg}, Error code: Ax01'}), 400
             payment_method_json = json.dumps(sanitized_payments)
         
-        cursor = db.execute(
-            'INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?, ?, ?, ?)',
-            (auction['name'], auction['buy'], auction['date'], payment_method_json)
-        )
-        auction_id = cursor.lastrowid
-        for card in cardsArr[1:]:
-            db.execute(
-                'INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id) '
-                'VALUES (?, ?, ?, ?, ?, ?, ?)',
-                (
-                    card.get('cardName'),
-                    normalize(card.get('cardName')),
-                    card.get('cardNum'),
-                    card.get('condition'),
-                    card.get('buyPrice'),
-                    card.get('marketValue'),
-                    auction_id
-                )
+        try:
+            cursor = db.execute(
+                'INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?, ?, ?, ?)',
+                (auction['name'], auction['buy'], auction['date'], payment_method_json)
             )
+            auction_id = cursor.lastrowid
+
+            for card in cardsArr[1:]:
+                if card.get('language') not in CONSTANTS.ALLOWED_LANGUAGES:
+                    raise ValueError('Invalid language code')
+                db.execute(
+                    'INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    (
+                        card.get('cardName'),
+                        normalize(card.get('cardName')),
+                        card.get('cardNum'),
+                        card.get('condition'),
+                        card.get('language'),
+                        card.get('buyPrice'),
+                        card.get('marketValue'),
+                        auction_id
+                    )
+                )
+
+        except (Exception, ValueError) as e:
+            db.rollback()
+            return jsonify({'status': 'error', 'message': f'SQL Error: {e}'}), 400
         db.commit()
         return jsonify({'status': 'success', 'auction_id': auction_id}), 201
     
@@ -403,7 +411,7 @@ def loadAuctions():
 def loadSealed():
     db = get_db()
 
-    sealed_products =  db.execute("SELECT 's' || id as sid, name, quantity, price, market_value, date FROM sealed WHERE sale_id is NULL AND auction_id is NULL AND opened = 0").fetchall()
+    sealed_products =  db.execute("SELECT 's' || id as sid, name, quantity, language, price, market_value, date FROM sealed WHERE sale_id is NULL AND auction_id is NULL AND opened = 0").fetchall()
     return jsonify({'status':'success', 'data' : [dict(product) for product in sealed_products]})
 
 @bp.route('/addSealed', methods=('POST',))
@@ -418,7 +426,23 @@ def addSealed():
         date = sealed.get('dateAdded') if sealed.get('dateAdded') else datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         if date and len(date) == 10:
             date = date + 'T00:00:00Z'
-        db.execute("INSERT INTO sealed(name, normalized_name, price, market_value, date) VALUES (?, ?, ?, ?, ?)",(sealed.get("name"), normalize(sealed.get("name")), price, marketValue, date))
+
+        if sealed.get("language") not in CONSTANTS.ALLOWED_LANGUAGES:
+            return jsonify({'status': 'error', 'message': f'Invalid language code, Error code: Ax27'}), 400
+        try:
+            db.execute("INSERT INTO sealed(name, normalized_name, language, price, market_value, date) VALUES (?, ?, ?, ?, ?, ?)",
+                       (
+                            sealed.get("name"),
+                            normalize(sealed.get("name")),
+                            sealed.get("language"),
+                            price,
+                            marketValue,
+                            date
+                        )
+                    )
+        except Exception as e:
+            db.rollback()
+            return jsonify({'status': 'error', 'message': f'SQL Error: {e}'}), 400
     db.commit()
     return jsonify({'status':'success'}),200
 
@@ -456,7 +480,7 @@ def loadBulk(auction_id):
 def loadSealedByAuction(auction_id):
     db = get_db()
     sealed_items = db.execute(
-        "SELECT 's' || id as sid, name, price, market_value, date, quantity FROM sealed "
+        "SELECT 's' || id as sid, name, language, price, market_value, date, quantity FROM sealed "
         "WHERE auction_id = ? AND sale_id is NULL AND opened = 0", 
         (auction_id,)
     ).fetchall()
@@ -540,17 +564,41 @@ def update(card_id):
     data = request.get_json()
     field = data.get("field")
     value = data.get("value")
-    allowed_fields = {"card_name", "card_num", "condition", "card_price", "market_value"}
+    allowed_fields = {"card_name", "card_num", "condition", "language", "card_price", "market_value"}
 
-    if field == 'sold' or field == 'sold_cm':
-        db.execute(f'UPDATE sale_items SET {field} = ? WHERE card_id = ?', (value, card_id))
-        db.commit()
-        return jsonify({'status': 'success'}),200
-
+    if field == 'language' and value not in CONSTANTS.ALLOWED_LANGUAGES:
+            return jsonify({'status': 'error', 'message': 'Invalid language code, Error code: Ax27'}), 400
+    
     if field in allowed_fields:
         db.execute(f'UPDATE cards SET {field} = ? WHERE id = ?', (value, card_id))
         db.commit()
     return jsonify({'status': 'success'}),200
+
+@bp.route('/updateSealed/<string:sid>', methods=('PATCH',))
+@verify_token
+def update_sealed(sid):
+    data = request.get_json() or {}
+    if data.get('field') != 'language':
+        return jsonify({'status': 'error', 'message': 'Invalid field'}), 400
+
+    language = data.get('value')
+    if language not in CONSTANTS.ALLOWED_LANGUAGES:
+        return jsonify({'status': 'error', 'message': 'Invalid language code, Error code: Ax27'}), 400
+
+    sealed_id = sid.removeprefix('s')
+    if not sealed_id or any(character not in '0123456789' for character in sealed_id):
+        return jsonify({'status': 'error', 'message': 'Invalid sealed ID'}), 400
+
+    db = get_db()
+    updated = db.execute(
+        'UPDATE sealed SET language = ? WHERE id = ?',
+        (language, int(sealed_id)),
+    )
+    if updated.rowcount != 1:
+        db.rollback()
+        return jsonify({'status': 'error', 'message': 'Sealed item not found'}), 404
+    db.commit()
+    return jsonify({'status': 'success'}), 200
 
 @bp.route('/addToExistingAuction/<int:auction_id>', methods=('POST',))
 @verify_token
@@ -561,13 +609,16 @@ def addToExistingAuction(auction_id):
         db = get_db()
         try:
             for card in cards:
-                db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id)'
-                ' VALUES (?, ?, ?, ?, ?, ?, ?)',
+                if card.get('language') not in CONSTANTS.ALLOWED_LANGUAGES:
+                    return jsonify({'status': 'error', 'message': f'Invalid language code, Error code: Ax27'}), 400
+                db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id)'
+                ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                 (
                     card.get('cardName'),
                     normalize(card.get('cardName')),
                     card.get('cardNum'),
                     card.get('condition'),
+                    card.get('language'),
                     card.get('buyPrice'),
                     card.get('marketValue'),
                     auction_id
@@ -583,9 +634,11 @@ def addToExistingAuction(auction_id):
                     date = item.get('date') if item.get('date') is not None else datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
                     if date and len(date) == 10:
                         date = date + 'T00:00:00Z'
+                    if item.get("language") not in CONSTANTS.ALLOWED_LANGUAGES:
+                        return jsonify({'status': 'error', 'message': f'Invalid language code, Error code: Ax27'}), 400
                     db.execute(
-                        "INSERT INTO sealed(name, normalized_name, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (item.get("name"), normalize(item.get("name")),item.get("quantity"), price, marketValue, date, auction_id)
+                        "INSERT INTO sealed(name, normalized_name, quantity, language, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (item.get("name"), normalize(item.get("name")),item.get("quantity"), item.get("language"), price, marketValue, date, auction_id)
                     )
 
             bulk = data.get('bulk')
@@ -771,9 +824,9 @@ def _orderReturn(saleId, itemIds, db, shipping_value=0):
             else:
                 db.execute('UPDATE sealed SET quantity = quantity - ? WHERE id = ?', (returnQuantity, sealed_id))
                 db.execute(
-                    """INSERT INTO sealed (name, normalized_name, quantity, price, market_value,
+                    """INSERT INTO sealed (name, normalized_name, quantity, language, price, market_value,
                                            date, sale_id, auction_id, opened, cardMarketID)
-                       SELECT name, normalized_name, ?, price, market_value,
+                       SELECT name, normalized_name, ?, language, price, market_value,
                               date, NULL, auction_id, opened, cardMarketID
                        FROM sealed WHERE id = ?""",
                     (returnQuantity, sealed_id)
@@ -854,7 +907,7 @@ def load_sale(saleId):
                        "JOIN sale_items si ON c.id = si.card_id "
                        "WHERE si.sale_id = ? ",(saleId,)).fetchall()
 
-    sealed = db.execute("SELECT s.name, s.price, s.market_value, s.date, s.id, s.auction_id, s.quantity FROM sealed s "
+    sealed = db.execute("SELECT s.name, s.language, s.price, s.market_value, s.date, s.id, s.auction_id, s.quantity FROM sealed s "
                         "WHERE s.sale_id = ? ",(saleId,)).fetchall()
 
     data = {
@@ -962,9 +1015,9 @@ def orderDebit(db, saleId, cards=None, sealed=None):
                 else:
                     db.execute("UPDATE sealed SET quantity = quantity - ? WHERE id = ?", (qty, sealed_id))
                     db.execute(
-                        """INSERT INTO sealed (name, normalized_name, quantity, price, market_value,
+                        """INSERT INTO sealed (name, normalized_name, quantity, language, price, market_value,
                                                date, sale_id, auction_id, opened, cardMarketID)
-                           SELECT name, normalized_name, ?, price, market_value,
+                           SELECT name, normalized_name, ?, language, price, market_value,
                                   date, ?, auction_id, opened, cardMarketID
                            FROM sealed WHERE id = ?""",
                         (qty, saleId, sealed_id)
@@ -1065,7 +1118,7 @@ def generateBuyReport():
         elements.append(Paragraph(f"Sales Report - {auctionName} - Added: {dateCreated}", styles["Heading1"]))
         elements.append(Spacer(1, 12))
 
-        curr.execute("SELECT card_name, card_num, condition, card_price AS 'buy price', market_value as 'market value', sold_date as 'sold' "
+        curr.execute("SELECT card_name, card_num, condition, language, card_price AS 'buy price', market_value as 'market value', sold_date as 'sold' "
                                 "FROM cards WHERE auction_id = ?", (auctionId,))
 
         cardsDesc = [desc[0] for desc in curr.description]
@@ -1162,7 +1215,7 @@ def generateSoldReport():
     year = str(year_number)
     db = get_db()
     cards = db.execute(
-        'SELECT c.card_name, c.card_num, c.card_price, si.sell_price, s.sale_date, '
+        'SELECT c.card_name, c.card_num, c.card_price, c.language, si.sell_price, s.sale_date, '
         'CASE WHEN EXISTS ('
         'SELECT 1 FROM grading_submission_cards gsc '
         'WHERE gsc.card_id = c.id AND gsc.is_current = 1'
@@ -1388,8 +1441,9 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
     # Table header
     pdf.set_font(font_family, '', 10)
     pdf.cell(35, 10, 'Card Name', 1, 0, 'C')
-    pdf.cell(20, 10, 'Card Number', 1, 0, 'C')
-    pdf.cell(20, 10, 'Graded', 1, 0, 'C')
+    pdf.cell(24, 10, 'Card Number', 1, 0, 'C')
+    pdf.cell(14, 10, 'Lang.', 1, 0, 'C')
+    pdf.cell(17, 10, 'Graded', 1, 0, 'C')
     pdf.cell(25, 10, 'Buy Price', 1, 0, 'C')
     pdf.cell(25, 10, 'Sell Price', 1, 0, 'C')
     pdf.cell(25, 10, 'Margin', 1, 0, 'C')
@@ -1401,6 +1455,7 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
     for card in cards:
         card_name = card['card_name'] or 'N/A'
         card_num = card['card_num'] or 'N/A'
+        language = card['language'] or 'N/A'
         is_graded = 'Yes' if card['is_graded'] else 'No'
         buy_price = f"{card['card_price']:.2f}€" if card['card_price'] else 'N/A'
         sell_price = f"{card['sell_price']:.2f}€" if card['sell_price'] else 'N/A'
@@ -1419,8 +1474,9 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
             # Redraw table header on new page
             pdf.set_font(font_family, '', 10)
             pdf.cell(35, 10, 'Card Name', 1, 0, 'C')
-            pdf.cell(20, 10, 'Card Number', 1, 0, 'C')
-            pdf.cell(20, 10, 'Graded', 1, 0, 'C')
+            pdf.cell(24, 10, 'Card Number', 1, 0, 'C')
+            pdf.cell(14, 10, 'Lang.', 1, 0, 'C')
+            pdf.cell(17, 10, 'Graded', 1, 0, 'C')
             pdf.cell(25, 10, 'Buy Price', 1, 0, 'C')
             pdf.cell(25, 10, 'Sell Price', 1, 0, 'C')
             pdf.cell(25, 10, 'Margin', 1, 0, 'C')
@@ -1441,8 +1497,9 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
 
         # Draw other cells aligned with the card name
         pdf.set_xy(x_start + 35, y_start)
-        pdf.cell(20, actual_height, card_num, 1, 0, 'C')
-        pdf.cell(20, actual_height, is_graded, 1, 0, 'C')
+        pdf.cell(24, actual_height, card_num, 1, 0, 'C')
+        pdf.cell(14, actual_height, language, 1, 0, 'C')
+        pdf.cell(17, actual_height, is_graded, 1, 0, 'C')
         pdf.cell(25, actual_height, buy_price, 1, 0, 'R')
         pdf.cell(25, actual_height, sell_price, 1, 0, 'R')
         pdf.cell(25, actual_height, card_profit, 1, 0, 'R')
@@ -1454,7 +1511,7 @@ def generatePDF(month, year, cards, sealed,bulkAndHoloList, shipping):
     # Table header
     pdf.set_font(font_family, '', 10)
     pdf.cell(60, 10, 'Product Name', 1, 0, 'C')
-    pdf.cell(10, 10, 'Quantity', 1, 0, 'C')
+    pdf.cell(10, 10, 'Qty', 1, 0, 'C')
     pdf.cell(30, 10, 'Buy Price', 1, 0, 'C')
     pdf.cell(30, 10, 'Sell Price', 1, 0, 'C')
     pdf.cell(20, 10, 'Margin', 1, 0, 'C')
@@ -1644,18 +1701,25 @@ def addToSingles():
         data = request.get_json()
 
         for card in data[1:]:
-            db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id)'
-                    'VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    (
-                        card.get('cardName'),
-                        normalize(card.get('cardName')),
-                        card.get('cardNum'),
-                        card.get('condition'),
-                        card.get('buyPrice'),
-                        card.get('marketValue'),
-                        auction_id
-                    )
-            )
+            if card.get('language') not in CONSTANTS.ALLOWED_LANGUAGES:
+                return jsonify({'status': 'error', 'message': f'Invalid language code, Error code: Ax27'}), 400
+            try:
+                db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id)'
+                        ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                        (
+                            card.get('cardName'),
+                            normalize(card.get('cardName')),
+                            card.get('cardNum'),
+                            card.get('condition'),
+                            card.get('language'),
+                            card.get('buyPrice'),
+                            card.get('marketValue'),
+                            auction_id
+                        )
+                )
+            except Exception as e:
+                db.rollback()
+                return jsonify({'status': 'error', 'message': f'Failed to save cards to database: {e}'}), 400
         db.commit()
     return jsonify({'status': 'success'}), 201
 
@@ -1714,13 +1778,16 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
             if card['marketValue'] is not None and card['marketValue'] > 0:
                 discount = (card['marketValue'] / newTotal) * priceDiff
                 new_price = round(card['marketValue'] - discount, 2)
-                cur.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
-                ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                if card.get('language') not in CONSTANTS.ALLOWED_LANGUAGES:
+                    raise Exception('Language not allowed')
+                cur.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id, cardmarketId)'
+                ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 (
                     card.get('cardName'),
                     normalize(card.get('cardName')),
                     card.get('cardNum'),
                     card.get('condition'),
+                    card.get('language'),
                     new_price,
                     card.get('marketValue'),
                     auction_id,
@@ -1729,14 +1796,17 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
 
         for item in sealed:
             if item['marketValue'] is not None and item['marketValue'] > 0:
+                if item.get('language') not in CONSTANTS.ALLOWED_LANGUAGES:
+                    raise Exception('Language not allowed')
                 discount = (item['marketValue'] / newTotal) * priceDiff
                 new_price = round(item['marketValue'] - discount, 2)
-                cur.execute('INSERT INTO sealed (name,normalized_name, quantity, price, market_value, date, auction_id, cardmarketId)'
-                           ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                cur.execute('INSERT INTO sealed (name, normalized_name, quantity, language, price, market_value, date, auction_id, cardmarketId)'
+                           ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                             (
                                 item.get('cardName'),
                                 normalize(item.get('cardName')),
                                 1,
+                                item.get('language'),
                                 new_price,
                                 item.get('marketValue'),
                                 datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
@@ -1758,8 +1828,8 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
             cur.execute('UPDATE sealed SET opened = 1 WHERE auction_id = ? AND id = ?', (auction_id, openedItem.get('id').replace('s', '')))
         else:
            cur.execute("UPDATE sealed SET quantity = quantity - 1 WHERE id = ?", (openedItem.get('id').replace('s', ''),))
-           cur.execute("INSERT INTO sealed (name, normalized_name, price, market_value, date, auction_id, cardmarketId) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                       (row['name'],normalize(row['name']) ,row['price'], row['market_value'], row['date'], auction_id, row['cardmarketId']))
+           cur.execute("INSERT INTO sealed (name, normalized_name, language, price, market_value, date, auction_id, cardmarketId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                       (row['name'], normalize(row['name']), row['language'], row['price'], row['market_value'], row['date'], auction_id, row['cardmarketId']))
            cur.execute("UPDATE sealed SET opened = 1 WHERE auction_id = ? AND id = ?", (auction_id, cur.lastrowid))
     except Exception as e:
         logger.exception(
@@ -1779,15 +1849,18 @@ def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
             auctionId = cur.lastrowid
             for card in cards:
                 if card['marketValue'] is not None and card['marketValue'] > 0:
+                    if card.get('language') not in CONSTANTS.ALLOWED_LANGUAGES:
+                        raise Exception('Language not allowed')
                     discount = (card['marketValue'] / newTotal) * priceDiff
                     new_price = round(card['marketValue'] - discount, 2)
-                    cur.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
-                    ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    cur.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id, cardmarketId)'
+                    ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                     (
                         card.get('cardName'),
                         normalize(card.get('cardName')),
                         card.get('cardNum'),
                         card.get('condition'),
+                        card.get('language'),
                         new_price,
                         card.get('marketValue'),
                         auctionId,
@@ -1805,14 +1878,17 @@ def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
     try:
         for item in sealed:
             if item['marketValue'] is not None and item['marketValue'] > 0:
+                if item.get('language') not in CONSTANTS.ALLOWED_LANGUAGES:
+                    raise Exception('Language not allowed')
                 discount = (item['marketValue'] / newTotal) * priceDiff
                 new_price = round(item['marketValue'] - discount, 2)
-                cur.execute('INSERT INTO sealed (name,normalized_name, quantity, price, market_value, date, auction_id, cardmarketId)'
-                           ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                cur.execute('INSERT INTO sealed (name, normalized_name, quantity, language, price, market_value, date, auction_id, cardmarketId)'
+                           ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                             (
                                 item.get('cardName'),
                                 normalize(item.get('cardName')),
                                 1,
+                                item.get('language'),
                                 new_price,
                                 item.get('marketValue'),
                                 datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
@@ -1832,8 +1908,8 @@ def openSingleSealed(cur, openedItem, sealed, cards,newTotal, priceDiff):
             cur.execute('UPDATE sealed SET opened = 1 WHERE id = ?', (openedItem.get('id').replace('s', ''),))
         else:
            cur.execute("UPDATE sealed SET quantity = quantity - 1 WHERE id = ?", (openedItem.get('id').replace('s', ''),))
-           cur.execute("INSERT INTO sealed (name,normalized_name, price, market_value, date, cardmarketId) VALUES (?, ?, ?, ?, ?, ?)",
-                       (row['name'],normalize(row['name']), row['price'], row['market_value'], row['date'], row['cardmarketId']))
+           cur.execute("INSERT INTO sealed (name, normalized_name, language, price, market_value, date, cardmarketId) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       (row['name'], normalize(row['name']), row['language'], row['price'], row['market_value'], row['date'], row['cardmarketId']))
            cur.execute("UPDATE sealed SET opened = 1 WHERE id = ?", (cur.lastrowid,))
     except Exception as e:
         logger.exception(
@@ -2130,17 +2206,24 @@ def _process_inventory_csv(file):
 
     dataList = []
     for row in reader:
-        item = {
-            'card_name': row['name'],
-            'card_num': row['setCode'] + ' ' + row['cn'] if row['cn'] else '',
-            'condition': CONSTANTS.CONDITION_DICT.get(row['condition']),
-            'buy_price': round(float(row['price']) * 0.8, 2),
-            'market_value': row['price'],
-            'quantity': row['quantity'],
-            'date': datetime.datetime.strptime(row['listedAt'], "%d-%m-%Y %H:%M:%S").strftime("%Y-%m-%dT%H:%M:%SZ"),
-            'cardmarketId': row['cardmarketId'],
-        }
-        dataList.append(item)
+        try:
+            language = row['language'].strip().lower() or 'english'
+            item = {
+                'card_name': row['name'],
+                'card_num': row['setCode'] + ' ' + row['cn'] if row['cn'] else '',
+                'condition': CONSTANTS.CONDITION_DICT.get(row['condition']),
+                'language': CONSTANTS.LANGUAGE_FULL_TO_ABB.get(
+                    language, language
+                ),
+                'buy_price': round(float(row['price']) * 0.8, 2),
+                'market_value': row['price'],
+                'quantity': row['quantity'],
+                'date': datetime.datetime.strptime(row['listedAt'], "%d-%m-%Y %H:%M:%S").strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'cardmarketId': row['cardmarketId'],
+            }
+            dataList.append(item)
+        except Exception as e:
+            raise Exception(f"Error processing CSV structure: {e}")
     return dataList
 
 # TODO: merge with the add endpoint
@@ -2165,14 +2248,18 @@ def _create_inventory(db, dataList=None):
     for item in dataList:
         isSealed = item.get('card_num') == ""
 
+        if item.get('language') not in CONSTANTS.ALLOWED_LANGUAGES:
+            raise ValueError(f"Invalid language code: {item.get('language')}")
+
         if isSealed:
             try:
-                db.execute('INSERT INTO sealed (name, normalized_name, quantity, price, market_value, date, auction_id, cardmarketId)'
-                    'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                db.execute('INSERT INTO sealed (name, normalized_name, quantity, language, price, market_value, date, auction_id, cardmarketId)'
+                    ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                     (
                         item.get('card_name'),
                         normalize(item.get('card_name')),
                         item.get('quantity'),
+                        item.get('language'),
                         item.get('buy_price'),
                         item.get('market_value'),
                         item.get('date'),
@@ -2190,13 +2277,14 @@ def _create_inventory(db, dataList=None):
             for i in range(quantity):
                 try:
                     buyPrice = round(float(item.get('market_value')) * 0.8, 2)
-                    db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id, cardmarketId)'
-                        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    db.execute('INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id, cardmarketId)'
+                        ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                         (
                             item.get('card_name'),
                             normalize(item.get('card_name')),
                             item.get('card_num'),
                             item.get('condition'),
+                            item.get('language'),
                             buyPrice,
                             item.get('market_value'),
                             auctionId,
@@ -2247,17 +2335,18 @@ def process_sold_csv(files,db):
     orders = checkIdOrder(db, orders)
     merged = articlesExpanded.merge(orders, on='idOrder', how='left', suffixes=('_art', '_ord'), validate='many_to_one')
 
+    #TODO: improve naming
     merged = merged[merged['status_ord'].isin(['sent', 'received', 'evaluated'])]
     merged['cardmarketId'] = merged['cardmarketId'].astype('Int64').astype('string')
 
     ids = merged['cardmarketId'].dropna().tolist()
     placehoders = ','.join(['?'] * len(ids))
 
-    cur = db.execute("SELECT id, name as itemName, NULL as card_num, quantity, market_value, auction_id, 'sealed' as item_type, 'NM' as condition, cardMarketID as cardmarketId "
+    cur = db.execute("SELECT id, name as itemName, NULL as card_num, quantity, market_value, auction_id, 'sealed' as item_type, 'NM' as condition, language, cardMarketID as cardmarketId "
                'FROM sealed '
               f'WHERE sale_id IS NULL AND opened = 0 AND cardMarketID IN ({placehoders}) '
                'UNION ALL '
-               "SELECT c.id as id, card_name as itemName, card_num, 1 as quantity, market_value, auction_id, 'card' as item_type, c.condition as condition, cardMarketID as cardmarketId "
+               "SELECT c.id as id, card_name as itemName, card_num, 1 as quantity, market_value, auction_id, 'card' as item_type, c.condition as condition, language, cardMarketID as cardmarketId "
                'FROM cards c '
                'LEFT JOIN sale_items si ON si.card_id = c.id '
                'LEFT JOIN grading_submission_cards gsc ON gsc.card_id = c.id AND gsc.is_current = 1 '
@@ -2267,12 +2356,19 @@ def process_sold_csv(files,db):
     allItemsExpanded = allItems.loc[allItems.index.repeat(allItems['quantity'])].reset_index(drop=True)
     allItemsExpanded['quantity'] = 1
 
-    merged['_match_seq'] = merged.groupby('cardmarketId').cumcount()
-    allItemsExpanded['_match_seq'] = allItemsExpanded.groupby('cardmarketId').cumcount()
     merged['condition'] = merged['condition'].replace(CONSTANTS.CONDITION_DICT)
     allItemsExpanded['condition'] = allItemsExpanded['condition'].replace(CONSTANTS.CONDITION_DICT)
+    merged['language'] = (
+        merged['language'].str.strip().str.lower()
+        .replace(CONSTANTS.LANGUAGE_FULL_TO_ABB)
+    )
+    allItemsExpanded['language'] = allItemsExpanded['language'].str.strip().str.lower()
 
-    wantedItems = merged.merge(allItemsExpanded, on=['cardmarketId', 'condition' ,'_match_seq'], how='left', suffixes=('_mer', '_db'), validate='one_to_one')
+    match_identity = ['cardmarketId', 'condition', 'language']
+    merged['_match_seq'] = merged.groupby(match_identity).cumcount()
+    allItemsExpanded['_match_seq'] = allItemsExpanded.groupby(match_identity).cumcount()
+
+    wantedItems = merged.merge(allItemsExpanded, on=['cardmarketId', 'condition', 'language' ,'_match_seq'], how='left', suffixes=('_mer', '_db'), validate='one_to_one')
     wantedItems = wantedItems.drop(columns='_match_seq')
     wantedItems['matched'] = wantedItems['item_type'].notna()
 
@@ -2285,10 +2381,12 @@ def process_sold_csv(files,db):
         sealed = []
         cards = []
         for _, row in group.iterrows():
+            #TODO: do we need this if _parse_number exists?
             sale_price = float(str(row['price']).replace('€', '').replace(',', '.').strip())
             if row['item_type'] == 'sealed':
                 sealed.append({
                     'sealedName': row['itemName'],
+                    'language': row['language'],
                     'quantity': 1,     
                     'marketValue': _parse_number(sale_price),
                     'auctionId': int(row['auction_id']),
@@ -2298,6 +2396,7 @@ def process_sold_csv(files,db):
                     'cardId': int(row['id']),
                     'cardName': row['itemName'],
                     'cardNum': '' if pd.isna(row['card_num']) else str(row['card_num']),
+                    'language': row['language'],
                     'marketValue': _parse_number(sale_price),
                 })
 
@@ -2665,13 +2764,13 @@ def search():
         
         # Search cards
         card_grouping = "ORDER BY c.id ASC LIMIT 8" if individual_cards else (
-            "GROUP BY UPPER(c.card_name), UPPER(c.card_num), UPPER(c.condition), "
+            "GROUP BY UPPER(c.card_name), UPPER(c.card_num), UPPER(c.condition), c.language, "
             "CASE WHEN gsc.id IS NULL THEN 0 ELSE 1 END, "
             "gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, gsc.cert_number "
             "ORDER BY c.id ASC LIMIT 8"
         )
         card_matches = db.execute(
-            f"SELECT c.card_name, c.card_num, c.condition, c.market_value, c.id, c.auction_id, "
+            f"SELECT c.card_name, c.card_num, c.condition, c.market_value, c.id, c.auction_id, c.language, "
             f"{'1' if individual_cards else 'COUNT(*)'} as available_count, a.auction_name, "
             "CASE WHEN gsc.id IS NULL THEN 0 ELSE 1 END AS is_graded, "
             "gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, gsc.cert_number FROM cards c "
@@ -2687,10 +2786,10 @@ def search():
         
         # Search sealed items
         sealed_matches = db.execute(
-            f"SELECT 's' || s.id as sid, s.name, s.market_value, s.auction_id,SUM(s.quantity) as available_count, a.auction_name FROM sealed s "
+            f"SELECT 's' || s.id as sid, s.name, s.language, s.market_value, s.auction_id,SUM(s.quantity) as available_count, a.auction_name FROM sealed s "
             "LEFT JOIN auctions a ON s.auction_id = a.id "
             f"WHERE ({sealed_where_clause}) AND s.sale_id IS NULL AND s.opened = 0 "
-            f"GROUP BY UPPER(s.name) ORDER BY s.id ASC LIMIT 8",
+            f"GROUP BY UPPER(s.name), s.language ORDER BY s.id ASC LIMIT 8",
             sealed_params
         ).fetchall()
         

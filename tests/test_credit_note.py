@@ -20,7 +20,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from tradeTracker import create_app
-from tradeTracker.db import get_db, init_db
+from tradeTracker.db import get_db
 
 
 class CreditNoteTestCase(unittest.TestCase):
@@ -32,7 +32,6 @@ class CreditNoteTestCase(unittest.TestCase):
             'WTF_CSRF_ENABLED': False,
         })
         with self.app.app_context():
-            init_db()
             self._setup_test_data()
         self.client = self.app.test_client()
 

@@ -2,11 +2,12 @@ import { csrfFetch, escapeHtml, sanitizeNumericId, sanitizeClassToken } from "./
 import { renderAlert } from "./renderUtil.js";
 
 export class DebitNoteItem {
-    constructor({ type, cardName, cardNum, condition, marketValue, grading, sid, cardIds, quantity, auctionId, addedIds }) {
+    constructor({ type, cardName, cardNum, condition, language, marketValue, grading, sid, cardIds, quantity, auctionId, addedIds }) {
         this.type = type;
         this.cardName = cardName;
         this.cardNum = cardNum;
         this.condition = condition;
+        this.language = language || 'en';
         this.marketValue = marketValue;
         this.grading = grading || null;
         this.sid = sid;
@@ -51,6 +52,7 @@ export class DebitNoteItem {
                         <p class="item-number">${escapeHtml(this.cardNum || '')}</p>
                     </div>
                     <p class="item-condition ${condClass}${this.grading ? ' graded' : ''}">${escapeHtml(conditionDisplay || '')}</p>
+                    <p class="item-language">${escapeHtml(this.language)}</p>
                     <div class="market-value">
                         <input class="market-value-input" type="number" min="0" step="0.01" value="${escapeHtml(String(this.marketValue ?? ''))}">
                         <span class="currency">€</span>
@@ -77,6 +79,7 @@ export class DebitNoteItem {
             row.innerHTML = `
                 <p class="item-quantity">${sanitizeNumericId(this.quantity)}</p>
                 <p class="item-name">${escapeHtml(this.cardName || '')}</p>
+                <p class="item-language">${escapeHtml(this.language)}</p>
                 <div class="market-value">
                     <input class="market-value-input" type="number" min="0" step="0.01" value="${escapeHtml(String(this.marketValue ?? ''))}">
                     <span class="currency">€</span>
@@ -108,6 +111,7 @@ export class DebitNoteItem {
                 type: 'sealed',
                 sid: result.sid,
                 cardName: result.name,
+                language: result.language || 'en',
                 marketValue: result.market_value,
                 quantity: pendingQty,
                 auctionId: result.auction_id ?? null,
@@ -130,6 +134,7 @@ export class DebitNoteItem {
             cardName: result.card_name,
             cardNum: result.card_num,
             condition: result.condition,
+            language: result.language || 'en',
             marketValue: result.market_value,
             grading: result.is_graded ? {
                 grader: result.grader,

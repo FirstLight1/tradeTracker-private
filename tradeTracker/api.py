@@ -5,10 +5,23 @@ import logging
 from . import csrf, limiter
 from tradeTracker.services.cfAuth import require_api_token
 from tradeTracker import actions
+from tradeTracker import CONSTANTS
 
 
 bp = Blueprint('api', __name__)
 logger = logging.getLogger(__name__)
+
+
+def _positive_item_count(value):
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, float) and not value.is_integer():
+        return None
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        return None
+    return count if count > 0 else None
 
 
 #Gets rows of CM table using chrome extension and save them to the datasabe
@@ -21,6 +34,12 @@ def cardMarketTable():
         data = request.get_json()
         cards = data.get('cards')
         sealed = data.get('sealed')
+        languages = [
+            str(item.get('language', 'en')).strip().lower()
+            for item in [*cards, *sealed]
+        ]
+        if any(language not in CONSTANTS.ALLOWED_LANGUAGES for language in languages):
+            return jsonify({'status': 'error', 'message': 'Invalid language code, Error code: Ax27'}), 400
         date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         auction = {
             'name': None,
@@ -39,11 +58,10 @@ def cardMarketTable():
             cardsToInsert = []
             
             for card in cards:
-                # Safely convert count to integer
-                try:
-                    count = int(card.get('count', 1))
-                except (ValueError, TypeError):
-                    count = 1
+                count = _positive_item_count(card.get('count', 1))
+                if count is None:
+                    db.rollback()
+                    return jsonify({'status': 'error', 'message': 'Invalid item count'}), 400
                     
                 for _ in range(count):
                     marketValue = card.get('marketValue', 0)
@@ -59,6 +77,7 @@ def cardMarketTable():
                         actions.normalize(card.get('name')),
                         card.get('num', None),
                         card.get('condition', None),
+                        str(card.get('language', 'en')).strip().lower(),
                         buyPrice,
                         marketValue,
                         auction_id
@@ -66,12 +85,16 @@ def cardMarketTable():
         
             # Execute the insert ONCE after building the full list
             db.executemany(
-                'INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                'INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                 cardsToInsert
             )
 
             sealedToInsert = []
             for item in sealed:
+                count = _positive_item_count(item.get('count', 1))
+                if count is None:
+                    db.rollback()
+                    return jsonify({'status': 'error', 'message': 'Invalid item count'}), 400
                 marketValue = item.get('marketValue', 0)
                 marketValue = float(marketValue) if marketValue is not None else None
 
@@ -83,7 +106,8 @@ def cardMarketTable():
                 sealedToInsert.append((
                     item.get('name', None),
                     actions.normalize(item.get('name')),
-                    item.get('count'),
+                    str(item.get('language', 'en')).strip().lower(),
+                    count,
                     buyPrice,
                     marketValue,
                     date,
@@ -91,7 +115,7 @@ def cardMarketTable():
                 ))
 
             db.executemany(
-                'INSERT INTO sealed (name, normalized_name, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?)', sealedToInsert
+                'INSERT INTO sealed (name, normalized_name, language, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', sealedToInsert
             )
 
             db.commit()
@@ -116,14 +140,13 @@ def cardMarketOrder():
     if cards:
         try:
             for card in cards:
-                
-                try:
-                    count = int(card.get('count', 1))
-                except (ValueError, TypeError):
-                    print('failed to get count')
-                    count = 1
+                count = _positive_item_count(card.get('count', 1))
+                if count is None:
+                    return jsonify({'status': 'error', 'message': 'Invalid item count'}), 400
             
-                rows = db.execute("SELECT c.id FROM cards c LEFT JOIN sale_items si ON c.id = si.card_id WHERE lower(c.card_name) = ? AND lower(c.card_num) = ? and upper(c.condition) = ? AND si.sale_id IS NULL",(card['name'].lower(), card['num'].lower(), card['condition'].upper())).fetchmany(count)
+                rows = db.execute("SELECT c.id FROM cards c LEFT JOIN sale_items si ON c.id = si.card_id "
+                                  "WHERE lower(c.card_name) = ? AND lower(c.card_num) = ? and upper(c.condition) = ? AND c.language = ? AND si.sale_id IS NULL",
+                                  (card['name'].lower(), card['num'].lower(), card['condition'].upper(), card.get('language', 'en').lower())).fetchmany(count)
         
                 ids = [row[0] for row in rows]
                 ids += [None] * (count - len(ids))
@@ -139,19 +162,23 @@ def cardMarketOrder():
     if sealed:
         try:
             for item in sealed:
-                try:
-                    count = int(item.get('count',1))
-                except:
-                    count = 1
+                count = _positive_item_count(item.get('count', 1))
+                if count is None:
+                    return jsonify({'status': 'error', 'message': 'Invalid item count'}), 400
+
+                language = item.get('language', 'en').lower()
+                if language not in CONSTANTS.ALLOWED_LANGUAGES:
+                    return jsonify({'status': 'error', 'message': 'Invalid language code, Error code: Ax27'}), 400
 
                 available = db.execute(
-                    'SELECT COALESCE(SUM(quantity), 0) FROM sealed WHERE lower(name) = ? AND sale_id IS NULL',
-                    (item['name'].lower(),)
+                    'SELECT COALESCE(SUM(quantity), 0) FROM sealed WHERE lower(name) = ? AND language = ? AND sale_id IS NULL AND opened = 0',
+                    (item['name'].lower(), language)
                 ).fetchone()[0]
                 first = db.execute(
-                    'SELECT id FROM sealed WHERE lower(name) = ? AND sale_id IS NULL ORDER BY id ASC LIMIT 1',
-                    (item['name'].lower(),)
+                    'SELECT id FROM sealed WHERE lower(name) = ? AND language = ? AND sale_id IS NULL AND opened = 0 ORDER BY id ASC LIMIT 1',
+                    (item['name'].lower(), language)
                 ).fetchone()
+                item['language'] = language
                 if first is not None and available > 0:
                     item['id'] = [first[0]]
                     item['quantity'] = min(count, available)

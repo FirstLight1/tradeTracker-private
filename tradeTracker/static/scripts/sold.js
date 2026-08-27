@@ -36,6 +36,7 @@ async function loadContent(button, soldDate) {
                     <p>Card name</p>
                     <p>Card number</p>
                     <p>Condition</p>
+                    <p>Lang</p>
                     <p>Buy price</p>
                     <p>Inventory market value</p>
                     <p>Sell price</p>
@@ -61,6 +62,7 @@ async function loadContent(button, soldDate) {
                     ${renderField(DOMPurify.sanitize(card.card_name), 'text', ['card-info', 'card-name'], 'Card Name', 'card_name')}
                     ${renderField(DOMPurify.sanitize(card.card_num), 'text', ['card-info', 'card-num'], 'Card Number', 'card_num')}
                     <p class='card-info condition ${safeConditionClass}${gradingClass}' data-field="condition">${DOMPurify.sanitize(conditionDisplay)}</p>
+                    ${renderField(DOMPurify.sanitize(card.language), 'text', ['card-info', 'language'], 'Lang', 'language')}
                     ${renderField(card.card_price ? DOMPurify.sanitize(card.card_price) + '€' : null, 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
                     ${renderField(card.market_value ? DOMPurify.sanitize(card.market_value) + '€' : null, 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
                     ${renderField(card.invoice_sell_price ? DOMPurify.sanitize(card.invoice_sell_price) + '€' : null, 'text', ['card-info', 'sell-price'], 'Sell Price', 'sell_price')}
@@ -80,6 +82,7 @@ async function loadContent(button, soldDate) {
                     <p class='card-info card-name'>${DOMPurify.sanitize(item.name)}</p>
                     <p class='card-info card-num'></p>
                     <p class='card-info condition'></p>
+                    ${renderField(DOMPurify.sanitize(item.language || 'en'), 'text', ['card-info', 'language'], 'Lang', 'language')}
                     <p class='card-info card-price'></p>
                     <p class='card-info market-value'>${DOMPurify.sanitize(item.market_value)}</p>
                     <p class='card-info sell-price'>${DOMPurify.sanitize(item.sell_price ?? item.market_value)}</p>
@@ -100,6 +103,7 @@ async function loadContent(button, soldDate) {
                     <p class='card-info card-name'>${DOMPurify.sanitize(bulk.item_type)}</p>
                     <p class='card-info card-num'></p>
                     <p class='card-info condition'></p>
+                    <p class='card-info language'></p>
                     <p class='card-info card-price'></p>
                     <p class='card-info market-value'>Počet: ${DOMPurify.sanitize(bulk.quantity)}</p>
                     <p class='card-info sell-price'>${bulk.total_price != null ? DOMPurify.sanitize(bulk.total_price) + '€' : 'Unknown'}</p>

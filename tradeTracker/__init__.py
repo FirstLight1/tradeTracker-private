@@ -97,10 +97,25 @@ def create_app(test_config=None):
 
     from . import db, tracker, actions, renderers, api, grading
 
-    # Run database migration before initializing the app
-    apply_database_migrations(app.config["DATABASE"])
-
     db.init_app(app)
+
+    # A fresh database needs the baseline schema before ALTER migrations run.
+    with app.app_context():
+        connection = db.get_db()
+        existing_tables = {
+            row['name'] for row in connection.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+        }
+        baseline_tables = {'auctions', 'cards', 'sealed'}
+        if not existing_tables:
+            db.init_db()
+            print("Database initialized automatically on first run")
+        elif not baseline_tables <= existing_tables:
+            raise RuntimeError('Database has an incomplete baseline schema')
+
+    apply_database_migrations(app.config["DATABASE"])
 
     configure_logging(app)
     app.logger.info("App startup")
@@ -115,12 +130,6 @@ def create_app(test_config=None):
             return err
         app.logger.exception("Unhandled exception during request")
         return {"status": "error", "message": "Internal server error"}, 500
-
-    # Initialize the database if it doesn't exist
-    if not os.path.exists(app.config["DATABASE"]):
-        with app.app_context():
-            db.init_db()
-            print("Database initialized automatically on first run")
 
     app.register_blueprint(api.bp)
     app.register_blueprint(tracker.bp)

@@ -17,7 +17,7 @@ import unittest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from tradeTracker import create_app
-from tradeTracker.db import get_db, init_db
+from tradeTracker.db import get_db
 
 
 # Real CardMarket inventory export header (comma-separated)
@@ -57,10 +57,6 @@ class InventoryCSVImportTestCase(unittest.TestCase):
             'DATABASE': self.db_path,
             'WTF_CSRF_ENABLED': False,
         })
-        with self.app.app_context():
-            # create_app runs migrations that may create barter before init_db
-            get_db().executescript('DROP TABLE IF EXISTS barter;')
-            init_db()
         self.client = self.app.test_client()
 
     def tearDown(self):
@@ -111,10 +107,11 @@ class InventoryCSVImportTestCase(unittest.TestCase):
 
             # Sealed: ETB row
             sealed = db.execute(
-                'SELECT name, quantity, price, market_value, auction_id FROM sealed'
+                'SELECT name, language, quantity, price, market_value, auction_id FROM sealed'
             ).fetchall()
             self.assertEqual(len(sealed), 1, [dict(s) for s in sealed])
             self.assertEqual(sealed[0]['name'], 'Chaos Rising Pokemon Center Elite Trainer Box')
+            self.assertEqual(sealed[0]['language'], 'en')
             self.assertEqual(sealed[0]['quantity'], 1)
             self.assertEqual(sealed[0]['market_value'], 180.0)
 

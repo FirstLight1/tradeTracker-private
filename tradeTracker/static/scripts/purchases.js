@@ -60,6 +60,7 @@ async function loadAuctionContent(button) {
                         <p>Card name</p>
                         <p>Card number</p>
                         <p>Condition</p>
+                        <p>Lang</p>
                         <p>Buy price</p>
                         <p>Market value</p>
                         <p>Margin</p>
@@ -76,6 +77,7 @@ async function loadAuctionContent(button) {
                         ${renderField(card.card_name != null ? DOMPurify.sanitize(card.card_name) : '', 'text', ['card-info', 'card-name'], 'Card Name', 'card_name')}
                         ${renderField(card.card_num != null ? DOMPurify.sanitize(card.card_num) : '', 'text', ['card-info', 'card-num'], 'Card Number', 'card_num')}
                         <p class='card-info condition ${safeCardConditionClass}' data-field="condition">${DOMPurify.sanitize(card.condition) ? DOMPurify.sanitize(card.condition) : 'Unknown'}</p>
+                        ${renderField(card.language != null ? DOMPurify.sanitize(card.language) : '', 'text', ['card-info', 'language'], 'Lang', 'language')}
                         ${renderField(card.card_price != null ? DOMPurify.sanitize(card.card_price) + '€' : '', 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
                         ${renderField(card.market_value != null ? DOMPurify.sanitize(card.market_value) + '€' : '', 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
                         ${renderField(card.card_price !== null && card.market_value !== null ? (card.market_value - card.card_price).toFixed(2) + '€' : '', 'text', ['card-info', 'profit'], 'profit', true)}
@@ -107,13 +109,13 @@ async function loadAuctionContent(button) {
                         sealedDiv.innerHTML = `
                             <p class='sealed-quantity'>${DOMPurify.sanitize(sealedItem.quantity)}</p>
                             <p class="sealed-name">${DOMPurify.sanitize(sealedItem.name)}</p>
+                            <p class="sealed-language">${DOMPurify.sanitize(sealedItem.language || 'en')}</p>
                             <p class="sealed-price">${DOMPurify.sanitize(sealedItem.price)}€</p>
                             <p class="VAT-sealed">${(Number(DOMPurify.sanitize(sealedItem.price)) / 1.23).toFixed(2)}</p>
                             <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
                             <p></p>
                             <p>${state}</p>
-                            <p></p>
                             <p></p>
                         `;
 
@@ -255,13 +257,13 @@ async function loadSealed(viewButton) {
                     sealedDiv.innerHTML = `
                         <p class='sealed-quantity'>${DOMPurify.sanitize(sealedData.quantity)}</p>
                         <p class='sealed-name'>${DOMPurify.sanitize(sealedData.name)}</p>
+                        <p class='sealed-language'>${DOMPurify.sanitize(sealedData.language || 'en')}</p>
                         <p class='unit-price'>${DOMPurify.sanitize(sealedData.price)}</p>
                         <p class='VAT-sealed sealed-market-value'>${(DOMPurify.sanitize(sealedData.price) / 1.23).toFixed(2)}</p>
                         <p class='market-value-sealed'>${DOMPurify.sanitize(sealedData.market_value)}</p>
                         <p class='margin'>${margin}</p>
                         <p class='add-date'>${formatedDate}</p>
                         <p>${state}</p>
-                        <p></p>
                         <p></p>
                     `;
                     contentDiv.append(sealedDiv);

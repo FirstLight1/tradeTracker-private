@@ -83,6 +83,7 @@ function displayDebitNoteResults(results, resultsQueue, searchInput) {
         const name = isSealed ? result.name : result.card_name;
         const num = isSealed ? '' : (result.card_num || '');
         const condition = isSealed ? '' : (result.condition || '');
+        const language = result.language || 'en';
         const availableCount = result.available_count ? Number(result.available_count) : 1;
         const marketValue = result.market_value != null ? result.market_value : '';
         const safeConditionClass = sanitizeClassToken(condition || '');
@@ -102,6 +103,7 @@ function displayDebitNoteResults(results, resultsQueue, searchInput) {
             <p class="result result-condition ${safeConditionClass}${result.is_graded ? ' graded' : ''}">
                 ${conditionContent}
             </p>
+            <p class="result result-language">${escapeHtml(language)}</p>
             <p class="result result-quantity">${pendingQty} / ${availableCount}</p>
             <p class="result result-market-value">${escapeHtml(String(marketValue))}€</p>
         `;
@@ -214,6 +216,7 @@ async function createDebitNote(saleId, originalInvoiceNum, recieverInfo, shippin
                 id: row.getAttribute('data-id').replace('s', ''),
                 quantity: row.querySelector('.item-quantity').textContent,
                 sealedName: row.querySelector('.item-name').textContent,
+                language: row.querySelector('.item-language').textContent,
                 marketValue: row.querySelector('.market-value-input').value,
                 auctionId: auctionIdAttr === null ? null : Number(auctionIdAttr)
             }

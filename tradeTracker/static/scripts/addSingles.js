@@ -32,6 +32,7 @@ saveButton.addEventListener('click', () => {
             card.cardName = input('input[name=cardName]');
             card.cardNum = input('input[name=cardNum]');
             card.condition = input('select[name=condition]');
+            card.language = DOMPurify.sanitize(ell.querySelector('select[name=language]').value);
             card.buyPrice = inputNumber('input[name=buyPrice]');
             card.marketValue = inputNumber('input[name=marketValue]');
             card.sellPrice = inputNumber('input[name=sellPrice]');

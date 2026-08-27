@@ -142,6 +142,39 @@ h1 {
     backdrop-filter: blur(10px);
 }
 
+.search-results .card-search-result {
+  grid-template-columns:
+    minmax(140px, 1.6fr)
+    minmax(85px, 0.9fr)
+    minmax(125px, 1.2fr)
+    45px
+    70px
+    60px
+    minmax(60px, 0.7fr)
+    130px
+    90px;
+  column-gap: clamp(8px, 1.1vw, 18px);
+}
+
+.search-results .sealed-search-result {
+  grid-template-columns:
+    minmax(160px, 1.8fr)
+    45px
+    80px
+    minmax(85px, 0.8fr)
+    minmax(100px, 1fr)
+    90px
+    70px;
+  column-gap: clamp(8px, 1.1vw, 18px);
+}
+
+.card-search-result .add-to-cart-btn,
+.card-search-result .view-auction,
+.sealed-search-result .add-to-cart-btn,
+.sealed-search-result .view-auction {
+  white-space: nowrap;
+}
+
 .search-results div:hover,
 .search-results div:focus {
     border-color: var(--glow-color, 0.6);
@@ -675,6 +708,23 @@ input[type="file"] {
 .shopping-cart.expanded > * {
     opacity: 1;
     pointer-events: auto;
+}
+
+.sealed-item-cart {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 35px 65px auto auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.sealed-item-cart .sealed-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.sealed-item-cart .sealed-language,
+.sealed-item-cart .sealed-price {
+    white-space: nowrap;
 }
 
 .delete-cart{

@@ -40,6 +40,47 @@ CONDITION_DICT = {
     'PO' : "POOR"
 }
 
+ALLOWED_LANGUAGES = {
+    'en',
+    'jp',
+    'de',
+    'fr',
+    'it',
+    'es',
+    'kr',
+    'cn',
+    'pt',
+}
+
+LANGUAGE_FULL_TO_ABB = {
+        'english': 'en',
+        'japanese': 'jp',
+        'german': 'de',
+        'french': 'fr',
+        'italian': 'it',
+        'spanish': 'es',
+        'korean': 'kr',
+        'chinese': 'cn',
+        'simplified chinese': 'cn',
+        's-chinese': 'cn',
+        'portuguese': 'pt',
+}
+
+LANGUAGE_ABB_TO_FULL = {
+    'en': 'english',
+    'jp': 'japanese',
+    'de': 'german',
+    'fr': 'french',
+    'it': 'italian',
+    'es': 'spanish',
+    'kr': 'korean',
+    'cn': 'chinese',
+    'cn': 'simplified chinese',
+    'cn': 's-chinese',
+    'pt': 'portuguese',
+}
+
+
 PARCEL_CATEGORIES = {
         "registered letter": "r",
         "letter": "olz",
