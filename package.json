@@ -1,0 +1,32 @@
+{
+  "name": "tradetracker-private",
+  "version": "1.0.0",
+  "description": "A Flask-based web application for tracking trading-card auctions, singles, bulk inventory, and sales. Includes invoice (PDF) generation, a companion Chrome extension integration for importing data from Cardmarket, and FIFO-based bulk/holo inventory accounting.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "lint": "oxlint static/js",
+    "lint:fix": "oxlint --fix static/js",
+    "format": "oxfmt static/js",
+    "format:check": "oxfmt --check static/js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FirstLight1/tradeTracker-private.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/FirstLight1/tradeTracker-private/issues"
+  },
+  "homepage": "https://github.com/FirstLight1/tradeTracker-private#readme",
+  "devDependencies": {
+    "oxfmt": "^0.65.0",
+    "oxlint": "^1.80.0"
+  }
+}
