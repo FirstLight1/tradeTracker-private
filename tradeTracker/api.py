@@ -59,6 +59,7 @@ def cardMarketTable():
                         actions.normalize(card.get('name')),
                         card.get('num', None),
                         card.get('condition', None),
+                        card.get('language', 'en'),
                         buyPrice,
                         marketValue,
                         auction_id
@@ -66,7 +67,7 @@ def cardMarketTable():
         
             # Execute the insert ONCE after building the full list
             db.executemany(
-                'INSERT INTO cards (card_name, normalized_name, card_num, condition, card_price, market_value, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                'INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                 cardsToInsert
             )
 
@@ -83,6 +84,7 @@ def cardMarketTable():
                 sealedToInsert.append((
                     item.get('name', None),
                     actions.normalize(item.get('name')),
+                    item.get('language', 'en'),
                     item.get('count'),
                     buyPrice,
                     marketValue,
@@ -91,7 +93,7 @@ def cardMarketTable():
                 ))
 
             db.executemany(
-                'INSERT INTO sealed (name, normalized_name, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?)', sealedToInsert
+                'INSERT INTO sealed (name, normalized_name, language, quantity, price, market_value, date, auction_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', sealedToInsert
             )
 
             db.commit()
@@ -123,7 +125,9 @@ def cardMarketOrder():
                     print('failed to get count')
                     count = 1
             
-                rows = db.execute("SELECT c.id FROM cards c LEFT JOIN sale_items si ON c.id = si.card_id WHERE lower(c.card_name) = ? AND lower(c.card_num) = ? and upper(c.condition) = ? AND si.sale_id IS NULL",(card['name'].lower(), card['num'].lower(), card['condition'].upper())).fetchmany(count)
+                rows = db.execute("SELECT c.id FROM cards c LEFT JOIN sale_items si ON c.id = si.card_id "
+                                  "WHERE lower(c.card_name) = ? AND lower(c.card_num) = ? and upper(c.condition) = ? AND c.language = ? AND si.sale_id IS NULL",
+                                  (card['name'].lower(), card['num'].lower(), card['condition'].upper())).fetchmany(count)
         
                 ids = [row[0] for row in rows]
                 ids += [None] * (count - len(ids))

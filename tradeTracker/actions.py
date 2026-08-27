@@ -2348,10 +2348,12 @@ def process_sold_csv(files,db):
         sealed = []
         cards = []
         for _, row in group.iterrows():
+            #TODO: do we need this if _parse_number exists?
             sale_price = float(str(row['price']).replace('€', '').replace(',', '.').strip())
             if row['item_type'] == 'sealed':
                 sealed.append({
                     'sealedName': row['itemName'],
+                    'language': row['language'],
                     'quantity': 1,     
                     'marketValue': _parse_number(sale_price),
                     'auctionId': int(row['auction_id']),
@@ -2361,6 +2363,7 @@ def process_sold_csv(files,db):
                     'cardId': int(row['id']),
                     'cardName': row['itemName'],
                     'cardNum': '' if pd.isna(row['card_num']) else str(row['card_num']),
+                    'language': row['language'],
                     'marketValue': _parse_number(sale_price),
                 })
 
