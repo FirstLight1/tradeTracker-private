@@ -1,7 +1,6 @@
 import base64
 from decimal import Decimal
 from flask import request, Blueprint, jsonify, current_app, send_file, abort
-from reportlab.platypus import SimpleDocTemplate
 from tradeTracker.db import get_db
 from io import BytesIO, TextIOWrapper, StringIO
 import re
@@ -1291,7 +1290,6 @@ def generateBuyReport():
             TTFont("DejaVuSans-Bold", os.path.join(font_dir, "DejaVuSans-Bold.ttf"))
         )
         pdfmetrics.registerFontFamily("DejaVuSans", normal="DejaVuSans", bold="DejaVuSans-Bold")
-        print(pdfmetrics.getRegisteredFontNames())
 
         elements = []
         auctionInfo = curr.execute(
@@ -1311,6 +1309,9 @@ def generateBuyReport():
         )
         elements.append(Spacer(1, 12))
 
+        # join auctions
+        # union cards and sealed items
+        # dont forget grade
         curr.execute(
             "SELECT card_name, card_num, condition, language, card_price AS 'buy price', market_value as 'market value', sold_date as 'sold' "
             "FROM cards WHERE auction_id = ?",
@@ -1541,6 +1542,7 @@ def parse_date_to_iso(value):
 
 
 def generatePDF(month, year, cards, sealed, bulkAndHoloList, shipping):
+
     # Determine the save path based on environment
     if os.getenv("FLASK_ENV") == "prod":
         data_dir = os.getenv("DATA_DIR", current_app.instance_path)
@@ -1555,6 +1557,10 @@ def generatePDF(month, year, cards, sealed, bulkAndHoloList, shipping):
 
     font_dir = os.path.join(os.path.dirname(__file__), "fonts")
 
+    from tradeTracker.services import report_service
+
+    report = report_service.ReportService(get_db())
+    return report.generatePurchaseReport(None, None, month, year, pdf_path)
     # Create PDF
     pdf = fpdf.FPDF()
     pdf.add_page()
