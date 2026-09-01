@@ -2601,7 +2601,8 @@ def _process_inventory_csv(file):
     return dataList
 
 
-# TODO: merge with the add endpoint
+#TODO: merge with the add endpoint
+#TODO: if date not found use today
 def _create_inventory(db, dataList=None):
 
     if dataList is None:

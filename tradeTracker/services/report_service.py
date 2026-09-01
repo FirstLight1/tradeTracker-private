@@ -194,6 +194,7 @@ class ReportService:
         #TODO: remove unnecessary data
         #TODO: format headers
         #TODO: format time
+        #TODO: improve header formating
         elements.append(
             Paragraph(
                 "Sales Report - {month}/{year}".format(month=month, year=year), styles["Heading1"]
@@ -208,6 +209,13 @@ class ReportService:
         infoHeader['shipping'] = sum(
             float(row.get("shipping_info", 0)) or 0 for row in soldData.get("shipping", [])
         )
+        for key, value in infoHeader.items():
+            if 'count' not in key:
+                value = f"{value:.2f}€"
+
+            key = key.replace("_", " ").capitalize()
+            elements.append(Paragraph(f"{key}: {value}", styles["Heading2"]))
+        elements.append(Spacer(1, 12))
 
         if itemsData:
             elements.append(Paragraph("Items", styles["Heading2"]))
