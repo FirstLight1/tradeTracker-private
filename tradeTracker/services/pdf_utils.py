@@ -25,9 +25,13 @@ def wrap_table_text(data, header_font_size=9, body_font_size=10, font_name="Deja
         splitLongWords=True,
     )
 
+    if data and isinstance(data[0], dict):
+        columns = list(data[0])
+        data = [columns] + [[row.get(column) for column in columns] for row in data]
+
     return [
         [
-            Paragraph(escape(value), header_style if row_index == 0 else body_style)
+            Paragraph(escape(value.replace('_', ' ')), header_style if row_index == 0 else body_style)
             if isinstance(value, str)
             else value
             for value in row

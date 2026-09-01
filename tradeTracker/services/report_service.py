@@ -1,3 +1,5 @@
+from ast import Tuple
+
 from reportlab.lib import colors
 from reportlab.lib import styles
 from reportlab.lib.pagesizes import landscape, letter
@@ -10,7 +12,8 @@ import pandas as pd
 from io import BytesIO, TextIOWrapper, StringIO
 from typing import Any
 import os
-
+import tradeTracker.CONSTANTS as CONSTANTS
+from decimal import Decimal
 from tradeTracker.services.pdf_utils import wrap_table_text
 
 
@@ -44,26 +47,71 @@ class ReportService:
             ]
         )
 
+    def _calculate_header(self, items: list[dict[str, Any]], bulk: list[dict[str, Any]]) -> dict[str, Any]:
+        card_count, sealed_count = (
+                sum(item.get("item_type") == t for item in items)
+                for t in ("card", "sealed")
+            )
+
+        total_buy_price = (sum(item.get("buy_price", 0) * item.get('quantity', 1) for item in items)
+                        + sum(CONSTANTS.BULK_ITEM_UNIT_PRICES.get(row.get("item_type", 0), "0") * row.get("quantity", 1) for row in bulk))
+
+        total_sell_price = (sum(item.get("sell_price", 0) * item.get('quantity', 1) for item in items)
+                        + sum(row['total_price'] or 0 for row in bulk))
+
+        total_profit = Decimal(total_sell_price) - Decimal(total_buy_price)
+
+        total_pos_margin = 0
+        total_neg_margin = 0
+
+        for item in items:
+            if item.get("item_type") == "sealed" and item['auction_id'] is not None:
+                curr_margin = Decimal(item["sell_price"] * item["quantity"]) - Decimal(item["buy_price"] * item["quantity"])
+                if curr_margin > 0:
+                    total_pos_margin += curr_margin
+                else:
+                    total_neg_margin += curr_margin
+            else:
+                curr_margin = Decimal(item["sell_price"] - item["buy_price"])
+                if curr_margin > 0:
+                    total_pos_margin += curr_margin
+                else:
+                    total_neg_margin += curr_margin
+
+        for item in bulk:
+            unit_price = CONSTANTS.BULK_ITEM_UNIT_PRICES.get(item["item_type"], 0)
+            total_pos_margin += Decimal(item["total_price"] - item["quantity"] * unit_price)
+
+        header_data = {
+                'card_count': card_count,
+                'sealed_count': sealed_count,
+                'total_buy_price': total_buy_price,
+                'total_sell_price': total_sell_price,
+                'total_profit': total_profit,
+                'total_pos_margin': total_pos_margin,
+                'total_neg_margin': total_neg_margin,
+                'total_margin_profit': total_pos_margin + total_neg_margin
+                }
+        return header_data
+
     def _get_auction_data(self, start_date, end_date, id=None):
         raise NotImplementedError
 
-    def _get_purchased_data(self, start_date, end_date, id=None):
-        if id:
-            where_clause = "auction_id = ?"
-        else:
-            where_clause = 'WHERE strftime("%Y", substr(date_created, 1, 19)) = ? AND strftime("%m", substr(date_created, 1, 19)) = ? '
+    def _get_purchased_data_month(self, month: int, year: int, id=None) -> list:
+        raise NotImplementedError
 
-        pass
+    def _get_purchased_data_by_id(self, id: int) -> list:
+        raise NotImplementedError
 
-    def _get_sold_data(self, start_date, end_date, month, year, id=None):
+    def _get_sold_data_month(self, month: int, year: int, id=None) -> dict:
 
         curr = self.db.cursor()
-        items = curr.execute(
+        curr.execute(
             """
             SELECT
                 c.card_name AS name,
                 c.card_num AS item_num,
-                c.card_price AS purchase_price,
+                c.card_price AS buy_price,
                 c.language AS language,
                 si.sell_price AS sell_price,
                 s.sale_date AS sale_date,
@@ -87,7 +135,7 @@ class ReportService:
             SELECT
                 se.name AS name,
                 NULL AS item_num,
-                se.price AS purchase_price,
+                se.price AS buy_price,
                 NULL AS language,
                 COALESCE(se.sell_price, se.market_value) AS sell_price,
                 s.sale_date AS sale_date,
@@ -103,9 +151,9 @@ class ReportService:
             (year, month, year, month),
         )
 
-        itemDesc = [desc[0] for desc in curr.description]
-        itemsRows = [row[:6] + ("True" if row[6] else "",) + row[7:] for row in curr.fetchall()]
-        itemsData = [itemDesc] + itemsRows
+        itemsData = [dict(row) for row in curr.fetchall()]
+        for item in itemsData:
+            item["is_graded"] = "True" if item["is_graded"] else ""
 
         bulkHolo = curr.execute(
             "SELECT item_type, SUM(bs.quantity) as quantity, SUM(bs.total_price) as total_price FROM bulk_sales bs "
@@ -115,20 +163,21 @@ class ReportService:
             (year, month),
         )
 
-        bulkDesc = [desc[0] for desc in curr.description]
-        bulkItems = [dict(item) for item in curr.fetchall()]
-        bulkData = [bulkDesc] + bulkItems
+        bulkData = [dict(item) for item in curr.fetchall()]
 
         shipping = curr.execute(
             'SELECT shipping_info FROM sales WHERE strftime("%Y", sale_date) = ? AND strftime("%m", sale_date) = ?',
             (year, month),
         )
 
-        shippingDesc = [desc[0] for desc in curr.description]
-        shippingInfo = [dict(item) for item in curr.fetchall()]
-        shippingData = [shippingDesc] + shippingInfo
+        shippingData = [dict(item) for item in curr.fetchall()]
+        data = {
+                "items": itemsData,
+                "bulk": bulkData,
+                "shipping": shippingData
+            }
 
-        return itemsData, bulkData, shippingData
+        return data
 
     def generateSoldReport(self, start_date, end_date):
         pass
@@ -141,9 +190,10 @@ class ReportService:
         elements = []
         styles = self._styles()
 
-        # TODO: switch to periodic report
-        # TODO: remove unnecessary data
-        # TODO: format headers
+        #TODO: allow periodic report
+        #TODO: remove unnecessary data
+        #TODO: format headers
+        #TODO: format time
         elements.append(
             Paragraph(
                 "Sales Report - {month}/{year}".format(month=month, year=year), styles["Heading1"]
@@ -151,7 +201,13 @@ class ReportService:
         )
         elements.append(Spacer(1, 12))
 
-        itemsData, bulkData, shippingData = self._get_sold_data(None, None, month, year)
+        soldData = self._get_sold_data_month(month, year)
+        itemsData = soldData.get("items", [])
+        bulkData = soldData.get("bulk", [])
+        infoHeader = self._calculate_header(itemsData, bulkData)
+        infoHeader['shipping'] = sum(
+            float(row.get("shipping_info", 0)) or 0 for row in soldData.get("shipping", [])
+        )
 
         if itemsData:
             elements.append(Paragraph("Items", styles["Heading2"]))
@@ -169,14 +225,6 @@ class ReportService:
             elements.append(Paragraph("Bulk", styles["Heading2"]))
             elements.append(Spacer(1, 12))
             table = Table(wrap_table_text(bulkData), repeatRows=1)
-            table.setStyle(self._table_style())
-            elements.append(table)
-            elements.append(Spacer(1, 12))
-
-        if shippingData:
-            elements.append(Paragraph("shipping", styles["Heading2"]))
-            elements.append(Spacer(1, 12))
-            table = Table(wrap_table_text(shippingData), repeatRows=1)
             table.setStyle(self._table_style())
             elements.append(table)
             elements.append(Spacer(1, 12))
