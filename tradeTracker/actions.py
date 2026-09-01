@@ -40,6 +40,7 @@ from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaReceiptService
 from tradeTracker.services.cfAuth import verify_token, require_api_token
 from tradeTracker.services.eph_service import EPHService
+from tradeTracker.services.pdf_utils import wrap_table_text
 # Packeta integration disabled — service hits the network (WSDL fetch) at construction
 # and requires the `postal` native dep. Re-enable together with the blocks in importCSV.
 # from tradeTracker.services.packeta_service import PacketaService
@@ -1326,7 +1327,9 @@ def generateBuyReport():
 
             cardsData = [cardsDesc] + cardRows
 
-            table = Table(cardsData, repeatRows=1)
+            table = Table(
+                wrap_table_text(cardsData, header_font_size=11), repeatRows=1
+            )
             table.setStyle(
                 TableStyle(
                     [
@@ -1359,7 +1362,9 @@ def generateBuyReport():
             sealedData = [sealedDesc] + sealedRows
             elements.append(Paragraph("Sealed Items", styles["Heading2"]))
             elements.append(Spacer(1, 12))
-            table = Table(sealedData, repeatRows=1)
+            table = Table(
+                wrap_table_text(sealedData, header_font_size=11), repeatRows=1
+            )
             table.setStyle(
                 TableStyle(
                     [

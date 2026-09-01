@@ -11,6 +11,8 @@ from io import BytesIO, TextIOWrapper, StringIO
 from typing import Any
 import os
 
+from tradeTracker.services.pdf_utils import wrap_table_text
+
 
 class ReportService:
     def __init__(self, db):
@@ -20,6 +22,7 @@ class ReportService:
         pdfmetrics.registerFont(
             TTFont("DejaVuSans-Bold", os.path.join(self.font_dir, "DejaVuSans-Bold.ttf"))
         )
+        pdfmetrics.registerFontFamily("DejaVuSans", normal="DejaVuSans", bold="DejaVuSans-Bold")
 
     def _styles(self):
         styles = getSampleStyleSheet()
@@ -141,7 +144,6 @@ class ReportService:
         # TODO: switch to periodic report
         # TODO: remove unnecessary data
         # TODO: format headers
-        # TODO: name overflowing
         elements.append(
             Paragraph(
                 "Sales Report - {month}/{year}".format(month=month, year=year), styles["Heading1"]
@@ -155,7 +157,7 @@ class ReportService:
             elements.append(Paragraph("Items", styles["Heading2"]))
             elements.append(Spacer(1, 12))
             table = Table(
-                itemsData,
+                wrap_table_text(itemsData),
                 colWidths=[width * mm for width in [35, 24, 25, 14, 25, 25, 17, 20, 15, 25]],
                 repeatRows=1,
             )
@@ -166,7 +168,7 @@ class ReportService:
         if bulkData:
             elements.append(Paragraph("Bulk", styles["Heading2"]))
             elements.append(Spacer(1, 12))
-            table = Table(bulkData, repeatRows=1)
+            table = Table(wrap_table_text(bulkData), repeatRows=1)
             table.setStyle(self._table_style())
             elements.append(table)
             elements.append(Spacer(1, 12))
@@ -174,7 +176,7 @@ class ReportService:
         if shippingData:
             elements.append(Paragraph("shipping", styles["Heading2"]))
             elements.append(Spacer(1, 12))
-            table = Table(shippingData, repeatRows=1)
+            table = Table(wrap_table_text(shippingData), repeatRows=1)
             table.setStyle(self._table_style())
             elements.append(table)
             elements.append(Spacer(1, 12))
