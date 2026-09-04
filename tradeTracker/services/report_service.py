@@ -8,6 +8,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+import datetime
 import pandas as pd
 from io import BytesIO, TextIOWrapper, StringIO
 from typing import Any
@@ -66,7 +67,7 @@ class ReportService:
 
         for item in items:
             if item.get("item_type") == "sealed" and item['auction_id'] is not None:
-                curr_margin = Decimal(item["sell_price"] * item["quantity"]) - Decimal(item["buy_price"] * item["quantity"])
+                curr_margin = Decimal(item["sell_price"] * item["qty"]) - Decimal(item["buy_price"] * item["qty"])
                 if curr_margin > 0:
                     total_pos_margin += curr_margin
                 else:
@@ -111,9 +112,10 @@ class ReportService:
             SELECT
                 c.card_name AS name,
                 c.card_num AS item_num,
+                c.language AS lang,
                 c.card_price AS buy_price,
-                c.language AS language,
                 si.sell_price AS sell_price,
+                ROUND(si.sell_price - c.card_price, 2) AS margin,
                 s.sale_date AS sale_date,
                 (
                     SELECT TRIM(grader || ' ' || COALESCE(grade_numeric, ''))
@@ -122,7 +124,7 @@ class ReportService:
                     AND gsc.is_current = 1
                 ) as grade,
                 'card' AS item_type,
-                1 AS quantity,
+                1 AS qty,
                 NULL AS auction_id
             FROM cards c
             JOIN sale_items si ON c.id = si.card_id
@@ -135,13 +137,14 @@ class ReportService:
             SELECT
                 se.name AS name,
                 NULL AS item_num,
+                se.language AS lang,
                 se.price AS buy_price,
-                NULL AS language,
                 COALESCE(se.sell_price, se.market_value) AS sell_price,
+                ROUND(COALESCE(se.sell_price, se.market_value) * se.quantity - se.price * se.quantity, 2) AS margin,
                 s.sale_date AS sale_date,
                 ' ' as grade,
                 'sealed' AS item_type,
-                se.quantity AS quantity,
+                se.quantity AS qty,
                 se.auction_id AS auction_id
             FROM sealed se
             JOIN sales s ON se.sale_id = s.id
@@ -152,6 +155,9 @@ class ReportService:
         )
 
         itemsData = [dict(row) for row in curr.fetchall()]
+        for item in itemsData:
+            date = datetime.datetime.strptime(item['sale_date'], "%Y-%m-%d")
+            item['sale_date'] = date.strftime("%d.%m.%Y")
 
         bulkHolo = curr.execute(
             "SELECT item_type, SUM(bs.quantity) as quantity, SUM(bs.total_price) as total_price FROM bulk_sales bs "
@@ -189,10 +195,8 @@ class ReportService:
         styles = self._styles()
 
         #TODO: allow periodic report
-        #TODO: remove unnecessary data
         #TODO: format headers
         #TODO: format time
-        #TODO: improve header formating
         elements.append(
             Paragraph(
                 "Sales Report - {month}/{year}".format(month=month, year=year), styles["Heading1"]
@@ -220,7 +224,7 @@ class ReportService:
             elements.append(Spacer(1, 12))
             table = Table(
                 wrap_table_text(itemsData),
-                colWidths=[width * mm for width in [35, 24, 25, 14, 25, 25, 17, 20, 15, 25]],
+                colWidths=[width * mm for width in [35, 24, 14, 25, 25, 25, 25, 17, 20, 15, 17]],
                 repeatRows=1,
             )
             table.setStyle(self._table_style())
