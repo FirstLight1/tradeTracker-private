@@ -115,12 +115,12 @@ class ReportService:
                 c.language AS language,
                 si.sell_price AS sell_price,
                 s.sale_date AS sale_date,
-                CASE WHEN EXISTS (
-                    SELECT 1
+                (
+                    SELECT TRIM(grader || ' ' || COALESCE(grade_numeric, ''))
                     FROM grading_submission_cards gsc
                     WHERE gsc.card_id = c.id
-                      AND gsc.is_current = 1
-                ) THEN 1 ELSE 0 END AS is_graded,
+                    AND gsc.is_current = 1
+                ) as grade,
                 'card' AS item_type,
                 1 AS quantity,
                 NULL AS auction_id
@@ -139,7 +139,7 @@ class ReportService:
                 NULL AS language,
                 COALESCE(se.sell_price, se.market_value) AS sell_price,
                 s.sale_date AS sale_date,
-                0 AS is_graded,
+                ' ' as grade,
                 'sealed' AS item_type,
                 se.quantity AS quantity,
                 se.auction_id AS auction_id
@@ -152,8 +152,6 @@ class ReportService:
         )
 
         itemsData = [dict(row) for row in curr.fetchall()]
-        for item in itemsData:
-            item["is_graded"] = "True" if item["is_graded"] else ""
 
         bulkHolo = curr.execute(
             "SELECT item_type, SUM(bs.quantity) as quantity, SUM(bs.total_price) as total_price FROM bulk_sales bs "
