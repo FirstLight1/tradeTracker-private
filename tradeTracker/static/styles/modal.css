@@ -21,9 +21,7 @@
 
 /* Modal Content */
 .modal-content {
-    background: linear-gradient(135deg,
-            rgba(26, 31, 46, 0.95) 0%,
-            rgba(13, 17, 23, 0.95) 100%);
+    background: linear-gradient(135deg, rgba(26, 31, 46, 0.95) 0%, rgba(13, 17, 23, 0.95) 100%);
     padding: 30px;
     border: 1px solid rgba(127, 255, 212, 0.15);
     width: 80%;
@@ -89,8 +87,8 @@
     max-width: 100%;
 }
 
-.modal-content input[type="text"],
-.modal-content input[type="date"] {
+.modal-content input[type='text'],
+.modal-content input[type='date'] {
     padding: 10px 15px;
     background: var(--primary-light);
     color: var(--text-color);
@@ -104,10 +102,12 @@
     transition: all 0.3s ease;
 }
 
-.modal-content input[type="text"]:focus,
-.modal-content input[type="date"]:focus {
+.modal-content input[type='text']:focus,
+.modal-content input[type='date']:focus {
     border-color: var(--accent-cyan);
-    box-shadow: 0 0 18px var(--accent-cyan) inset, 0 0 8px var(--accent-cyan);
+    box-shadow:
+        0 0 18px var(--accent-cyan) inset,
+        0 0 8px var(--accent-cyan);
     outline: none;
 }
 
@@ -125,7 +125,9 @@
     color: var(--text-color);
     border: 1px solid var(--accent-cyan);
     border-radius: 15px;
-    font: 16px var(--primary-font), serif;
+    font:
+        16px var(--primary-font),
+        serif;
 }
 
 .grading-status-modal textarea {
@@ -135,11 +137,13 @@
 .grading-status-modal select:focus,
 .grading-status-modal textarea:focus {
     border-color: var(--accent-cyan);
-    box-shadow: 0 0 18px var(--accent-cyan) inset, 0 0 8px var(--accent-cyan);
+    box-shadow:
+        0 0 18px var(--accent-cyan) inset,
+        0 0 8px var(--accent-cyan);
     outline: none;
 }
 
-.grading-status-modal input[type="number"] {
+.grading-status-modal input[type='number'] {
     box-sizing: border-box;
     width: 100%;
     padding: 10px 15px;
@@ -147,7 +151,9 @@
     color: var(--text-color);
     border: 1px solid var(--accent-cyan);
     border-radius: 25px;
-    font: 16px var(--primary-font), serif;
+    font:
+        16px var(--primary-font),
+        serif;
 }
 
 .grading-status-modal .field-help {
@@ -189,7 +195,7 @@
     transform: scale(1.02);
 }
 
-.upload-file-label input[type="file"] {
+.upload-file-label input[type='file'] {
     display: none;
 }
 
@@ -250,10 +256,12 @@
 .modal-content .sales-invoice {
     margin-top: 20px;
     padding: 12px;
-    background: linear-gradient(135deg,
-            transparent 0%,
-            rgba(127, 255, 212, 0.1) 50%,
-            transparent 100%);
+    background: linear-gradient(
+        135deg,
+        transparent 0%,
+        rgba(127, 255, 212, 0.1) 50%,
+        transparent 100%
+    );
     color: var(--text-color);
     border: 1px solid rgba(127, 255, 212, 0.3);
     border-radius: 25px;
@@ -274,12 +282,16 @@
 
 .modal-content .generate-invoice:hover,
 .modal-content .sales-invoice:hover {
-    background: linear-gradient(135deg,
-            transparent 0%,
-            rgba(127, 255, 212, 0.2) 50%,
-            transparent 100%);
+    background: linear-gradient(
+        135deg,
+        transparent 0%,
+        rgba(127, 255, 212, 0.2) 50%,
+        transparent 100%
+    );
     letter-spacing: 0.25em;
-    box-shadow: 0 0 24px var(--glow-color), 0 0 12px var(--mist-color);
+    box-shadow:
+        0 0 24px var(--glow-color),
+        0 0 12px var(--mist-color);
     border-color: var(--accent-cyan);
 }
 
@@ -327,7 +339,9 @@
 .modal-content .delivery-method-select:focus,
 .modal-content .parcel-category-select:focus {
     border-color: var(--accent-cyan);
-    box-shadow: 0 0 18px var(--accent-cyan) inset, 0 0 8px var(--accent-cyan);
+    box-shadow:
+        0 0 18px var(--accent-cyan) inset,
+        0 0 8px var(--accent-cyan);
     outline: none;
 }
 
@@ -347,7 +361,9 @@
 
 .modal-content .insurance-value-input:focus {
     border-color: var(--accent-cyan);
-    box-shadow: 0 0 18px var(--accent-cyan) inset, 0 0 8px var(--accent-cyan);
+    box-shadow:
+        0 0 18px var(--accent-cyan) inset,
+        0 0 8px var(--accent-cyan);
     outline: none;
 }
 
@@ -364,7 +380,7 @@
     width: 100%;
 }
 
-.modal-content .invoice-buttons>button {
+.modal-content .invoice-buttons > button {
     width: 100%;
     max-width: none;
     min-width: 0;
@@ -396,10 +412,12 @@
 .modal-content .modal-buttons button {
     flex: 1;
     padding: 12px;
-    background: linear-gradient(135deg,
-            transparent 0%,
-            rgba(127, 255, 212, 0.1) 50%,
-            transparent 100%);
+    background: linear-gradient(
+        135deg,
+        transparent 0%,
+        rgba(127, 255, 212, 0.1) 50%,
+        transparent 100%
+    );
     color: var(--text-color);
     border: 1px solid rgba(127, 255, 212, 0.3);
     border-radius: 25px;
@@ -444,8 +462,8 @@
     width: 100%;
 }
 
-.modal-content .sealed-item-row>input,
-.modal-content .sealed-item-row>select {
+.modal-content .sealed-item-row > input,
+.modal-content .sealed-item-row > select {
     flex: 1 1 0;
     min-width: 90px;
     padding: 8px 12px;
@@ -461,23 +479,25 @@
     transition: all 0.3s ease;
 }
 
-.modal-content .sealed-item-row>input:focus,
-.modal-content .sealed-item-row>select:focus {
+.modal-content .sealed-item-row > input:focus,
+.modal-content .sealed-item-row > select:focus {
     border-color: var(--accent-cyan);
-    box-shadow: 0 0 18px var(--accent-cyan) inset, 0 0 8px var(--accent-cyan);
+    box-shadow:
+        0 0 18px var(--accent-cyan) inset,
+        0 0 8px var(--accent-cyan);
     outline: none;
 }
 
-.modal-content .sealed-item-row>.sealed-name-input {
+.modal-content .sealed-item-row > .sealed-name-input {
     flex: 2 1 120px;
 }
 
-.modal-content .sealed-item-row>.sealed-number-input {
+.modal-content .sealed-item-row > .sealed-number-input {
     flex: 1 1 90px;
 }
 
-.modal-content .sealed-item-row>.sealed-price-input,
-.modal-content .sealed-item-row>.sealed-market-value-input {
+.modal-content .sealed-item-row > .sealed-price-input,
+.modal-content .sealed-item-row > .sealed-market-value-input {
     flex: 0 1 80px;
     min-width: 70px;
 }
@@ -505,7 +525,6 @@
     background: rgba(127, 255, 212, 0.5);
 }
 
-
 /*Missing Ids Modal */
 .missingIdModal {
     position: fixed;
@@ -525,9 +544,7 @@
 }
 
 .modal-card-list {
-    background: linear-gradient(135deg,
-            rgba(26, 31, 46, 0.95) 0%,
-            rgba(13, 17, 23, 0.95) 100%);
+    background: linear-gradient(135deg, rgba(26, 31, 46, 0.95) 0%, rgba(13, 17, 23, 0.95) 100%);
     padding: 30px;
     border: 1px solid rgba(127, 255, 212, 0.15);
     width: 80%;

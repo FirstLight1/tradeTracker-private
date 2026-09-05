@@ -1,5 +1,10 @@
-import { renderAlert, renderServerErrors, downloadFile, updateInventoryValueAndTotalProfit } from "./utils/renderUtil.js";
-import { csrfFetch } from "./utils/sanitizers.js";
+import {
+    renderAlert,
+    renderServerErrors,
+    downloadFile,
+    updateInventoryValueAndTotalProfit,
+} from './utils/renderUtil.js';
+import { csrfFetch } from './utils/sanitizers.js';
 
 function bindSoldReportButton() {
     const salesBtn = document.querySelector('.sales-btn');
@@ -37,7 +42,7 @@ function bindSoldReportButton() {
             div.remove();
             if (restoreFocusTo?.isConnected) restoreFocusTo.focus();
         };
-        const handleKeydown = event => {
+        const handleKeydown = (event) => {
             if (event.key === 'Escape') close();
         };
         document.addEventListener('keydown', handleKeydown);
@@ -68,10 +73,17 @@ async function generateSoldReport(month, year, div, close) {
         if (!response.ok || contentType.includes('application/json')) {
             const err = await response.json().catch(() => ({}));
             ensureAlertContainer();
-            renderServerErrors(err, div, {
-                month: '#sold-month', 'sold-month': '#sold-month',
-                year: '#sold-year', 'sold-year': '#sold-year',
-            }, 'Unable to generate sold report');
+            renderServerErrors(
+                err,
+                div,
+                {
+                    month: '#sold-month',
+                    'sold-month': '#sold-month',
+                    year: '#sold-year',
+                    'sold-year': '#sold-year',
+                },
+                'Unable to generate sold report',
+            );
             return;
         }
         downloadFile(response);
@@ -148,7 +160,7 @@ function bindImportCSV(selector, type, root = document) {
         try {
             const response = await csrfFetch('/importCSV', {
                 method: 'POST',
-                body: formData
+                body: formData,
             });
             const data = await response.json();
             switch (data.status) {
@@ -171,11 +183,19 @@ function bindImportCSV(selector, type, root = document) {
                         const lines = [];
                         if (failed.length) {
                             lines.push(`${failed.length} order(s) failed to process:`);
-                            failed.forEach(item => lines.push(`- #${item.idOrder} ${item.name || ''} - ${item.reason || 'unknown error'}`));
+                            failed.forEach((item) =>
+                                lines.push(
+                                    `- #${item.idOrder} ${item.name || ''} - ${item.reason || 'unknown error'}`,
+                                ),
+                            );
                         }
                         if (rejected.length) {
-                            lines.push(`${rejected.length} order(s) skipped (items not in inventory):`);
-                            rejected.forEach(item => lines.push(`- #${item.idOrder} ${item.name || ''}`));
+                            lines.push(
+                                `${rejected.length} order(s) skipped (items not in inventory):`,
+                            );
+                            rejected.forEach((item) =>
+                                lines.push(`- #${item.idOrder} ${item.name || ''}`),
+                            );
                         }
                         renderHeaderAlert(lines.join('\n'), 'error');
                     } else {

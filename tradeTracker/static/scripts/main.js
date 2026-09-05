@@ -1,9 +1,27 @@
-import { renderField, renderAlert, renderServerErrors, clearFieldErrors, scrollOnLoad, replaceWithPElement, getInventoryValue, updateInventoryValueAndTotalProfit, appendEuroSign, downloadFile, createNewItem } from "./utils/renderUtil.js";
-import { CardStruct, queue, CartLine } from "./utils/classes.js";
-import { escapeHtml, sanitizePlainText, sanitizeAttrValue, sanitizeNumericId, sanitizeClassToken, csrfFetch } from "./utils/sanitizers.js";
-import { searchCard } from "./utils/searchApi.js";
-import "./headerActions.js";
-
+import {
+    renderField,
+    renderAlert,
+    renderServerErrors,
+    clearFieldErrors,
+    scrollOnLoad,
+    replaceWithPElement,
+    getInventoryValue,
+    updateInventoryValueAndTotalProfit,
+    appendEuroSign,
+    downloadFile,
+    createNewItem,
+} from './utils/renderUtil.js';
+import { CardStruct, queue, CartLine } from './utils/classes.js';
+import {
+    escapeHtml,
+    sanitizePlainText,
+    sanitizeAttrValue,
+    sanitizeNumericId,
+    sanitizeClassToken,
+    csrfFetch,
+} from './utils/sanitizers.js';
+import { searchCard } from './utils/searchApi.js';
+import './headerActions.js';
 
 function paymentTypeSelect(className, defaultValue = '') {
     return `
@@ -17,7 +35,7 @@ function paymentTypeSelect(className, defaultValue = '') {
         <option value="Dobierka" ${defaultValue === 'Dobierka' ? 'selected' : ''}>Dobierka</option>
         <option value="Online platobný systém" ${defaultValue === 'Online platobný systém' ? 'selected' : ''}>Online platobný systém</option>
         </select>
-    `
+    `;
 }
 
 function languageSelect(className = 'language-select', dataField = '', defaultValue = 'en') {
@@ -53,7 +71,7 @@ function paymentTypeRow(type = '', amount = 0, className = 'payment-row') {
         <input type="number" class="payment-amount-input" step="0.01" min="0" placeholder="Amount" value="${amount}" autocomplete="off">
         <button class="remove-payment-btn">×</button>
     </div>
-    `
+    `;
 }
 
 function parsePaymentMethods(paymentMethodData) {
@@ -64,12 +82,14 @@ function parsePaymentMethods(paymentMethodData) {
         if (Array.isArray(parsed)) return parsed;
     } catch (e) {
         // Old format - space separated
-        return paymentMethodData.trim().split(' ').map(type => ({ type: type, amount: 0 }));
+        return paymentMethodData
+            .trim()
+            .split(' ')
+            .map((type) => ({ type: type, amount: 0 }));
     }
 
     return [];
 }
-
 
 const ALLOWED_PAYMENT_TYPES = new Set([
     'Hotovosť',
@@ -78,7 +98,7 @@ const ALLOWED_PAYMENT_TYPES = new Set([
     'Bankový prevod',
     'Online platba',
     'Dobierka',
-    'Online platobný systém'
+    'Online platobný systém',
 ]);
 
 function validatePayments(payments) {
@@ -112,11 +132,13 @@ function formatPaymentDisplay(payments) {
     if (!payments || payments.length === 0) return 'No payment method';
 
     // Escape HTML to prevent XSS, then join with <br>
-    return payments.map(p => {
-        const type = escapeHtml(p.type || '');
-        const amount = parseFloat(p.amount || 0).toFixed(2);
-        return `${type}: ${amount}€`;
-    }).join('<br>');
+    return payments
+        .map((p) => {
+            const type = escapeHtml(p.type || '');
+            const amount = parseFloat(p.amount || 0).toFixed(2);
+            return `${type}: ${amount}€`;
+        })
+        .join('<br>');
 }
 
 async function updatePaymentMethod(auctionId, payments) {
@@ -124,16 +146,15 @@ async function updatePaymentMethod(auctionId, payments) {
         const response = await csrfFetch(`/updatePaymentMethod/${auctionId}`, {
             method: 'PATCH',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ payments: payments })
-        })
+            body: JSON.stringify({ payments: payments }),
+        });
         const data = await response.json();
         if (data.status === 'success') {
             return true;
         }
-    }
-    catch (error) {
+    } catch (error) {
         renderAlert('Error updating payment method: ' + error, 'error');
         return false;
     }
@@ -141,8 +162,10 @@ async function updatePaymentMethod(auctionId, payments) {
 
 function calculateCardBuyPrice(cards) {
     let totalBuyPrice = 0;
-    cards.forEach(card => {
-        const buyPrice = Number(card.querySelector('.card-price').textContent.replace('€', '').trim());
+    cards.forEach((card) => {
+        const buyPrice = Number(
+            card.querySelector('.card-price').textContent.replace('€', '').trim(),
+        );
         totalBuyPrice += buyPrice;
     });
     return totalBuyPrice.toFixed(2);
@@ -151,7 +174,7 @@ function calculateCardBuyPrice(cards) {
 function calculateSealedBuyPrice(sealed) {
     let totalBuyPrice = 0;
     console.log(sealed);
-    sealed.forEach(s => {
+    sealed.forEach((s) => {
         const buyPrice = Number(s.price);
         totalBuyPrice += buyPrice;
     });
@@ -167,28 +190,27 @@ function getInputValueAndPatch(value, element, dataset, cardId) {
 }
 
 async function patchValue(id, value, dataset) {
-    if (value === " ") {
+    if (value === ' ') {
         value = null;
     }
     if (!value === null || !value === undefined) {
         value = String(value);
         value = value.replace('€', '');
-
     }
     try {
         const response = await csrfFetch(`/update/${id}`, {
             method: 'PATCH',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ field: dataset, value: value })
+            body: JSON.stringify({ field: dataset, value: value }),
         });
         const data = await response.json();
         if (!(data.status === 'success')) {
             renderAlert('Failed to update: ' + dataset, 'error');
             return;
         } else {
-            return
+            return;
         }
     } catch (e) {
         renderAlert('Error updating value: ' + e + 'Error code: Mx01', 'error');
@@ -200,7 +222,7 @@ async function patchSealedLanguage(sid, language) {
         const response = await csrfFetch(`/updateSealed/${sid}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ field: 'language', value: language })
+            body: JSON.stringify({ field: 'language', value: language }),
         });
         const data = await response.json();
         if (response.ok && data.status === 'success') return true;
@@ -237,13 +259,20 @@ function enableSealedLanguageEditing(sealedDiv) {
         };
 
         select.addEventListener('click', (selectEvent) => selectEvent.stopPropagation());
-        select.addEventListener('change', async () => {
-            saving = true;
-            select.disabled = true;
-            const selectedValue = select.value;
-            const saved = await patchSealedLanguage(sealedDiv.getAttribute('sid'), selectedValue);
-            finishEditing(saved ? selectedValue : previousValue);
-        }, { once: true });
+        select.addEventListener(
+            'change',
+            async () => {
+                saving = true;
+                select.disabled = true;
+                const selectedValue = select.value;
+                const saved = await patchSealedLanguage(
+                    sealedDiv.getAttribute('sid'),
+                    selectedValue,
+                );
+                finishEditing(saved ? selectedValue : previousValue);
+            },
+            { once: true },
+        );
         select.addEventListener('blur', () => {
             if (!saving) finishEditing(previousValue);
         });
@@ -257,15 +286,15 @@ function deleteAuction(id, div) {
     csrfFetch(`/deleteAuction/${id}`, {
         method: 'DELETE',
     })
-        .then(response => response.json())
-        .then(data => {
+        .then((response) => response.json())
+        .then((data) => {
             if (data.status === 'success') {
                 div.remove();
             } else {
                 renderAlert('Error deleting auction: ' + JSON.stringify(data), 'error');
             }
         })
-        .catch(error => {
+        .catch((error) => {
             renderAlert('Error deleting auction: ' + error, 'error');
         });
 }
@@ -314,20 +343,20 @@ async function updateAuction(auctionId, value, field) {
         const response = await csrfFetch(`/updateAuction/${auctionId}`, {
             method: 'PATCH',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ field: field, value: value })
+            body: JSON.stringify({ field: field, value: value }),
         });
         const data = await response.json();
         if (!(data.status === 'success')) {
             renderAlert('Error updating auction: ' + JSON.stringify(data), 'error');
             return;
         } else {
-            return
+            return;
         }
     } catch (error) {
         renderAlert('Error updating auction: ' + error + 'Mx04', 'error');
-        return
+        return;
     }
 }
 
@@ -383,7 +412,7 @@ function createSealedModal(sid, auctionId, initialValue, sourceName, sourceLangu
     rowsContainer.append(firstRow);
     createNewItem(firstRow, {
         triggerSelector: '.sealed-market-value-input',
-        onTrigger: (el) => window.handleSealedInput(el, rowsContainer)
+        onTrigger: (el) => window.handleSealedInput(el, rowsContainer),
     });
 
     const addLineButton = document.createElement('button');
@@ -395,7 +424,7 @@ function createSealedModal(sid, auctionId, initialValue, sourceName, sourceLangu
         rowsContainer.appendChild(newRow);
         createNewItem(newRow, {
             triggerSelector: '.sealed-market-value-input',
-            onTrigger: (el) => window.handleSealedInput(el, rowsContainer)
+            onTrigger: (el) => window.handleSealedInput(el, rowsContainer),
         });
     });
 
@@ -406,14 +435,22 @@ function createSealedModal(sid, auctionId, initialValue, sourceName, sourceLangu
     confirmButton.addEventListener('click', async () => {
         const cards = [];
         const sealed = [];
-        rowsContainer.querySelectorAll('.sealed-item-row').forEach(div => {
+        rowsContainer.querySelectorAll('.sealed-item-row').forEach((div) => {
             const item = new CardStruct();
             item.cardName = DOMPurify.sanitize(div.querySelector('.sealed-name-input').value);
             item.cardNum = DOMPurify.sanitize(div.querySelector('.sealed-number-input').value);
-            item.condition = DOMPurify.sanitize(div.querySelector('.sealed-condition-select').value);
+            item.condition = DOMPurify.sanitize(
+                div.querySelector('.sealed-condition-select').value,
+            );
             item.language = DOMPurify.sanitize(div.querySelector('.sealed-language-select').value);
-            item.buyPrice = Number(DOMPurify.sanitize(div.querySelector('.sealed-price-input').value.replace('€', '')));
-            item.marketValue = Number(DOMPurify.sanitize(div.querySelector('.sealed-market-value-input').value.replace('€', '')));
+            item.buyPrice = Number(
+                DOMPurify.sanitize(div.querySelector('.sealed-price-input').value.replace('€', '')),
+            );
+            item.marketValue = Number(
+                DOMPurify.sanitize(
+                    div.querySelector('.sealed-market-value-input').value.replace('€', ''),
+                ),
+            );
             item.soldDate = null;
             if (item.marketValue == '') return;
             if (item.cardNum !== '') {
@@ -427,7 +464,11 @@ function createSealedModal(sid, auctionId, initialValue, sourceName, sourceLangu
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ openedItem: { id: sid, initialValue: initialValue }, sealed: sealed, cards: cards })
+            body: JSON.stringify({
+                openedItem: { id: sid, initialValue: initialValue },
+                sealed: sealed,
+                cards: cards,
+            }),
         });
         const result = await response.json();
         if (result.status === 'success') {
@@ -515,7 +556,7 @@ function gradingModal(cardId) {
     const gradingForm = modal.querySelector('.direct-grading-form');
     const gradeNumeric = modal.querySelector('#grading-grade-numeric');
     const gradeLabel = modal.querySelector('#grading-grade-label');
-    gradingForm.addEventListener('submit', async event => {
+    gradingForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         clearFieldErrors(gradingForm);
         const grader = modal.querySelector('#grading-grader');
@@ -532,7 +573,8 @@ function gradingModal(cardId) {
         }
         if (Object.keys(errors).length) {
             renderServerErrors({ errors }, gradingForm, {
-                grader: '#grading-grader', grade_numeric: '#grading-grade-numeric',
+                grader: '#grading-grader',
+                grade_numeric: '#grading-grade-numeric',
                 post_grade_market_value: '#grading-market-value',
             });
             return;
@@ -565,11 +607,19 @@ function gradingModal(cardId) {
             });
             const result = await response.json().catch(() => ({}));
             if (!response.ok) {
-                renderServerErrors(result, gradingForm, {
-                    grader: '#grading-grader', grade_numeric: '#grading-grade-numeric',
-                    grade_label: '#grading-grade-label', qualifier: '#grading-qualifier',
-                    cert_number: '#grading-cert-number', post_grade_market_value: '#grading-market-value',
-                }, 'Unable to save card grading');
+                renderServerErrors(
+                    result,
+                    gradingForm,
+                    {
+                        grader: '#grading-grader',
+                        grade_numeric: '#grading-grade-numeric',
+                        grade_label: '#grading-grade-label',
+                        qualifier: '#grading-qualifier',
+                        cert_number: '#grading-cert-number',
+                        post_grade_market_value: '#grading-market-value',
+                    },
+                    'Unable to save card grading',
+                );
                 confirmButton.disabled = false;
                 confirmButton.textContent = 'Confirm';
                 return;
@@ -598,25 +648,25 @@ function cardConditionDisplay(card) {
     }
     if (card.grading_state === 'graded') {
         const fullGrade = [card.grader, card.grade_numeric, card.grade_label, card.qualifier]
-            .filter(value => value !== null && value !== undefined && value !== '')
+            .filter((value) => value !== null && value !== undefined && value !== '')
             .join(' ');
         return fullGrade || 'Graded';
     }
     return card.condition || 'Unknown';
 }
 
-window.handleSealedInput = function(input, container) {
+window.handleSealedInput = function (input, container) {
     window.handleCardInput(input, {
         itemSelector: '.sealed-item-row',
         container,
-        triggerSelector: '.sealed-market-value-input'
+        triggerSelector: '.sealed-market-value-input',
     });
-}
+};
 
 function cartValue(cartContent) {
     let sum = 0.0;
     if (cartContent.cards) {
-        cartContent.cards.forEach(card => {
+        cartContent.cards.forEach((card) => {
             if (card.marketValue) {
                 sum += Number(card.marketValue);
             }
@@ -624,11 +674,10 @@ function cartValue(cartContent) {
     }
 
     if (cartContent.sealed) {
-        cartContent.sealed.forEach(item => {
+        cartContent.sealed.forEach((item) => {
             sum += Number(item.marketValue) * (Number(item.quantity) || 1);
-        })
-    };
-
+        });
+    }
 
     if (cartContent.bulkItem) {
         sum += Number(cartContent.bulkItem.sell_price);
@@ -647,7 +696,9 @@ function cartValue(cartContent) {
 async function changeCardPricesBasedOnAuctionPrice(auctionTab) {
     const auctionId = auctionTab.getAttribute('data-id');
     let auctionPrice = auctionTab.querySelector('.auction-price').textContent.replace('€', '');
-    const response = await csrfFetch(`/recalculateCardPrices/${auctionId}/${auctionPrice}`, { method: 'POST' });
+    const response = await csrfFetch(`/recalculateCardPrices/${auctionId}/${auctionPrice}`, {
+        method: 'POST',
+    });
     const data = await response.json();
     if (data.status == 'success') {
         window.location.reload();
@@ -656,7 +707,6 @@ async function changeCardPricesBasedOnAuctionPrice(auctionTab) {
     } else if (data.status == 'no_cards') {
         renderAlert('No cards found in this auction to recalculate prices.', 'message');
     }
-
 }
 
 const existingIDs = new Set();
@@ -664,8 +714,8 @@ const cartLines = [];
 
 function rebuildExistingIDs() {
     existingIDs.clear();
-    cartLines.forEach(line => {
-        line.cardIds.forEach(id => existingIDs.add(id));
+    cartLines.forEach((line) => {
+        line.cardIds.forEach((id) => existingIDs.add(id));
     });
 }
 
@@ -681,8 +731,14 @@ function renderCartLine(line) {
 
     const updateDisplay = () => {
         const gradeDisplay = line.grading
-            ? [line.grading.grader, line.grading.grade_numeric, line.grading.grade_label, line.grading.qualifier]
-                .filter(value => value !== null && value !== undefined && value !== '').join(' ') || 'Graded'
+            ? [
+                  line.grading.grader,
+                  line.grading.grade_numeric,
+                  line.grading.grade_label,
+                  line.grading.qualifier,
+              ]
+                  .filter((value) => value !== null && value !== undefined && value !== '')
+                  .join(' ') || 'Graded'
             : line.condition;
         const minusDisabled = line.cardIds.length <= 1 ? 'disabled' : '';
         const plusDisabled = !line.canIncrement ? 'disabled' : '';
@@ -737,7 +793,7 @@ function attachCartLineListeners(cardDiv, line, updateDisplay) {
         if (line.cardIds.length <= 1) {
             // Remove entire line
             const removedIds = line.removeAll();
-            removedIds.forEach(id => existingIDs.delete(id));
+            removedIds.forEach((id) => existingIDs.delete(id));
             const idx = cartLines.indexOf(line);
             if (idx !== -1) cartLines.splice(idx, 1);
             cardDiv.remove();
@@ -776,7 +832,7 @@ function attachCartLineListeners(cardDiv, line, updateDisplay) {
     const removeBtn = cardDiv.querySelector('.remove-from-cart');
     removeBtn.addEventListener('click', () => {
         const removedIds = line.removeAll();
-        removedIds.forEach(id => existingIDs.delete(id));
+        removedIds.forEach((id) => existingIDs.delete(id));
         const idx = cartLines.indexOf(line);
         if (idx !== -1) cartLines.splice(idx, 1);
         cardDiv.remove();
@@ -795,7 +851,7 @@ function saveCartContentToSession() {
     const exEl = document.querySelector('.ex-cart-content');
 
     // Persist cartLines via toJSON
-    let cartLinesData = cartLines.map(line => line.toJSON());
+    let cartLinesData = cartLines.map((line) => line.toJSON());
 
     let sealedData = [];
     if (sealedEl.length > 0) {
@@ -805,38 +861,42 @@ function saveCartContentToSession() {
                 auctionId: item.getAttribute('auction_id'),
                 name: item.querySelector('.sealed-name').textContent,
                 language: item.getAttribute('data-language') || 'en',
-                marketValue: item.querySelector('.sealed-price').textContent.replace('€', '').replace(',', '.').trim(),
+                marketValue: item
+                    .querySelector('.sealed-price')
+                    .textContent.replace('€', '')
+                    .replace(',', '.')
+                    .trim(),
                 quantity: item.querySelector('.sealed-qty-display')?.textContent || '1',
-                available: item.getAttribute('data-available') || ''
-            }
+                available: item.getAttribute('data-available') || '',
+            };
             sealedData.push(sealed);
         }
     }
-    let bulkData = {}
+    let bulkData = {};
     if (bulkEl.children.length > 0) {
         bulkData = {
             type: 'bulk',
             quantity: bulkEl.querySelector('.bulk-quantity').textContent.replace('q: ', ''),
-            price: bulkEl.querySelector('.bulk-sell-price').value || ''
-        }
+            price: bulkEl.querySelector('.bulk-sell-price').value || '',
+        };
     }
 
-    let holoData = {}
+    let holoData = {};
     if (holoEl.children.length > 0) {
         holoData = {
             type: 'holo',
             quantity: holoEl.querySelector('.holo-quantity').textContent.replace('q: ', ''),
-            price: holoEl.querySelector('.holo-sell-price').value || ''
-        }
+            price: holoEl.querySelector('.holo-sell-price').value || '',
+        };
     }
 
-    let exData = {}
+    let exData = {};
     if (exEl.children.length > 0) {
         exData = {
             type: 'ex',
             quantity: exEl.querySelector('.ex-quantity').textContent.replace('q: ', ''),
-            price: exEl.querySelector('.ex-sell-price').value || ''
-        }
+            price: exEl.querySelector('.ex-sell-price').value || '',
+        };
     }
 
     const cartData = {
@@ -844,7 +904,7 @@ function saveCartContentToSession() {
         sealed: sealedData,
         bulk: bulkData,
         holo: holoData,
-        ex: exData
+        ex: exData,
     };
 
     sessionStorage.setItem('cartData', JSON.stringify(cartData));
@@ -863,7 +923,7 @@ function loadCartContentFromSession() {
 
         // Restore cart lines
         if (cartData.cartLines && cartData.cartLines.length > 0) {
-            cartData.cartLines.forEach(data => {
+            cartData.cartLines.forEach((data) => {
                 const line = CartLine.fromJSON(data);
                 cartLines.push(line);
                 renderCartLine(line);
@@ -873,17 +933,20 @@ function loadCartContentFromSession() {
 
         // Restore sealed items
         if (cartData.sealed && cartData.sealed.length > 0) {
-            cartData.sealed.forEach(item => {
+            cartData.sealed.forEach((item) => {
                 // Backward compat: older sessions stored `price` (with €) instead of `marketValue`
-                const marketValue = item.marketValue != null
-                    ? item.marketValue
-                    : (item.price ? item.price.replace('€', '').replace(',', '.').trim() : '');
+                const marketValue =
+                    item.marketValue != null
+                        ? item.marketValue
+                        : item.price
+                          ? item.price.replace('€', '').replace(',', '.').trim()
+                          : '';
                 addSealedToCart(
                     { name: item.name, language: item.language || 'en', market_value: marketValue },
                     item.sid,
                     item.auctionId || null,
                     Number(item.quantity) || 1,
-                    item.available ? Number(item.available) : null
+                    item.available ? Number(item.available) : null,
                 );
             });
         }
@@ -956,9 +1019,11 @@ function loadCartContentFromSession() {
                 saveCartContentToSession();
             });
         }
-
     } catch (e) {
-        renderAlert('Error loading cart data from sessionStorage: ' + e + 'Error code: Mx03', 'error');
+        renderAlert(
+            'Error loading cart data from sessionStorage: ' + e + 'Error code: Mx03',
+            'error',
+        );
     }
 }
 
@@ -980,12 +1045,12 @@ function saveModalDataToSession() {
         deliveryMethod: document.querySelector('.delivery-method-select')?.value || '',
         parcelCategory: document.querySelector('.parcel-category-select')?.value || '',
         insuranceValue: document.querySelector('.insurance-value-input')?.value || '',
-        paymentMethods: []
+        paymentMethods: [],
     };
 
     // Collect all payment methods
     const paymentDivs = document.querySelectorAll('.payment-div');
-    paymentDivs.forEach(div => {
+    paymentDivs.forEach((div) => {
         const paymentType = div.querySelector('.payment-type')?.value || '';
         const amount = div.querySelector('.amount, .amunt')?.value || '';
         modalData.paymentMethods.push({ type: paymentType, amount: amount });
@@ -1016,7 +1081,8 @@ function loadModalDataFromSession(recieverDiv) {
         if (clientCity) clientCity.value = DOMPurify.sanitize(modalData.clientCity);
         if (clientCountry) clientCountry.value = DOMPurify.sanitize(modalData.clientCountry);
         if (clientZip) clientZip.value = DOMPurify.sanitize(modalData.clientZip);
-        if (paybackDate && modalData.paybackDate) paybackDate.value = DOMPurify.sanitize(modalData.paybackDate);
+        if (paybackDate && modalData.paybackDate)
+            paybackDate.value = DOMPurify.sanitize(modalData.paybackDate);
         if (priceInput) priceInput.value = DOMPurify.sanitize(modalData.price);
         if (shippingPrice) shippingPrice.value = DOMPurify.sanitize(modalData.shippingPrice);
 
@@ -1037,8 +1103,10 @@ function loadModalDataFromSession(recieverDiv) {
                     </select>
                     <input type='number' placeholder="Insurance value" class="insurance-value-input">
                     `;
-                    const parcelCategorySelect = deliveryMethodInfo.querySelector('.parcel-category-select');
-                    const insuranceValueInput = deliveryMethodInfo.querySelector('.insurance-value-input');
+                    const parcelCategorySelect =
+                        deliveryMethodInfo.querySelector('.parcel-category-select');
+                    const insuranceValueInput =
+                        deliveryMethodInfo.querySelector('.insurance-value-input');
                     if (parcelCategorySelect && modalData.parcelCategory) {
                         parcelCategorySelect.value = DOMPurify.sanitize(modalData.parcelCategory);
                     }
@@ -1046,7 +1114,7 @@ function loadModalDataFromSession(recieverDiv) {
                         insuranceValueInput.value = DOMPurify.sanitize(modalData.insuranceValue);
                     }
                     const newInputs = deliveryMethodInfo.querySelectorAll('input, select');
-                    newInputs.forEach(input => {
+                    newInputs.forEach((input) => {
                         input.addEventListener('input', saveModalDataToSession);
                         input.addEventListener('change', saveModalDataToSession);
                     });
@@ -1064,7 +1132,8 @@ function loadModalDataFromSession(recieverDiv) {
                 const firstSelect = firstPaymentDiv.querySelector('.payment-type');
                 const firstAmount = firstPaymentDiv.querySelector('.amount');
                 if (firstSelect) firstSelect.value = modalData.paymentMethods[0].type;
-                if (firstAmount) firstAmount.value = DOMPurify.sanitize(modalData.paymentMethods[0].amount);
+                if (firstAmount)
+                    firstAmount.value = DOMPurify.sanitize(modalData.paymentMethods[0].amount);
             }
 
             // Add additional payment methods (if any)
@@ -1083,14 +1152,17 @@ function loadModalDataFromSession(recieverDiv) {
 
                 // Add event listeners to restored inputs
                 const newInputs = newSelectDiv.querySelectorAll('input, select');
-                newInputs.forEach(input => {
+                newInputs.forEach((input) => {
                     input.addEventListener('input', saveModalDataToSession);
                     input.addEventListener('change', saveModalDataToSession);
                 });
             }
         }
     } catch (e) {
-        renderAlert('Error loading modal data from sessionStorage: ' + e + 'Error code: Mx05', 'error');
+        renderAlert(
+            'Error loading modal data from sessionStorage: ' + e + 'Error code: Mx05',
+            'error',
+        );
     }
 }
 
@@ -1098,7 +1170,14 @@ function clearModalDataFromSession() {
     sessionStorage.removeItem('invoiceModalData');
 }
 
-function deleteCartContent(contentDiv, bulkCartContent, holoCartContent, exCartContent, sealedContent, recieverDiv = null) {
+function deleteCartContent(
+    contentDiv,
+    bulkCartContent,
+    holoCartContent,
+    exCartContent,
+    sealedContent,
+    recieverDiv = null,
+) {
     contentDiv.innerHTML = '<p>Your cart is empty</p>';
     bulkCartContent.innerHTML = '';
     holoCartContent.innerHTML = '';
@@ -1124,41 +1203,54 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
     // Collect all payment methods (every time Confirm is clicked)
     const paymentDivs = recieverDiv.querySelectorAll('.payment-div');
     const paymentMethods = [];
-    paymentDivs.forEach(div => {
+    paymentDivs.forEach((div) => {
         const paymentType = div.querySelector('.payment-type')?.value;
         if (!paymentType || paymentType === '' || paymentType === ' ') {
             return;
         }
         const payment = {
             type: paymentType,
-            amount: parseFloat(div.querySelector('.amount')?.value.replace(',', '.')) || 0
+            amount: parseFloat(div.querySelector('.amount')?.value.replace(',', '.')) || 0,
         };
         paymentMethods.push(payment);
-    })
+    });
 
     // Get values by specific class names (every time)
     const clientName = DOMPurify.sanitize(recieverDiv.querySelector('.client-name')?.value) || '';
-    const clientAddress = DOMPurify.sanitize(recieverDiv.querySelector('.client-address')?.value) || '';
+    const clientAddress =
+        DOMPurify.sanitize(recieverDiv.querySelector('.client-address')?.value) || '';
     const clientCity = DOMPurify.sanitize(recieverDiv.querySelector('.client-city')?.value) || '';
-    const clientCountry = DOMPurify.sanitize(recieverDiv.querySelector('.client-country')?.value) || '';
+    const clientCountry =
+        DOMPurify.sanitize(recieverDiv.querySelector('.client-country')?.value) || '';
     const clientZip = DOMPurify.sanitize(recieverDiv.querySelector('.client-zip')?.value) || '';
     const paybackDate = DOMPurify.sanitize(recieverDiv.querySelector('.date-input')?.value) || '';
     const shippingWay = 'Doprava / Poštovné – samostatná služba';
-    const shippingPrice = DOMPurify.sanitize(recieverDiv.querySelector('.shipping-price')?.value.replace(',', '.')) || '';
-    const deliveryMethod = DOMPurify.sanitize(recieverDiv.querySelector('.delivery-method-select')?.value) || '';
-    const parcelCategory = DOMPurify.sanitize(recieverDiv.querySelector('.parcel-category-select')?.value) || '';
-    const insuranceValue = DOMPurify.sanitize(recieverDiv.querySelector('.insurance-value-input')?.value) || '';
+    const shippingPrice =
+        DOMPurify.sanitize(recieverDiv.querySelector('.shipping-price')?.value.replace(',', '.')) ||
+        '';
+    const deliveryMethod =
+        DOMPurify.sanitize(recieverDiv.querySelector('.delivery-method-select')?.value) || '';
+    const parcelCategory =
+        DOMPurify.sanitize(recieverDiv.querySelector('.parcel-category-select')?.value) || '';
+    const insuranceValue =
+        DOMPurify.sanitize(recieverDiv.querySelector('.insurance-value-input')?.value) || '';
 
     // Calculate total payment amount from payment methods
     const paymentTotal = paymentMethods.reduce((sum, payment) => sum + payment.amount, 0);
-    const cartValueInput = DOMPurify.sanitize(document.querySelector('.price-input').value.replace(',', '.')) || cartVal;
+    const cartValueInput =
+        DOMPurify.sanitize(document.querySelector('.price-input').value.replace(',', '.')) ||
+        cartVal;
     const expectedTotal = parseFloat(cartValueInput) + Number(shippingPrice);
 
     // Validate payment amounts match cart total
     if (paymentMethods.length > 1) {
         // If multiple payment methods, check that sum matches total
-        if (Math.abs(paymentTotal - expectedTotal) > 0.01) { // Allow 1 cent tolerance for rounding
-            renderAlert(`Payment amount (${paymentTotal.toFixed(2)}€) is not equal to total cart value (${expectedTotal.toFixed(2)}€)`, 'error');
+        if (Math.abs(paymentTotal - expectedTotal) > 0.01) {
+            // Allow 1 cent tolerance for rounding
+            renderAlert(
+                `Payment amount (${paymentTotal.toFixed(2)}€) is not equal to total cart value (${expectedTotal.toFixed(2)}€)`,
+                'error',
+            );
             return;
         }
     } else if (paymentMethods.length === 1) {
@@ -1191,7 +1283,7 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
     }
     cartContent.recieverInfo = recieverInfo;
 
-    if (shippingPrice !== "") {
+    if (shippingPrice !== '') {
         const shipping = {
             shippingWay: shippingWay,
             shippingPrice: shippingPrice.replace(',', '.'),
@@ -1203,7 +1295,7 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
         const delivery = {
             deliveryMethod: deliveryMethod,
             parcelCategory: parcelCategory,
-            insuranceValue: insuranceValue
+            insuranceValue: insuranceValue,
         };
         cartContent.delivery = delivery;
     }
@@ -1214,11 +1306,18 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
         const holoSub = cartContent.holoItem ? Number(cartContent.holoItem.sell_price) : 0;
         const exSub = cartContent.exItem ? Number(cartContent.exItem.sell_price) : 0;
         const fixedSubtotal = bulkSub + holoSub + exSub;
-        const cardsSub = cartContent.cards ? cartContent.cards.reduce((sum, c) => sum + Number(c.marketValue), 0) : 0;
-        const sealedSub = cartContent.sealed ? cartContent.sealed.reduce(
-            (sum, item) => sum + Number(String(item.marketValue).replace('€', '')) * (Number(item.quantity) || 1),
-            0
-        ) : 0;
+        const cardsSub = cartContent.cards
+            ? cartContent.cards.reduce((sum, c) => sum + Number(c.marketValue), 0)
+            : 0;
+        const sealedSub = cartContent.sealed
+            ? cartContent.sealed.reduce(
+                  (sum, item) =>
+                      sum +
+                      Number(String(item.marketValue).replace('€', '')) *
+                          (Number(item.quantity) || 1),
+                  0,
+              )
+            : 0;
 
         const adjustableSubtotal = cardsSub + sealedSub;
         const targetAdjustable = cartValueInput - fixedSubtotal;
@@ -1226,8 +1325,11 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
         if (adjustableSubtotal > 0) {
             const scale = targetAdjustable / adjustableSubtotal;
             const allItems = [
-                ...(cartContent.cards || []).map(item => ({ item, quantity: 1 })),
-                ...(cartContent.sealed || []).map(item => ({ item, quantity: Number(item.quantity) || 1 }))
+                ...(cartContent.cards || []).map((item) => ({ item, quantity: 1 })),
+                ...(cartContent.sealed || []).map((item) => ({
+                    item,
+                    quantity: Number(item.quantity) || 1,
+                })),
             ];
 
             let distributed = 0;
@@ -1245,14 +1347,13 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
     }
     cartContent.recieverInfo.total = Number(cartValue(cartContent));
     if (Object.keys(cartContent).length !== 0) {
-        const response = await csrfFetch(`/createSale/${kind}`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(cartContent),
-            });
+        const response = await csrfFetch(`/createSale/${kind}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(cartContent),
+        });
 
         const contentType = response.headers.get('content-type') || '';
         if (!response.ok || contentType.includes('application/json')) {
@@ -1261,7 +1362,7 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
             return false;
         }
         try {
-            downloadFile(response)
+            downloadFile(response);
             return true;
         } catch (e) {
             renderAlert('Error: ' + e, 'error');
@@ -1270,16 +1371,16 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
 }
 
 function shoppingCart() {
-    const contentDiv = document.querySelector(".cart-content");
-    const bulkCartDiv = document.querySelector(".bulk-cart-content");
-    const holoCartDiv = document.querySelector(".holo-cart-content");
-    const exCartDiv = document.querySelector(".ex-cart-content");
+    const contentDiv = document.querySelector('.cart-content');
+    const bulkCartDiv = document.querySelector('.bulk-cart-content');
+    const holoCartDiv = document.querySelector('.holo-cart-content');
+    const exCartDiv = document.querySelector('.ex-cart-content');
     const sealedContent = document.querySelector('.sealed-content');
 
     if (contentDiv.childElementCount === 0) {
         contentDiv.innerHTML = '<p>Your cart is empty</p>';
     }
-    const cartDiv = document.querySelector(".shopping-cart");
+    const cartDiv = document.querySelector('.shopping-cart');
     if (cartDiv) {
         cartDiv.addEventListener('click', (e) => {
             if (e.target === cartDiv) {
@@ -1320,28 +1421,34 @@ function shoppingCart() {
         });
     }
 
-
-    const confirmButton = document.querySelector(".confirm-btn");
+    const confirmButton = document.querySelector('.confirm-btn');
     confirmButton.addEventListener('click', async () => {
         const cartContent = {};
-        if (contentDiv.childElementCount === 1 && contentDiv.children[0].tagName === 'P' && bulkCartDiv.childElementCount === 0 && holoCartDiv.childElementCount === 0 && exCartDiv.childElementCount === 0 && sealedContent.childElementCount === 0) {
+        if (
+            contentDiv.childElementCount === 1 &&
+            contentDiv.children[0].tagName === 'P' &&
+            bulkCartDiv.childElementCount === 0 &&
+            holoCartDiv.childElementCount === 0 &&
+            exCartDiv.childElementCount === 0 &&
+            sealedContent.childElementCount === 0
+        ) {
             return;
         }
         let recieverDiv = document.querySelector('.reciever-div');
         if (recieverDiv) {
-            return
+            return;
         }
         // Expand cartLines into flat cards array for invoice
         let cards = [];
-        cartLines.forEach(line => {
+        cartLines.forEach((line) => {
             cards.push(...line.toInvoiceItems());
         });
         cartContent.cards = cards;
 
-        const sealedItem = sealedContent.querySelectorAll(".sealed-item-cart");
+        const sealedItem = sealedContent.querySelectorAll('.sealed-item-cart');
         if (sealedItem) {
             let sealed = [];
-            sealedItem.forEach(item => {
+            sealedItem.forEach((item) => {
                 const sid = item.getAttribute('sid');
                 const auctionId = item.getAttribute('auction_id') || null;
 
@@ -1350,67 +1457,90 @@ function shoppingCart() {
                     auctionId: auctionId,
                     sealedName: item.querySelector('.sealed-name')?.textContent || '',
                     language: item.getAttribute('data-language') || 'en',
-                    marketValue: item.querySelector('.sealed-price')?.textContent.replace('€', '').replace(',', '.').trim() || '',
-                    quantity: Number(item.querySelector('.sealed-qty-display')?.textContent) || 1
+                    marketValue:
+                        item
+                            .querySelector('.sealed-price')
+                            ?.textContent.replace('€', '')
+                            .replace(',', '.')
+                            .trim() || '',
+                    quantity: Number(item.querySelector('.sealed-qty-display')?.textContent) || 1,
                 };
                 sealed.push(sealedData);
             });
             cartContent.sealed = sealed;
         }
 
-        const bulkCartContent = document.querySelector(".bulk-cart-content");
+        const bulkCartContent = document.querySelector('.bulk-cart-content');
         const bulkItems = bulkCartContent.querySelector('.bulk-cart-item-bulk');
-        const holoCartContent = document.querySelector(".holo-cart-content");
+        const holoCartContent = document.querySelector('.holo-cart-content');
         const holoItems = holoCartContent.querySelector('.holo-cart-item-holo');
-        const exCartContent = document.querySelector(".ex-cart-content");
+        const exCartContent = document.querySelector('.ex-cart-content');
         const exItems = exCartContent.querySelector('.ex-cart-item-ex');
         if (bulkItems) {
-            let bulkQuantity = Number(bulkItems.querySelectorAll('p')[1].textContent.replace('q: ', ''));
+            let bulkQuantity = Number(
+                bulkItems.querySelectorAll('p')[1].textContent.replace('q: ', ''),
+            );
             if (bulkQuantity === 0) {
-                bulkQuantity = 1
+                bulkQuantity = 1;
             }
 
             //this is bad I need to think about this shit cause no way this is correct
 
-            const sellPriceInput = bulkItems.querySelector('.bulk-sell-price').value.replace(',', '.');
+            const sellPriceInput = bulkItems
+                .querySelector('.bulk-sell-price')
+                .value.replace(',', '.');
             const bulk = {
                 counter_name: 'bulk',
                 quantity: bulkQuantity,
-                unit_price: sellPriceInput && bulkQuantity ? (Number(sellPriceInput) / bulkQuantity).toFixed(2) : 0.01,
+                unit_price:
+                    sellPriceInput && bulkQuantity
+                        ? (Number(sellPriceInput) / bulkQuantity).toFixed(2)
+                        : 0.01,
                 sell_price: sellPriceInput ? Number(sellPriceInput) : 0.01,
-                buy_price: 0.01
+                buy_price: 0.01,
             };
             cartContent.bulkItem = bulk;
         }
 
         if (holoItems) {
-            let holoQuantity = Number(holoItems.querySelectorAll('p')[1].textContent.replace('q: ', ''));
+            let holoQuantity = Number(
+                holoItems.querySelectorAll('p')[1].textContent.replace('q: ', ''),
+            );
             holoQuantity = holoQuantity === 0 ? 1 : holoQuantity;
-            const sellPriceInput = holoItems.querySelector('.holo-sell-price').value.replace(',', '.');
+            const sellPriceInput = holoItems
+                .querySelector('.holo-sell-price')
+                .value.replace(',', '.');
             const holo = {
                 counter_name: 'holo',
                 quantity: holoQuantity,
-                unit_price: sellPriceInput && holoQuantity ? (Number(sellPriceInput) / holoQuantity).toFixed(2) : 0.03,
+                unit_price:
+                    sellPriceInput && holoQuantity
+                        ? (Number(sellPriceInput) / holoQuantity).toFixed(2)
+                        : 0.03,
                 sell_price: sellPriceInput ? Number(sellPriceInput) : 0.03,
-                buy_price: 0.03
+                buy_price: 0.03,
             };
             cartContent.holoItem = holo;
         }
 
         if (exItems) {
-            let exQuantity = Number(exItems.querySelectorAll('p')[1].textContent.replace('q: ', ''));
+            let exQuantity = Number(
+                exItems.querySelectorAll('p')[1].textContent.replace('q: ', ''),
+            );
             exQuantity = exQuantity === 0 ? 1 : exQuantity;
             const sellPriceInput = exItems.querySelector('.ex-sell-price').value.replace(',', '.');
             const ex = {
                 counter_name: 'ex',
                 quantity: exQuantity,
-                unit_price: sellPriceInput && exQuantity ? (Number(sellPriceInput) / exQuantity).toFixed(2) : 0.15,
+                unit_price:
+                    sellPriceInput && exQuantity
+                        ? (Number(sellPriceInput) / exQuantity).toFixed(2)
+                        : 0.15,
                 sell_price: sellPriceInput ? Number(sellPriceInput) : 0.15,
-                buy_price: 0.15
+                buy_price: 0.15,
             };
             cartContent.exItem = ex;
         }
-
 
         const cartVal = Number(cartValue(cartContent));
 
@@ -1497,7 +1627,7 @@ function shoppingCart() {
                     <input type='number' placeholder="Insurance value" class="insurance-value-input">
                     `;
                     const newInputs = deliveryMethodInfo.querySelectorAll('input, select');
-                    newInputs.forEach(input => {
+                    newInputs.forEach((input) => {
                         input.addEventListener('input', saveModalDataToSession);
                         input.addEventListener('change', saveModalDataToSession);
                     });
@@ -1509,7 +1639,7 @@ function shoppingCart() {
 
             // Add event listeners to save data on input
             const modalInputs = recieverDiv.querySelectorAll('input, select');
-            modalInputs.forEach(input => {
+            modalInputs.forEach((input) => {
                 input.addEventListener('input', saveModalDataToSession);
                 input.addEventListener('change', saveModalDataToSession);
             });
@@ -1533,14 +1663,16 @@ function shoppingCart() {
 
                 // Add event listeners to new inputs for sessionStorage
                 const newInputs = newSelectDiv.querySelectorAll('input, select');
-                newInputs.forEach(input => {
+                newInputs.forEach((input) => {
                     input.addEventListener('input', saveModalDataToSession);
                     input.addEventListener('change', saveModalDataToSession);
                 });
             });
 
             const dateInput = document.querySelector('.date-input');
-            dateInput.value = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            dateInput.value = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000)
+                .toISOString()
+                .split('T')[0];
         }
 
         const generateInvoiceBtn = document.querySelector('.generate-invoice');
@@ -1551,7 +1683,14 @@ function shoppingCart() {
                 for (const key in cartContent) {
                     delete cartContent[key];
                 }
-                deleteCartContent(contentDiv, bulkCartContent, holoCartContent, exCartContent, sealedContent, recieverDiv)
+                deleteCartContent(
+                    contentDiv,
+                    bulkCartContent,
+                    holoCartContent,
+                    exCartContent,
+                    sealedContent,
+                    recieverDiv,
+                );
                 loadBulkHoloValues();
 
                 // Clear sessionStorage on successful invoice generation
@@ -1568,7 +1707,14 @@ function shoppingCart() {
                 for (const key in cartContent) {
                     delete cartContent[key];
                 }
-                deleteCartContent(contentDiv, bulkCartContent, holoCartContent, exCartContent, sealedContent, recieverDiv)
+                deleteCartContent(
+                    contentDiv,
+                    bulkCartContent,
+                    holoCartContent,
+                    exCartContent,
+                    sealedContent,
+                    recieverDiv,
+                );
                 loadBulkHoloValues();
 
                 // Clear sessionStorage on successful invoice generation
@@ -1588,7 +1734,9 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
         }
 
         // Check if a matching CartLine already exists
-        const existing = cartLines.find(l => l.matches(card.cardName, card.cardNum, card.condition, card.grading));
+        const existing = cartLines.find((l) =>
+            l.matches(card.cardName, card.cardNum, card.condition, card.grading),
+        );
         if (existing) {
             existing.cardIds.push(cardId);
             existingIDs.add(cardId);
@@ -1604,9 +1752,13 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
         } else {
             // Create new CartLine with just this one cardId, empty pool
             const line = new CartLine(
-                card.cardName, card.cardNum, card.condition,
-                card.auctionName || '', card.marketValue || '',
-                [cardId], card.grading
+                card.cardName,
+                card.cardNum,
+                card.condition,
+                card.auctionName || '',
+                card.marketValue || '',
+                [cardId],
+                card.grading,
             );
             cartLines.push(line);
             existingIDs.add(cardId);
@@ -1616,7 +1768,9 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
     }
 
     // Entry A: From search results (no cardId)
-    const existing = cartLines.find(l => l.matches(card.cardName, card.cardNum, card.condition, card.grading));
+    const existing = cartLines.find((l) =>
+        l.matches(card.cardName, card.cardNum, card.condition, card.grading),
+    );
     if (existing) {
         // Try to increment existing line
         if (!existing.canIncrement) {
@@ -1653,8 +1807,8 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
                 condition: card.condition,
                 is_graded: card.grading !== null,
                 ...card.grading,
-                exclude_ids: [...existingIDs]
-            })
+                exclude_ids: [...existingIDs],
+            }),
         });
         if (!response.ok) {
             renderAlert('Failed to fetch card IDs, Mx10', 'error');
@@ -1666,9 +1820,13 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
             return;
         }
         const line = new CartLine(
-            card.cardName, card.cardNum, card.condition,
-            card.auctionName || '', card.marketValue || '',
-            data.card_ids, card.grading
+            card.cardName,
+            card.cardNum,
+            card.condition,
+            card.auctionName || '',
+            card.marketValue || '',
+            data.card_ids,
+            card.grading,
         );
         cartLines.push(line);
         existingIDs.add(line.cardIds[0]);
@@ -1698,10 +1856,10 @@ function addSealedToCart(sealed, sid, auctionId = null, quantity = 1, available 
         const language = sealed.language || 'en';
         itemDiv.setAttribute('data-language', language);
         if (auctionId != null) {
-            itemDiv.setAttribute('auction_id', auctionId)
+            itemDiv.setAttribute('auction_id', auctionId);
         }
 
-        const max = Number(available) > 0 ? Number(available) : (Number(quantity) || 1);
+        const max = Number(available) > 0 ? Number(available) : Number(quantity) || 1;
         let qty = Math.min(Math.max(Number(quantity) || 1, 1), max);
         itemDiv.setAttribute('data-available', max);
 
@@ -1721,10 +1879,18 @@ function addSealedToCart(sealed, sid, auctionId = null, quantity = 1, available 
             `;
 
             itemDiv.querySelector('.sealed-qty-minus').addEventListener('click', () => {
-                if (qty > 1) { qty--; renderSealed(); saveCartContentToSession(); }
+                if (qty > 1) {
+                    qty--;
+                    renderSealed();
+                    saveCartContentToSession();
+                }
             });
             itemDiv.querySelector('.sealed-qty-plus').addEventListener('click', () => {
-                if (qty < max) { qty++; renderSealed(); saveCartContentToSession(); }
+                if (qty < max) {
+                    qty++;
+                    renderSealed();
+                    saveCartContentToSession();
+                }
             });
             itemDiv.querySelector('.remove-from-cart').addEventListener('click', () => {
                 existingIDs.delete(sid);
@@ -1740,18 +1906,20 @@ function addSealedToCart(sealed, sid, auctionId = null, quantity = 1, available 
     return;
 }
 
-
 function addBulkToCart() {
     const button = document.querySelector('.card-add-bulk');
     const input = document.querySelector('.cart-bulk-input');
-    const contentDiv = document.querySelector(".bulk-cart-content");
+    const contentDiv = document.querySelector('.bulk-cart-content');
     button.addEventListener('click', () => {
         const value = input.value;
         const bulkItems = contentDiv.querySelector('.bulk-cart-item-bulk');
         const inventorySize = document.querySelector('.bulk-value').textContent;
         const maxBulk = Number(inventorySize);
         if (Number(value) + currentCartValue('bulk') > maxBulk) {
-            renderAlert(`You can not add more than ${maxBulk} bulk items to the cart, Error code: Mx13`, 'error');
+            renderAlert(
+                `You can not add more than ${maxBulk} bulk items to the cart, Error code: Mx13`,
+                'error',
+            );
             return;
         }
 
@@ -1763,11 +1931,11 @@ function addBulkToCart() {
                     <p>Bulk</p>
                     <p class='bulk-quantity'>q: ${DOMPurify.sanitize(value)}</p>
                     <input type='text' class='bulk-sell-price'>
-                    <button class='remove-from-cart'>Remove</button>`
+                    <button class='remove-from-cart'>Remove</button>`;
 
                 contentDiv.appendChild(div);
-                const sellPriceInput = contentDiv.querySelector('.bulk-sell-price')
-                sellPriceInput.addEventListener("blur", saveCartContentToSession)
+                const sellPriceInput = contentDiv.querySelector('.bulk-sell-price');
+                sellPriceInput.addEventListener('blur', saveCartContentToSession);
                 saveCartContentToSession();
             }
         } else {
@@ -1795,7 +1963,7 @@ function addBulkToCart() {
 function addHoloToCart() {
     const button = document.querySelector('.card-add-holo');
     const input = document.querySelector('.cart-holo-input');
-    const contentDiv = document.querySelector(".holo-cart-content");
+    const contentDiv = document.querySelector('.holo-cart-content');
 
     button.addEventListener('click', () => {
         const value = input.value;
@@ -1803,7 +1971,10 @@ function addHoloToCart() {
         const inventorySize = document.querySelector('.holo-value').textContent;
         const maxHolo = Number(inventorySize);
         if (Number(value) + currentCartValue('holo') > maxHolo) {
-            renderAlert(`You can not add more than ${maxHolo} holo items to the cart, Error code: Mx14`, 'error');
+            renderAlert(
+                `You can not add more than ${maxHolo} holo items to the cart, Error code: Mx14`,
+                'error',
+            );
             return;
         }
 
@@ -1815,10 +1986,10 @@ function addHoloToCart() {
                     <p>Holo</p>
                     <p class='holo-quantity'>q: ${DOMPurify.sanitize(value)}</p>
                     <input type='text' class='holo-sell-price'>
-                    <button class='remove-from-cart'>Remove</button>`
+                    <button class='remove-from-cart'>Remove</button>`;
                 contentDiv.appendChild(div);
-                const sellPriceInput = contentDiv.querySelector('.holo-sell-price')
-                sellPriceInput.addEventListener("blur", saveCartContentToSession)
+                const sellPriceInput = contentDiv.querySelector('.holo-sell-price');
+                sellPriceInput.addEventListener('blur', saveCartContentToSession);
 
                 saveCartContentToSession();
             }
@@ -1855,7 +2026,10 @@ function addExToCart() {
         const inventorySize = document.querySelector('.ex-value').textContent;
         const maxEx = Number(inventorySize);
         if (Number(value) + currentCartValue('ex') > maxEx) {
-            renderAlert(`You can not add more than ${maxEx} ex items to the cart, Error code: Mx15`, 'error');
+            renderAlert(
+                `You can not add more than ${maxEx} ex items to the cart, Error code: Mx15`,
+                'error',
+            );
             return;
         }
 
@@ -1911,7 +2085,7 @@ function startPolling() {
                     document.querySelector('.bulk-cart-content'),
                     document.querySelector('.holo-cart-content'),
                     document.querySelector('.ex-cart-content'),
-                    document.querySelector('.sealed-content')
+                    document.querySelector('.sealed-content'),
                 );
                 sessionStorage.setItem('invoiceModalData', JSON.stringify(shippingInfo));
                 cards.forEach((card) => {
@@ -1926,24 +2100,41 @@ function startPolling() {
                     });
 
                     if (validIds.length === 0) return;
-                    if (validIds.some(id => existingIDs.has(id))) return;
+                    if (validIds.some((id) => existingIDs.has(id))) return;
 
-                    const line = new CartLine(card.name, card.num, card.condition, null, card.marketValue, validIds);
+                    const line = new CartLine(
+                        card.name,
+                        card.num,
+                        card.condition,
+                        null,
+                        card.marketValue,
+                        validIds,
+                    );
                     line.maxQuantity();
                     cartLines.push(line);
                     renderCartLine(line);
-                    validIds.forEach(id => existingIDs.add(id));
+                    validIds.forEach((id) => existingIDs.add(id));
                 });
 
                 sealed.forEach((item) => {
                     const sealedIds = Array.isArray(item.id) ? item.id : [item.id];
-                    if (sealedIds.length === 0 || sealedIds.every(id => id == null)) {
+                    if (sealedIds.length === 0 || sealedIds.every((id) => id == null)) {
                         spawnMissingIdModal(item);
                         return;
                     }
                     const qty = Number(item.quantity) || item.count || 1;
                     const available = item.available != null ? Number(item.available) : null;
-                    addSealedToCart({ name: item.name, language: item.language || 'en', market_value: item.market_value }, sealedIds[0], null, qty, available);
+                    addSealedToCart(
+                        {
+                            name: item.name,
+                            language: item.language || 'en',
+                            market_value: item.market_value,
+                        },
+                        sealedIds[0],
+                        null,
+                        qty,
+                        available,
+                    );
                 });
             }
         } catch (error) {
@@ -1955,7 +2146,7 @@ function startPolling() {
 function spawnMissingIdModal(card) {
     let modal = document.querySelector('.missingIdModal');
     if (!modal) {
-        modal = document.createElement("div");
+        modal = document.createElement('div');
         modal.classList.add('missingIdModal');
         modal.innerHTML = `
             <div class="modal-card-list">
@@ -1973,19 +2164,18 @@ function spawnMissingIdModal(card) {
         });
     }
 
-    const cardDiv = document.createElement("div");
+    const cardDiv = document.createElement('div');
     cardDiv.innerHTML = `
-        <p>${DOMPurify.sanitize(card.name || "")}</p>
-        <p>${DOMPurify.sanitize(card.num || "")}</p>
-        <p>${DOMPurify.sanitize(card.condition || "")}</p>
-        <p>${DOMPurify.sanitize(card.marketValue || card.market_value || "")}€</p>
+        <p>${DOMPurify.sanitize(card.name || '')}</p>
+        <p>${DOMPurify.sanitize(card.num || '')}</p>
+        <p>${DOMPurify.sanitize(card.condition || '')}</p>
+        <p>${DOMPurify.sanitize(card.marketValue || card.market_value || '')}€</p>
     `;
     cardDiv.classList.add('missingId-item');
     modal.querySelector('.missingId-list').append(cardDiv);
 
     document.body.appendChild(modal);
 }
-
 
 function addResultScrollingWithArrows(searchInput, resultsQueue) {
     searchInput.addEventListener('keydown', (event) => {
@@ -2002,7 +2192,6 @@ function addResultScrollingWithArrows(searchInput, resultsQueue) {
     });
 }
 
-
 function searchBar() {
     const searchInput = document.querySelector('.search-field');
 
@@ -2010,28 +2199,26 @@ function searchBar() {
     let results = null;
     searchInput.addEventListener('keydown', async (event) => {
         if (event.key == 'Enter') {
-            if (searchInput.value == "") {
-
+            if (searchInput.value == '') {
                 const searchContainer = document.querySelector('.search-results');
                 searchContainer.innerHTML = ''; // Clear previous results
                 return;
             }
             results = await searchCard(searchInput.value, [...existingIDs]);
-            const resultsQueue = new queue(results.length + 1) //if no results it thows error;
-            resultsQueue.enqueue(searchInput)
+            const resultsQueue = new queue(results.length + 1); //if no results it thows error;
+            resultsQueue.enqueue(searchInput);
             displaySearchResults(results, resultsQueue, searchInput);
             addResultScrollingWithArrows(searchInput, resultsQueue, searchInput);
-
         }
-    })
+    });
     searchBtn.addEventListener('click', async () => {
-        if (searchInput.value == "") {
+        if (searchInput.value == '') {
             const searchContainer = document.querySelector('.search-results');
             searchContainer.innerHTML = ''; // Clear previous results
         }
         results = await searchCard(searchInput.value.trim(), [...existingIDs]);
         const resultsQueue = new queue(results.length + 1);
-        resultsQueue.enqueue(searchInput)
+        resultsQueue.enqueue(searchInput);
         displaySearchResults(results, resultsQueue);
         searchInput.focus();
         addResultScrollingWithArrows(searchInput, resultsQueue);
@@ -2039,7 +2226,6 @@ function searchBar() {
 }
 
 function displaySearchResults(results, resultsQueue, searchInput) {
-
     const searchContainer = document.querySelector('.search-results');
     searchContainer.innerHTML = ''; // Clear previous results
 
@@ -2051,7 +2237,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
         return;
     }
 
-    results.forEach(result => {
+    results.forEach((result) => {
         const div = document.createElement('div');
         div.classList.add('search-result-item');
         div.tabIndex = 0;
@@ -2066,7 +2252,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
             const sealed = {
                 name: result.name,
                 language: result.language || 'en',
-                market_value: result.market_value
+                market_value: result.market_value,
             };
 
             div.innerHTML = `
@@ -2111,11 +2297,11 @@ function displaySearchResults(results, resultsQueue, searchInput) {
 
             // Add to cart handler for sealed items
             div.addEventListener('click', async () => {
-                const available = result.available_count != null ? Number(result.available_count) : null;
+                const available =
+                    result.available_count != null ? Number(result.available_count) : null;
                 addSealedToCart(sealed, result.sid, result.auction_id, 1, available);
                 searchContainer.innerHTML = '';
             });
-
         } else {
             // Handle card display
             div.classList.add('card-search-result');
@@ -2125,17 +2311,21 @@ function displaySearchResults(results, resultsQueue, searchInput) {
             card.condition = result.condition;
             card.language = result.language || 'en';
             card.marketValue = result.market_value;
-            card.grading = result.is_graded ? {
-                grader: result.grader,
-                grade_numeric: result.grade_numeric != null ? String(result.grade_numeric) : null,
-                grade_label: result.grade_label,
-                qualifier: result.qualifier,
-                cert_number: result.cert_number,
-            } : null;
+            card.grading = result.is_graded
+                ? {
+                      grader: result.grader,
+                      grade_numeric:
+                          result.grade_numeric != null ? String(result.grade_numeric) : null,
+                      grade_label: result.grade_label,
+                      qualifier: result.qualifier,
+                      cert_number: result.cert_number,
+                  }
+                : null;
             const safeConditionClass = sanitizeClassToken(result.condition || 'Unknown');
             const gradeDisplay = card.grading
                 ? [result.grader, result.grade_numeric, result.grade_label, result.qualifier]
-                    .filter(value => value !== null && value !== undefined && value !== '').join(' ') || 'Graded'
+                      .filter((value) => value !== null && value !== undefined && value !== '')
+                      .join(' ') || 'Graded'
                 : result.condition || 'Unknown';
 
             const availableCount = result.available_count ? result.available_count : 1;
@@ -2167,10 +2357,12 @@ function displaySearchResults(results, resultsQueue, searchInput) {
                     resultsQueue.getCurrent().focus();
                 } else if (event.key == 'ArrowRight') {
                     pendingQty = Math.min(pendingQty + 1, availableCount);
-                    div.querySelector('.result-quantity').textContent = `${pendingQty} / ${availableCount}`;
+                    div.querySelector('.result-quantity').textContent =
+                        `${pendingQty} / ${availableCount}`;
                 } else if (event.key == 'ArrowLeft') {
                     pendingQty = Math.max(pendingQty - 1, 1);
-                    div.querySelector('.result-quantity').textContent = `${pendingQty} / ${availableCount}`;
+                    div.querySelector('.result-quantity').textContent =
+                        `${pendingQty} / ${availableCount}`;
                 } else if (event.key == 'Enter') {
                     for (let i = 0; i < pendingQty; i++) {
                         await addToShoppingCart(card);
@@ -2236,7 +2428,10 @@ async function loadBulkHoloValues() {
             holoVal.textContent = data.holo_counter;
             exVal.textContent = data.ex_counter;
         } else {
-            renderAlert('There was a problem loading bulk, holo and ex values, Error code: Mx16', 'error');
+            renderAlert(
+                'There was a problem loading bulk, holo and ex values, Error code: Mx16',
+                'error',
+            );
         }
     } catch (e) {
         renderAlert('Error loading bulk/holo/ex values: ' + e + 'Error code: Mx17', 'error');
@@ -2253,33 +2448,53 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
     box?.remove();
 
     const isSealed = cardId.includes('s');
-    const gradingState = isSealed ? null : (itemLine.dataset.gradingState || 'raw');
+    const gradingState = isSealed ? null : itemLine.dataset.gradingState || 'raw';
     const canAddToCart = isSealed || gradingState !== 'at_grader';
     const canDelete = isSealed || gradingState === 'raw';
     const canGrade = !isSealed && gradingState === 'raw';
     const canViewGrading = !isSealed && gradingState === 'at_grader';
     box = document.createElement('div');
-    box.classList.add("context-menu");
+    box.classList.add('context-menu');
     //TODO: move styles to css
-    box.style.left = (e.pageX + 10) + "px";
-    box.style.top = (e.pageY - 25) + "px";
+    box.style.left = e.pageX + 10 + 'px';
+    box.style.top = e.pageY - 25 + 'px';
     box.innerHTML = `<div class="">
                             <div class="">
-                                ${isSealed ? `<div class="">
+                                ${
+                                    isSealed
+                                        ? `<div class="">
                                     <button class="open-sealed-item">Open</button>
-                                </div>` : ''}
-                                ${canAddToCart ? `<div class="">
+                                </div>`
+                                        : ''
+                                }
+                                ${
+                                    canAddToCart
+                                        ? `<div class="">
                                     <button class="add-to-cart">Add to cart</button>
-                                </div>` : ''}
-                                ${canDelete ? `<div class="">
+                                </div>`
+                                        : ''
+                                }
+                                ${
+                                    canDelete
+                                        ? `<div class="">
                                     <button class="delete-card" data-id="${cardId}">Delete</button>
-                                </div>` : ''}
-                                ${canGrade ? `<div class="">
+                                </div>`
+                                        : ''
+                                }
+                                ${
+                                    canGrade
+                                        ? `<div class="">
                                     <button class="grade-card" data-id="${cardId}">Grade</button>
-                                </div>` : ''}
-                                ${canViewGrading ? `<div class="">
+                                </div>`
+                                        : ''
+                                }
+                                ${
+                                    canViewGrading
+                                        ? `<div class="">
                                     <button class="view-grading">View grading</button>
-                                </div>` : ''}
+                                </div>`
+                                        : ''
+                                }
                             </div>
                         </div>
                         <span hidden class="card-id">${cardId}</span>
@@ -2291,7 +2506,9 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
         openButton.addEventListener('click', () => {
             const auctionDiv = itemLine.closest('.auction-tab');
             const auctionId = auctionDiv?.getAttribute('data-id');
-            const initialValue = itemLine.querySelector('.sealed-market-value, .market-value-sealed').textContent.replace('€', '');
+            const initialValue = itemLine
+                .querySelector('.sealed-market-value, .market-value-sealed')
+                .textContent.replace('€', '');
             const sourceName = itemLine.querySelector('.sealed-name').textContent;
             const sourceLanguage = itemLine.querySelector('.sealed-language')?.textContent || 'en';
             createSealedModal(cardId, auctionId, initialValue, sourceName, sourceLanguage);
@@ -2327,8 +2544,14 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
 
             const sealedData = {
                 name: DOMPurify.sanitize(itemLine.querySelector('.sealed-name').textContent),
-                language: DOMPurify.sanitize(itemLine.querySelector('.sealed-language')?.textContent || 'en'),
-                market_value: DOMPurify.sanitize(itemLine.querySelector('.sealed-market-value, .market-value-sealed').textContent.replace('€', ''))
+                language: DOMPurify.sanitize(
+                    itemLine.querySelector('.sealed-language')?.textContent || 'en',
+                ),
+                market_value: DOMPurify.sanitize(
+                    itemLine
+                        .querySelector('.sealed-market-value, .market-value-sealed')
+                        .textContent.replace('€', ''),
+                ),
             };
 
             const available = Number(itemLine.getAttribute('data-quantity')) || null;
@@ -2343,15 +2566,19 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
             const card = new CardStruct();
             card.cardName = itemLine.querySelector('.card-name').textContent;
             card.cardNum = itemLine.querySelector('.card-num').textContent;
-            card.condition = itemLine.dataset.condition || itemLine.querySelector('.condition').textContent;
+            card.condition =
+                itemLine.dataset.condition || itemLine.querySelector('.condition').textContent;
             card.language = itemLine.querySelector('.language')?.textContent || 'en';
-            card.grading = itemLine.dataset.isGraded === 'true' ? {
-                grader: itemLine.dataset.grader || null,
-                grade_numeric: itemLine.dataset.gradeNumeric || null,
-                grade_label: itemLine.dataset.gradeLabel || null,
-                qualifier: itemLine.dataset.qualifier || null,
-                cert_number: itemLine.dataset.certNumber || null,
-            } : null;
+            card.grading =
+                itemLine.dataset.isGraded === 'true'
+                    ? {
+                          grader: itemLine.dataset.grader || null,
+                          grade_numeric: itemLine.dataset.gradeNumeric || null,
+                          grade_label: itemLine.dataset.gradeLabel || null,
+                          qualifier: itemLine.dataset.qualifier || null,
+                          cert_number: itemLine.dataset.certNumber || null,
+                      }
+                    : null;
             const marketValueText = itemLine.querySelector('.market-value').textContent;
             card.marketValue = marketValueText ? marketValueText.replace('€', '') : null;
             await addToShoppingCart(card, auctionId, cardId);
@@ -2359,59 +2586,67 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
     }
 
     const deleteButton = box.querySelector('.delete-card');
-    if (deleteButton) deleteButton.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (deleteButton.textContent !== 'Confirm') {
-            deleteButton.textContent = 'Confirm';
-            const timerID = setTimeout(() => {
-                deleteButton.textContent = 'Delete';
-            }, 3000);
-            return;
-        }
-
-        const cardsContainer = itemLine.closest('.cards-container');
-        const auctionDiv = itemLine.closest('.auction-tab');
-        const auctionId = auctionDiv?.getAttribute('data-id');
-
-        if (isSealed) {
-            try {
-                const response = await csrfFetch(`/deleteSealed/${cardId}`, { method: 'DELETE' });
-                const data = await response.json();
-                if (data.status !== 'success') {
-                    renderAlert('Error deleting sealed item: ' + JSON.stringify(data), 'error');
-                    return;
-                }
-            } catch (error) {
-                renderAlert('Error deleting sealed item: ' + error + ' Error code: Mx19', 'error');
+    if (deleteButton)
+        deleteButton.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (deleteButton.textContent !== 'Confirm') {
+                deleteButton.textContent = 'Confirm';
+                const timerID = setTimeout(() => {
+                    deleteButton.textContent = 'Delete';
+                }, 3000);
                 return;
             }
-            itemLine.remove();
-            await updateInventoryValueAndTotalProfit();
-        } else {
-            const deleted = await removeCard(cardId, itemLine);
-            if (!deleted) return;
-            await updateInventoryValueAndTotalProfit();
-            if (cardsContainer && cardsContainer.childElementCount < 3) {
-                if (auctionDiv && auctionDiv.classList.contains('singles')) {
-                    const p = document.createElement('p');
-                    p.textContent = 'Empty';
-                    cardsContainer.insertBefore(p, cardsContainer.querySelector('.button-container'));
-                } else if (auctionDiv) {
-                    deleteAuction(auctionId, auctionDiv);
+
+            const cardsContainer = itemLine.closest('.cards-container');
+            const auctionDiv = itemLine.closest('.auction-tab');
+            const auctionId = auctionDiv?.getAttribute('data-id');
+
+            if (isSealed) {
+                try {
+                    const response = await csrfFetch(`/deleteSealed/${cardId}`, {
+                        method: 'DELETE',
+                    });
+                    const data = await response.json();
+                    if (data.status !== 'success') {
+                        renderAlert('Error deleting sealed item: ' + JSON.stringify(data), 'error');
+                        return;
+                    }
+                } catch (error) {
+                    renderAlert(
+                        'Error deleting sealed item: ' + error + ' Error code: Mx19',
+                        'error',
+                    );
+                    return;
+                }
+                itemLine.remove();
+                await updateInventoryValueAndTotalProfit();
+            } else {
+                const deleted = await removeCard(cardId, itemLine);
+                if (!deleted) return;
+                await updateInventoryValueAndTotalProfit();
+                if (cardsContainer && cardsContainer.childElementCount < 3) {
+                    if (auctionDiv && auctionDiv.classList.contains('singles')) {
+                        const p = document.createElement('p');
+                        p.textContent = 'Empty';
+                        cardsContainer.insertBefore(
+                            p,
+                            cardsContainer.querySelector('.button-container'),
+                        );
+                    } else if (auctionDiv) {
+                        deleteAuction(auctionId, auctionDiv);
+                    }
                 }
             }
-        }
 
-        box?.remove();
-        box = null;
-    });
-};
+            box?.remove();
+            box = null;
+        });
+}
 
 document.addEventListener('click', (e) => {
     box?.remove();
     box = null;
 });
-
 
 async function loadAuctionContent(button) {
     const auctionId = Number(button.getAttribute('data-id'));
@@ -2447,21 +2682,28 @@ async function loadAuctionContent(button) {
                         <p></p>
                     </div>
                 `;
-                    cards.forEach(card => {
+                    cards.forEach((card) => {
                         const safeCardId = sanitizeNumericId(card.id);
                         const conditionDisplay = cardConditionDisplay(card);
-                        const safeCardConditionClass = sanitizeClassToken(card.condition || 'Unknown');
-                        const gradingClass = card.grading_state === 'graded'
-                            ? ' graded'
-                            : card.grading_state === 'at_grader' ? ' at-grader' : '';
+                        const safeCardConditionClass = sanitizeClassToken(
+                            card.condition || 'Unknown',
+                        );
+                        const gradingClass =
+                            card.grading_state === 'graded'
+                                ? ' graded'
+                                : card.grading_state === 'at_grader'
+                                  ? ' at-grader'
+                                  : '';
                         const cardDiv = document.createElement('div');
                         cardDiv.classList.add('card');
                         cardDiv.setAttribute('data-id', safeCardId);
                         cardDiv.dataset.condition = card.condition || '';
                         cardDiv.dataset.gradingState = card.grading_state || 'raw';
                         cardDiv.dataset.gradingSubmissionId = card.grading_submission_id ?? '';
-                        cardDiv.dataset.gradingSubmissionStatus = card.grading_submission_status ?? '';
-                        cardDiv.dataset.isGraded = card.grading_state === 'graded' ? 'true' : 'false';
+                        cardDiv.dataset.gradingSubmissionStatus =
+                            card.grading_submission_status ?? '';
+                        cardDiv.dataset.isGraded =
+                            card.grading_state === 'graded' ? 'true' : 'false';
                         cardDiv.dataset.grader = card.grader ?? '';
                         cardDiv.dataset.gradeNumeric = card.grade_numeric ?? '';
                         cardDiv.dataset.gradeLabel = card.grade_label ?? '';
@@ -2485,25 +2727,41 @@ async function loadAuctionContent(button) {
                         clearTimeout(timer);
 
                         timer = setTimeout(() => {
-                            const itemLine = e.target.closest('.card') || e.target.closest('.sealed-item');
-                            const safeCardId = sanitizeNumericId(itemLine?.getAttribute("data-id")) || itemLine.getAttribute("sid");
+                            const itemLine =
+                                e.target.closest('.card') || e.target.closest('.sealed-item');
+                            const safeCardId =
+                                sanitizeNumericId(itemLine?.getAttribute('data-id')) ||
+                                itemLine.getAttribute('sid');
                             spawnItemsContextMenu(safeCardId, e, itemLine);
                         }, 200);
                     });
 
                     cardsContainer.addEventListener('dblclick', (event) => {
                         clearTimeout(timer);
-                        if (event.target.closest('.card') && !(event.target.tagName === "DIV")) {
+                        if (event.target.closest('.card') && !(event.target.tagName === 'DIV')) {
                             const cardDiv = event.target.closest('.card');
                             const cardId = cardDiv.getAttribute('data-id');
-                            const editableFields = new Set(['card_name', 'card_num', 'card_price', 'market_value']);
+                            const editableFields = new Set([
+                                'card_name',
+                                'card_num',
+                                'card_price',
+                                'market_value',
+                            ]);
                             if (event.target.classList.contains('condition')) {
                                 if (event.target.classList.contains('graded')) return;
                                 const value = event.target.textContent.trim();
                                 const select = document.createElement('select');
-                                const options = ['Mint', 'Near Mint', 'Excellent', 'Good', 'Light Played', 'Played', 'Poor'];
+                                const options = [
+                                    'Mint',
+                                    'Near Mint',
+                                    'Excellent',
+                                    'Good',
+                                    'Light Played',
+                                    'Played',
+                                    'Poor',
+                                ];
                                 const dataset = event.target.dataset.field;
-                                options.forEach(option => {
+                                options.forEach((option) => {
                                     const opt = document.createElement('option');
                                     opt.value = option;
                                     opt.textContent = option;
@@ -2517,7 +2775,10 @@ async function loadAuctionContent(button) {
                                 select.addEventListener('change', (event) => {
                                     const selectedValue = event.target.value;
                                     const p = document.createElement('p');
-                                    const classValue = selectedValue.split(' ').join('_').toLowerCase();
+                                    const classValue = selectedValue
+                                        .split(' ')
+                                        .join('_')
+                                        .toLowerCase();
                                     p.classList.add('card-info', 'condition', classValue);
                                     p.textContent = selectedValue || value;
                                     select.replaceWith(p);
@@ -2528,7 +2789,11 @@ async function loadAuctionContent(button) {
                                 const value = event.target.textContent.trim();
                                 const dataset = event.target.dataset.field;
                                 const container = document.createElement('div');
-                                container.innerHTML = languageSelect('card-info language select-language', dataset, value);
+                                container.innerHTML = languageSelect(
+                                    'card-info language select-language',
+                                    dataset,
+                                    value,
+                                );
                                 const select = container.firstElementChild;
                                 event.target.replaceWith(select);
                                 select.focus();
@@ -2541,7 +2806,10 @@ async function loadAuctionContent(button) {
                                     select.replaceWith(p);
                                     patchValue(cardId, selectedValue, dataset);
                                 });
-                            } else if (event.target.tagName === "P" && editableFields.has(event.target.dataset.field)) {
+                            } else if (
+                                event.target.tagName === 'P' &&
+                                editableFields.has(event.target.dataset.field)
+                            ) {
                                 let value = event.target.textContent.replace('€', '');
                                 if (isNaN(value)) {
                                     value = value.toUpperCase();
@@ -2559,8 +2827,16 @@ async function loadAuctionContent(button) {
                                         newValue = newValue.toUpperCase();
                                     }
 
-                                    getInputValueAndPatch(newValue || value, input, dataset, cardId);
-                                    if (blurEvent.target.classList.contains('card-price') || blurEvent.target.classList.contains('sell-price')) {
+                                    getInputValueAndPatch(
+                                        newValue || value,
+                                        input,
+                                        dataset,
+                                        cardId,
+                                    );
+                                    if (
+                                        blurEvent.target.classList.contains('card-price') ||
+                                        blurEvent.target.classList.contains('sell-price')
+                                    ) {
                                         await updateInventoryValueAndTotalProfit();
                                     }
                                 });
@@ -2573,7 +2849,6 @@ async function loadAuctionContent(button) {
                         }
                     });
 
-
                     const inputFields = cardsContainer.querySelectorAll('input[type="text"]');
                     inputFields.forEach((input) => {
                         input.addEventListener('blur', async (event) => {
@@ -2582,7 +2857,7 @@ async function loadAuctionContent(button) {
                             const dataset = event.target.dataset;
                             getInputValueAndPatch(value, input, dataset.field, cardId);
                             await updateInventoryValueAndTotalProfit();
-                        })
+                        });
                         input.addEventListener('keydown', (event) => {
                             if (event.key === 'Enter') {
                                 input.blur();
@@ -2601,8 +2876,11 @@ async function loadAuctionContent(button) {
                             card.cardNum = cardDiv.querySelector('.card-num').textContent;
                             card.condition = cardDiv.dataset.condition;
                             card.language = cardDiv.querySelector('.language')?.textContent || 'en';
-                            const marketValueText = cardDiv.querySelector('.market-value').textContent;
-                            card.marketValue = marketValueText ? marketValueText.replace('€', '') : null;
+                            const marketValueText =
+                                cardDiv.querySelector('.market-value').textContent;
+                            card.marketValue = marketValueText
+                                ? marketValueText.replace('€', '')
+                                : null;
                             await addToShoppingCart(card, auctionId, cardId);
                         });
                     });
@@ -2613,23 +2891,28 @@ async function loadAuctionContent(button) {
                             const cardId = button.getAttribute('data-id');
                             const cardDiv = button.closest('.card');
                             const cardsContainer = button.closest('.cards-container');
-                            const auctionId = cardsContainer.closest('.auction-tab').getAttribute('data-id');
+                            const auctionId = cardsContainer
+                                .closest('.auction-tab')
+                                .getAttribute('data-id');
                             if (button.textContent === 'Confirm') {
                                 const auctionDiv = cardsContainer.closest('.auction-tab');
                                 const deleted = await removeCard(cardId, cardDiv);
                                 if (!deleted) return;
                                 if (auctionDiv.classList.contains('singles')) {
-                                    await updateInventoryValueAndTotalProfit()
+                                    await updateInventoryValueAndTotalProfit();
                                     if (cardsContainer.childElementCount < 3) {
                                         const p = document.createElement('p');
                                         p.textContent = 'Empty';
-                                        cardsContainer.insertBefore(p, cardsContainer.querySelector('.button-container'));
+                                        cardsContainer.insertBefore(
+                                            p,
+                                            cardsContainer.querySelector('.button-container'),
+                                        );
                                     }
                                 } else {
                                     await updateInventoryValueAndTotalProfit();
                                 }
                                 if (cardsContainer.childElementCount < 3) {
-                                    if (!(auctionDiv.classList.contains('singles'))) {
+                                    if (!auctionDiv.classList.contains('singles')) {
                                         deleteAuction(auctionId, auctionDiv);
                                     }
                                 }
@@ -2657,7 +2940,7 @@ async function loadAuctionContent(button) {
                     const responseSealed = await csrfFetch(sealedUrl);
                     const sealedData = await responseSealed.json();
 
-                    sealedData.forEach(sealedItem => {
+                    sealedData.forEach((sealedItem) => {
                         const sealedDiv = document.createElement('div');
                         sealedDiv.classList.add('sealed-item');
                         sealedDiv.setAttribute('sid', sealedItem.sid);
@@ -2665,7 +2948,9 @@ async function loadAuctionContent(button) {
                             sealedDiv.setAttribute('data-quantity', sealedItem.quantity);
                         }
 
-                        const margin = (Number(sealedItem.market_value) - Number(sealedItem.price)).toFixed(2);
+                        const margin = (
+                            Number(sealedItem.market_value) - Number(sealedItem.price)
+                        ).toFixed(2);
 
                         sealedDiv.innerHTML = `
                             <p class='sealed-quantity'>${DOMPurify.sanitize(sealedItem.quantity)}</p>
@@ -2679,7 +2964,10 @@ async function loadAuctionContent(button) {
                             `;
                         enableSealedLanguageEditing(sealedDiv);
 
-                        cardsContainer.insertBefore(sealedDiv, cardsContainer.querySelector('.button-container'));
+                        cardsContainer.insertBefore(
+                            sealedDiv,
+                            cardsContainer.querySelector('.button-container'),
+                        );
                         sealedDiv.addEventListener('click', (event) => {
                             if (event.target.closest('.sealed-language, .sealed-language-select')) {
                                 event.stopPropagation();
@@ -2701,25 +2989,38 @@ async function loadAuctionContent(button) {
                             const auctionId = auctionDiv.getAttribute('data-id');
 
                             const sealedData = {
-                                name: DOMPurify.sanitize(sealedDiv.querySelector('.sealed-name').textContent),
-                                language: DOMPurify.sanitize(sealedDiv.querySelector('.sealed-language')?.textContent || 'en'),
-                                market_value: DOMPurify.sanitize(sealedDiv.querySelector('.sealed-market-value').textContent.replace('€', ''))
+                                name: DOMPurify.sanitize(
+                                    sealedDiv.querySelector('.sealed-name').textContent,
+                                ),
+                                language: DOMPurify.sanitize(
+                                    sealedDiv.querySelector('.sealed-language')?.textContent ||
+                                        'en',
+                                ),
+                                market_value: DOMPurify.sanitize(
+                                    sealedDiv
+                                        .querySelector('.sealed-market-value')
+                                        .textContent.replace('€', ''),
+                                ),
                             };
 
-                            const available = Number(sealedDiv.getAttribute('data-quantity')) || null;
+                            const available =
+                                Number(sealedDiv.getAttribute('data-quantity')) || null;
                             addSealedToCart(sealedData, sid, auctionId, 1, available);
                         });
                     });
 
                     // Add event listeners for "Delete" buttons
-                    const deleteSealedButtons = cardsContainer.querySelectorAll('.delete-sealed-item');
+                    const deleteSealedButtons =
+                        cardsContainer.querySelectorAll('.delete-sealed-item');
                     deleteSealedButtons.forEach((button) => {
                         button.addEventListener('click', async () => {
                             const sid = button.getAttribute('data-sid');
                             const sealedDiv = button.closest('.sealed-item');
 
                             if (button.textContent === 'Confirm') {
-                                const response = await csrfFetch(`/deleteSealed/${sid}`, { method: 'DELETE' });
+                                const response = await csrfFetch(`/deleteSealed/${sid}`, {
+                                    method: 'DELETE',
+                                });
                                 const data = await response.json();
 
                                 if (data.status === 'success') {
@@ -2741,7 +3042,6 @@ async function loadAuctionContent(button) {
                             }
                         });
                     });
-
                 } catch (error) {
                     renderAlert('Error loading sealed items: ' + error, 'error');
                 }
@@ -2750,7 +3050,7 @@ async function loadAuctionContent(button) {
                 try {
                     const responseBulk = await csrfFetch(bulkUrl);
                     const bulkData = await responseBulk.json();
-                    bulkData.forEach(bulkItem => {
+                    bulkData.forEach((bulkItem) => {
                         const bulkDiv = document.createElement('div');
                         bulkDiv.classList.add('bulk-item');
                         bulkDiv.setAttribute('data-id', bulkItem.id);
@@ -2760,9 +3060,11 @@ async function loadAuctionContent(button) {
                             <p class="bulk-sell-price">Sell Price: ${bulkItem.total_price ? DOMPurify.sanitize(bulkItem.total_price) + '€' : 'N/A'}</p>
                             <button class="delete-bulk-item" data-id="${DOMPurify.sanitize(bulkItem.id)}">Delete</button>
                         `;
-                        cardsContainer.insertBefore(bulkDiv, cardsContainer.querySelector('.button-container'));
-                    }
-                    );
+                        cardsContainer.insertBefore(
+                            bulkDiv,
+                            cardsContainer.querySelector('.button-container'),
+                        );
+                    });
                     const deleteBulkButtons = cardsContainer.querySelectorAll('.delete-bulk-item');
                     deleteBulkButtons.forEach((button) => {
                         button.addEventListener('click', async () => {
@@ -2789,7 +3091,6 @@ async function loadAuctionContent(button) {
                             }
                         });
                     });
-
                 } catch (error) {
                     renderAlert('Error loading bulk items: ' + error, 'error');
                 }
@@ -2854,7 +3155,10 @@ async function loadAuctionContent(button) {
                     <p class="bulk-sell-price">Sell Price: <input type="text" class="bulk-sell-price-input" ></p>
     
                 `;
-                cardsContainer.insertBefore(newBulkDiv, cardsContainer.querySelector('.button-container'));
+                cardsContainer.insertBefore(
+                    newBulkDiv,
+                    cardsContainer.querySelector('.button-container'),
+                );
             }
         });
 
@@ -2877,7 +3181,10 @@ async function loadAuctionContent(button) {
                 <button class="remove-sealed-input">×</button>
             `;
 
-            cardsContainer.insertBefore(newSealedDiv, cardsContainer.querySelector('.button-container'));
+            cardsContainer.insertBefore(
+                newSealedDiv,
+                cardsContainer.querySelector('.button-container'),
+            );
 
             // Add remove button functionality
             const removeBtn = newSealedDiv.querySelector('.remove-sealed-input');
@@ -2885,7 +3192,8 @@ async function loadAuctionContent(button) {
                 newSealedDiv.remove();
 
                 // Hide save button if no new items
-                const hasNewItems = cardsContainer.querySelector('.new-card') ||
+                const hasNewItems =
+                    cardsContainer.querySelector('.new-card') ||
                     cardsContainer.querySelector('.add-sealed-item') ||
                     cardsContainer.querySelector('.add-bulk-item') ||
                     cardsContainer.querySelector('.add-holo-item') ||
@@ -2908,7 +3216,10 @@ async function loadAuctionContent(button) {
                     <p class="holo-quantity">Quantity: <input type="number" class="holo-quantity-input" min="1"></p>
                     <p class="holo-sell-price">Sell Price: <input type="text" class="holo-sell-price-input" ></p>
                 `;
-                cardsContainer.insertBefore(newHoloDiv, cardsContainer.querySelector('.button-container'));
+                cardsContainer.insertBefore(
+                    newHoloDiv,
+                    cardsContainer.querySelector('.button-container'),
+                );
             }
         });
 
@@ -2924,7 +3235,10 @@ async function loadAuctionContent(button) {
                     <p class="ex-quantity">Quantity: <input type="number" class="ex-quantity-input" min="1"></p>
                     <p class="ex-sell-price">Sell Price: <input type="text" class="ex-sell-price-input" ></p>
                 `;
-                cardsContainer.insertBefore(newExDiv, cardsContainer.querySelector('.button-container'));
+                cardsContainer.insertBefore(
+                    newExDiv,
+                    cardsContainer.querySelector('.button-container'),
+                );
             }
         });
 
@@ -2938,13 +3252,31 @@ async function loadAuctionContent(button) {
             try {
                 newCards.forEach(async (card) => {
                     let cardObj = new CardStruct();
-                    cardObj.cardName = DOMPurify.sanitize(card.querySelector('input.card-name').value.trim().toUpperCase()) || null;
-                    cardObj.cardNum = DOMPurify.sanitize(card.querySelector('input.card-num').value.trim().toUpperCase()) || null;
-                    cardObj.condition = DOMPurify.sanitize(card.querySelector('select.condition').value) || null;
-                    cardObj.language = DOMPurify.sanitize(card.querySelector('select.language').value);
-                    cardObj.buyPrice = DOMPurify.sanitize(card.querySelector('input.card-price').value.replace(',', '.').trim()) || null;
-                    cardObj.marketValue = DOMPurify.sanitize(card.querySelector('input.market-value').value.replace(',', '.').trim()) || null;
-                    cardObj.sellPrice = DOMPurify.sanitize(card.querySelector('input.sell-price').value.replace(',', '.').trim()) || null;
+                    cardObj.cardName =
+                        DOMPurify.sanitize(
+                            card.querySelector('input.card-name').value.trim().toUpperCase(),
+                        ) || null;
+                    cardObj.cardNum =
+                        DOMPurify.sanitize(
+                            card.querySelector('input.card-num').value.trim().toUpperCase(),
+                        ) || null;
+                    cardObj.condition =
+                        DOMPurify.sanitize(card.querySelector('select.condition').value) || null;
+                    cardObj.language = DOMPurify.sanitize(
+                        card.querySelector('select.language').value,
+                    );
+                    cardObj.buyPrice =
+                        DOMPurify.sanitize(
+                            card.querySelector('input.card-price').value.replace(',', '.').trim(),
+                        ) || null;
+                    cardObj.marketValue =
+                        DOMPurify.sanitize(
+                            card.querySelector('input.market-value').value.replace(',', '.').trim(),
+                        ) || null;
+                    cardObj.sellPrice =
+                        DOMPurify.sanitize(
+                            card.querySelector('input.sell-price').value.replace(',', '.').trim(),
+                        ) || null;
                     cardObj.soldDate = null;
 
                     if (cardObj.buyPrice === null) cardObj.buyPrice = cardObj.marketValue * 0.85;
@@ -2971,27 +3303,54 @@ async function loadAuctionContent(button) {
 
                 const bulkDiv = cardsContainer.querySelector('.add-bulk-item');
                 if (bulkDiv) {
-                    const bulkItems = { 'item_type': 'bulk', 'quantity': null, 'total_price': null };
-                    bulkItems.quantity = DOMPurify.sanitize(bulkDiv.querySelector('.bulk-quantity-input').value.trim()) || null;
-                    bulkItems.total_price = DOMPurify.sanitize(bulkDiv.querySelector('.bulk-sell-price-input').value.replace(',', '.').trim()) || null;
+                    const bulkItems = { item_type: 'bulk', quantity: null, total_price: null };
+                    bulkItems.quantity =
+                        DOMPurify.sanitize(
+                            bulkDiv.querySelector('.bulk-quantity-input').value.trim(),
+                        ) || null;
+                    bulkItems.total_price =
+                        DOMPurify.sanitize(
+                            bulkDiv
+                                .querySelector('.bulk-sell-price-input')
+                                .value.replace(',', '.')
+                                .trim(),
+                        ) || null;
                     bulkItems.unit_price = bulkItems.total_price / bulkItems.quantity || null;
                     itemsToAdd['bulk'] = bulkItems;
                 }
 
                 const holoDiv = cardsContainer.querySelector('.add-holo-item');
                 if (holoDiv) {
-                    const holoItems = { 'item_type': 'holo', 'quantity': null, 'total_price': null };
-                    holoItems.quantity = DOMPurify.sanitize(holoDiv.querySelector('.holo-quantity-input').value.trim()) || null;
-                    holoItems.total_price = DOMPurify.sanitize(holoDiv.querySelector('.holo-sell-price-input').value.replace(',', '.').trim()) || null;
+                    const holoItems = { item_type: 'holo', quantity: null, total_price: null };
+                    holoItems.quantity =
+                        DOMPurify.sanitize(
+                            holoDiv.querySelector('.holo-quantity-input').value.trim(),
+                        ) || null;
+                    holoItems.total_price =
+                        DOMPurify.sanitize(
+                            holoDiv
+                                .querySelector('.holo-sell-price-input')
+                                .value.replace(',', '.')
+                                .trim(),
+                        ) || null;
                     holoItems.unit_price = holoItems.total_price / holoItems.quantity || null;
                     itemsToAdd['holo'] = holoItems;
                 }
 
                 const exDiv = cardsContainer.querySelector('.add-ex-item');
                 if (exDiv) {
-                    const exItems = { 'item_type': 'ex', 'quantity': null, 'total_price': null };
-                    exItems.quantity = DOMPurify.sanitize(exDiv.querySelector('.ex-quantity-input').value.trim()) || null;
-                    exItems.total_price = DOMPurify.sanitize(exDiv.querySelector('.ex-sell-price-input').value.replace(',', '.').trim()) || null;
+                    const exItems = { item_type: 'ex', quantity: null, total_price: null };
+                    exItems.quantity =
+                        DOMPurify.sanitize(
+                            exDiv.querySelector('.ex-quantity-input').value.trim(),
+                        ) || null;
+                    exItems.total_price =
+                        DOMPurify.sanitize(
+                            exDiv
+                                .querySelector('.ex-sell-price-input')
+                                .value.replace(',', '.')
+                                .trim(),
+                        ) || null;
                     exItems.unit_price = exItems.total_price / exItems.quantity || null;
                     itemsToAdd['ex'] = exItems;
                 }
@@ -3000,12 +3359,26 @@ async function loadAuctionContent(button) {
                 const sealedDivs = cardsContainer.querySelectorAll('.add-sealed-item');
                 if (sealedDivs.length > 0) {
                     const sealedItems = [];
-                    sealedDivs.forEach(sealedDiv => {
-                        const name = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-name-input').value.trim()) || null;
-                        const price = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-price-input').value.trim()) || null;
-                        const marketValue = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-market-value-input').value.trim()) || null;
-                        const language = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-language-select').value);
-                        const date = DOMPurify.sanitize(sealedDiv.querySelector('.sealed-date-input').value) || null;
+                    sealedDivs.forEach((sealedDiv) => {
+                        const name =
+                            DOMPurify.sanitize(
+                                sealedDiv.querySelector('.sealed-name-input').value.trim(),
+                            ) || null;
+                        const price =
+                            DOMPurify.sanitize(
+                                sealedDiv.querySelector('.sealed-price-input').value.trim(),
+                            ) || null;
+                        const marketValue =
+                            DOMPurify.sanitize(
+                                sealedDiv.querySelector('.sealed-market-value-input').value.trim(),
+                            ) || null;
+                        const language = DOMPurify.sanitize(
+                            sealedDiv.querySelector('.sealed-language-select').value,
+                        );
+                        const date =
+                            DOMPurify.sanitize(
+                                sealedDiv.querySelector('.sealed-date-input').value,
+                            ) || null;
 
                         if (name !== null && marketValue !== null) {
                             sealedItems.push({
@@ -3013,7 +3386,7 @@ async function loadAuctionContent(button) {
                                 price: price,
                                 market_value: marketValue,
                                 language: language,
-                                date: date
+                                date: date,
                             });
                         }
                     });
@@ -3027,9 +3400,9 @@ async function loadAuctionContent(button) {
                 const response = await csrfFetch(`/addToExistingAuction/${auctionId}`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
                     },
-                    body: jsonbody
+                    body: jsonbody,
                 });
                 const data = await response.json();
                 if (!(data.status === 'success')) {
@@ -3039,7 +3412,7 @@ async function loadAuctionContent(button) {
 
                 await updateInventoryValueAndTotalProfit();
 
-                newCards.forEach(card => card.classList.remove('new-card'));
+                newCards.forEach((card) => card.classList.remove('new-card'));
             } catch (error) {
                 renderAlert('Error saving new cards: ' + error, 'error');
                 return;
@@ -3057,12 +3430,11 @@ async function initializeSealed() {
     viewButton.addEventListener('click', () => {
         loadSealed(viewButton);
     });
-
 }
 
 async function loadSealed(viewButton) {
     const sealedTab = document.querySelector('.sealed-tab');
-    const contentDiv = document.querySelector('.sealed-tab-content')
+    const contentDiv = document.querySelector('.sealed-tab-content');
     if (sealedTab.hidden || sealedTab.childElementCount === 0) {
         sealedTab.hidden = false;
         viewButton.innerHTML = 'Hide';
@@ -3084,10 +3456,17 @@ async function loadSealed(viewButton) {
                     if (sealedData.quantity != null) {
                         sealedDiv.setAttribute('data-quantity', sealedData.quantity);
                     }
-                    const margin = (Number(DOMPurify.sanitize(sealedData.market_value)) - Number(DOMPurify.sanitize(sealedData.price))).toFixed(2);
+                    const margin = (
+                        Number(DOMPurify.sanitize(sealedData.market_value)) -
+                        Number(DOMPurify.sanitize(sealedData.price))
+                    ).toFixed(2);
                     const timeStamp = DOMPurify.sanitize(sealedData.date).replace('Z', '');
                     const date = new Date(timeStamp);
-                    let formatedDate = date.toLocaleDateString('sk-SK', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                    let formatedDate = date.toLocaleDateString('sk-SK', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                    });
                     sealedDiv.innerHTML = `
                         <p class='sealed-quantity'>${DOMPurify.sanitize(sealedData.quantity)}</p>
                         <p class='sealed-name'>${DOMPurify.sanitize(sealedData.name)}</p>
@@ -3099,7 +3478,7 @@ async function loadSealed(viewButton) {
                         <p class='add-date'>${formatedDate}</p>
                         <p></p>
                         <p></p>
-                        `
+                        `;
                     enableSealedLanguageEditing(sealedDiv);
 
                     sealedDiv.addEventListener('click', (event) => {
@@ -3111,13 +3490,12 @@ async function loadSealed(viewButton) {
                         spawnItemsContextMenu(sealedData.sid, event, sealedDiv);
                     });
                     contentDiv.append(sealedDiv);
-                })
+                });
 
-
-                const buttonsContainer = document.querySelector('.buttons-container')
+                const buttonsContainer = document.querySelector('.buttons-container');
 
                 const addButton = buttonsContainer.querySelector('.add-sealed');
-                const date = new Date().toJSON().split('T')[0]
+                const date = new Date().toJSON().split('T')[0];
                 addButton.addEventListener('click', () => {
                     const div = document.createElement('div');
                     div.classList.add('add-sealed');
@@ -3127,19 +3505,18 @@ async function loadSealed(viewButton) {
                             <input type='number' placeholder='market value'></input>
                             ${languageSelect('sealed-language-select')}
                             <input type='date' value=${date} max=${date} ></input>
-                        `
+                        `;
                     contentDiv.append(div);
 
                     const saveButton = buttonsContainer.querySelector('.save-sealed-btn');
                     saveButton.hidden = false;
-
                 });
 
                 const saveButton = buttonsContainer.querySelector('.save-sealed-btn');
                 saveButton.addEventListener('click', async () => {
                     const inputDivs = contentDiv.querySelectorAll('.add-sealed');
-                    let inputValues = []
-                    inputDivs.forEach(div => {
+                    let inputValues = [];
+                    inputDivs.forEach((div) => {
                         const inputs = div.querySelectorAll('input');
                         const row = {};
                         row.name = inputs[0].value || null;
@@ -3150,30 +3527,28 @@ async function loadSealed(viewButton) {
                         if (row.name !== null && row.market_value !== null) {
                             inputValues.push(row);
                         }
-                    })
+                    });
                     saveButton.hidden = true;
                     if (inputValues.length > 0) {
                         const response = await csrfFetch('/addSealed', {
                             method: 'POST',
                             headers: {
-                                'Content-Type': 'application/json'
+                                'Content-Type': 'application/json',
                             },
-                            body: JSON.stringify(inputValues)
+                            body: JSON.stringify(inputValues),
                         });
                         const data = await response.json();
                         if (data.status === 'success') {
-                            window.location.reload()
+                            window.location.reload();
                         } else {
                             renderAlert(data.message, 'error');
-                            inputDivs.forEach(div => {
+                            inputDivs.forEach((div) => {
                                 div.remove();
                             });
                         }
                     }
-                })
-
-            }
-            catch (e) {
+                });
+            } catch (e) {
                 console.log('Error:', e);
             }
         }
@@ -3190,7 +3565,7 @@ async function loadUnlinkedIds() {
         if (data.status === 'success') {
             return data.data;
         } else {
-            throw ('Error');
+            throw 'Error';
         }
     } catch (err) {
         renderAlert('There was an error fetching non-barter ids' + err, 'error');
@@ -3206,7 +3581,7 @@ async function renderBarterSelect(select) {
         option.textContent = sanitizePlainText(row.invoice_number);
         select.appendChild(option);
     });
-    return select
+    return select;
 }
 
 function openMergeAuctionModal(auctionId, auctionName) {
@@ -3235,7 +3610,7 @@ function openMergeAuctionModal(auctionId, auctionName) {
     targetSelect.addEventListener('focus', async (event) => {
         const response = await csrfFetch(`/loadAuctions`);
         const data = await response.json();
-        data.forEach(auction => {
+        data.forEach((auction) => {
             if (auction.id == auctionId) return;
             const safeAuctionId = sanitizeNumericId(auction.id);
             const option = document.createElement('option');
@@ -3243,12 +3618,11 @@ function openMergeAuctionModal(auctionId, auctionName) {
             option.textContent = `${auction.auction_name || 'Auction ' + (auction.id - 1)}`;
             targetSelect.appendChild(option);
         });
-    })
+    });
     let targetId = null;
     targetSelect.addEventListener('change', (event) => {
         targetId = event.target.value;
     });
-
 
     const confirmBtn = contentDiv.querySelector('.merge-auction-confirm-btn');
     confirmBtn.addEventListener('click', async (event) => {
@@ -3260,7 +3634,7 @@ function openMergeAuctionModal(auctionId, auctionName) {
         const response = await csrfFetch(`/mergeAuctions/${auctionId}/${targetId}`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
             },
         });
         const data = await response.json();
@@ -3270,7 +3644,7 @@ function openMergeAuctionModal(auctionId, auctionName) {
         } else {
             renderAlert(data.message, 'error');
             close();
-        };
+        }
     });
 
     modal.appendChild(contentDiv);
@@ -3288,7 +3662,7 @@ async function loadAuctions() {
     try {
         const response = await csrfFetch('/loadAuctions');
         const data = await response.json();
-        data.forEach(auction => {
+        data.forEach((auction) => {
             const safeAuctionId = sanitizeNumericId(auction.id);
             const safeSaleId = sanitizeNumericId(auction.sale_id);
             const auctionDiv = document.createElement('div');
@@ -3298,12 +3672,22 @@ async function loadAuctions() {
                 auctionDiv.classList.add('singles');
             }
             auctionDiv.setAttribute('data-id', safeAuctionId);
-            let auctionName = auction.auction_name || "Auction " + (auction.id - 1); // Fallback for name
+            let auctionName = auction.auction_name || 'Auction ' + (auction.id - 1); // Fallback for name
             let auctionPrice = auction.auction_price || null; // Fallback for buy price
             const buyDate = new Date(auction.date_created);
-            let formatedDate = buyDate.toLocaleDateString('sk-SK', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            let formatedDate = buyDate.toLocaleDateString('sk-SK', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+            });
             if (formatedDate === 'Invalid Date') {
-                formatedDate = new Date(String(auction.date_created).split('T')[0]).toLocaleDateString('sk-SK', { year: 'numeric', month: '2-digit', day: '2-digit' });;
+                formatedDate = new Date(
+                    String(auction.date_created).split('T')[0],
+                ).toLocaleDateString('sk-SK', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                });
             }
 
             // Parse payment methods
@@ -3331,10 +3715,11 @@ async function loadAuctions() {
                             <button class="merge-button">Merge</button>
                         </div>
                         <div class="auction-option auction-link-cell">
-                            ${auction.sale_id == null
-                    ? `<select class='barter-id-select'><option value="null">Select Invoice Number to link</option></select>`
-                    : `<a class="sale-link" href="/sold#${safeSaleId}">Invoice Number: ${DOMPurify.sanitize(invoiceNumber)}</a>`
-                }
+                            ${
+                                auction.sale_id == null
+                                    ? `<select class='barter-id-select'><option value="null">Select Invoice Number to link</option></select>`
+                                    : `<a class="sale-link" href="/sold#${safeSaleId}">Invoice Number: ${DOMPurify.sanitize(invoiceNumber)}</a>`
+                            }
                         </div>
                     </div>
                 </div>
@@ -3346,7 +3731,6 @@ async function loadAuctions() {
 
             // Store payments data on the div for la
             auctionDiv.paymentsData = payments;
-
         });
 
         const mergeAuctions = document.querySelectorAll('.merge-button');
@@ -3358,7 +3742,6 @@ async function loadAuctions() {
                 openMergeAuctionModal(auctionId, auctionName);
             });
         });
-
 
         const barterSelects = document.querySelectorAll('.barter-id-select');
         barterSelects.forEach((select) => {
@@ -3374,18 +3757,17 @@ async function loadAuctions() {
                     const res = await csrfFetch(`/linkAuctionToSale/${auctionId}`, {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({ 'sale_id': selected })
+                        body: JSON.stringify({ sale_id: selected }),
                     });
-                    const data = await res.json()
+                    const data = await res.json();
                     if (data.status === 'success') {
-                        console.log('success')
+                        console.log('success');
                     }
                 } catch (err) {
-                    renderAlert('There was an error' + err, 'error')
+                    renderAlert('There was an error' + err, 'error');
                 }
-
             });
         });
 
@@ -3402,12 +3784,17 @@ async function loadAuctions() {
 
             // Add existing payments
             if (payments.length > 0) {
-                payments.forEach(payment => {
-                    rowsContainer.innerHTML += paymentTypeRow(DOMPurify.sanitize(payment.type), DOMPurify.sanitize(payment.amount));
+                payments.forEach((payment) => {
+                    rowsContainer.innerHTML += paymentTypeRow(
+                        DOMPurify.sanitize(payment.type),
+                        DOMPurify.sanitize(payment.amount),
+                    );
                 });
             } else {
                 // Add one empty row if no payments
-                const auctionPrice = DOMPurify.sanitize(auctionDiv.querySelector('.auction-price').textContent.replace('€', ''));
+                const auctionPrice = DOMPurify.sanitize(
+                    auctionDiv.querySelector('.auction-price').textContent.replace('€', ''),
+                );
                 rowsContainer.innerHTML += paymentTypeRow('Bankový prevod', auctionPrice);
             }
 
@@ -3424,7 +3811,7 @@ async function loadAuctions() {
             // Attach remove button listeners
             const attachRemoveListeners = () => {
                 const removeButtons = rowsContainer.querySelectorAll('.remove-payment-btn');
-                removeButtons.forEach(btn => {
+                removeButtons.forEach((btn) => {
                     btn.onclick = () => {
                         if (rowsContainer.children.length > 1) {
                             btn.closest('.payment-row').remove();
@@ -3443,49 +3830,54 @@ async function loadAuctions() {
             });
 
             // Save button
-            paymentContainer.querySelector('.save-payments-btn').addEventListener('click', async () => {
-                const paymentRows = rowsContainer.querySelectorAll('.payment-row');
-                const paymentsArray = [];
-                let hasEmptyType = false;
+            paymentContainer
+                .querySelector('.save-payments-btn')
+                .addEventListener('click', async () => {
+                    const paymentRows = rowsContainer.querySelectorAll('.payment-row');
+                    const paymentsArray = [];
+                    let hasEmptyType = false;
 
-                paymentRows.forEach(row => {
-                    const type = row.querySelector('.payment-type-select').value;
-                    const amount = parseFloat(row.querySelector('.payment-amount-input').value) || 0;
+                    paymentRows.forEach((row) => {
+                        const type = row.querySelector('.payment-type-select').value;
+                        const amount =
+                            parseFloat(row.querySelector('.payment-amount-input').value) || 0;
 
-                    if (!type || type.trim() === '') {
-                        hasEmptyType = true;
-                    } else {
-                        paymentsArray.push({ type, amount });
+                        if (!type || type.trim() === '') {
+                            hasEmptyType = true;
+                        } else {
+                            paymentsArray.push({ type, amount });
+                        }
+                    });
+
+                    if (hasEmptyType && paymentsArray.length === 0) {
+                        renderAlert('Please select at least one payment type', 'error');
+                        return;
                     }
-                });
 
-                if (hasEmptyType && paymentsArray.length === 0) {
-                    renderAlert('Please select at least one payment type', 'error');
-                    return;
-                }
+                    // Validate payments
+                    const validation = validatePayments(paymentsArray);
+                    if (!validation.valid) {
+                        renderAlert(validation.error, 'error');
+                        return;
+                    }
 
-                // Validate payments
-                const validation = validatePayments(paymentsArray);
-                if (!validation.valid) {
-                    renderAlert(validation.error, 'error');
-                    return;
-                }
-
-                const success = await updatePaymentMethod(auctionId, paymentsArray);
-                if (success) {
-                    // Update display
-                    auctionDiv.paymentsData = paymentsArray;
-                    const paymentDisplay = formatPaymentDisplay(paymentsArray);
-                    paymentContainer.innerHTML = `
+                    const success = await updatePaymentMethod(auctionId, paymentsArray);
+                    if (success) {
+                        // Update display
+                        auctionDiv.paymentsData = paymentsArray;
+                        const paymentDisplay = formatPaymentDisplay(paymentsArray);
+                        paymentContainer.innerHTML = `
                         <div class="payment-method">${DOMPurify.sanitize(paymentDisplay)}</div>
                         <button class="edit-payments-btn">Edit</button>
                     `;
-                    // Re-attach listener to new edit button
-                    paymentContainer.querySelector('.edit-payments-btn').addEventListener('click', handleEditPayment);
-                } else {
-                    renderAlert('Failed to update payment methods. Please try again.', 'error');
-                }
-            });
+                        // Re-attach listener to new edit button
+                        paymentContainer
+                            .querySelector('.edit-payments-btn')
+                            .addEventListener('click', handleEditPayment);
+                    } else {
+                        renderAlert('Failed to update payment methods. Please try again.', 'error');
+                    }
+                });
 
             // Cancel button
             paymentContainer.querySelector('.cancel-payments-btn').addEventListener('click', () => {
@@ -3495,7 +3887,9 @@ async function loadAuctions() {
                     <button class="edit-payments-btn">Edit</button>
                 `;
                 // Re-attach listener to new edit button
-                paymentContainer.querySelector('.edit-payments-btn').addEventListener('click', handleEditPayment);
+                paymentContainer
+                    .querySelector('.edit-payments-btn')
+                    .addEventListener('click', handleEditPayment);
             });
         };
 
@@ -3505,7 +3899,7 @@ async function loadAuctions() {
         });
 
         const auctionPriceInputs = document.querySelectorAll('input.auction-price');
-        auctionPriceInputs.forEach(input => {
+        auctionPriceInputs.forEach((input) => {
             input.addEventListener('blur', (event) => {
                 const value = event.target.value.replace(',', '.');
                 const auctionDiv = event.target.closest('.auction-tab');
@@ -3518,15 +3912,13 @@ async function loadAuctions() {
                 p.classList.add('auction-price');
                 p.textContent = appendEuroSign(value, 'auction_price');
                 event.target.replaceWith(p);
-
-
-            })
+            });
             input.addEventListener('keydown', (event) => {
                 if (event.key == 'Enter') {
                     input.blur();
                 }
-            })
-        })
+            });
+        });
 
         const attachAuctionNameListener = (name) => {
             if (name.textContent === 'Singles') {
@@ -3553,7 +3945,7 @@ async function loadAuctions() {
                     p.textContent = value;
                     blurEvent.target.replaceWith(p);
                     attachAuctionNameListener(p);
-                })
+                });
                 input.addEventListener('keydown', (keyEvent) => {
                     if (keyEvent.key == 'Enter') {
                         input.blur();
@@ -3563,7 +3955,7 @@ async function loadAuctions() {
         };
 
         const auctionNames = document.querySelectorAll('.auction-name');
-        auctionNames.forEach(name => attachAuctionNameListener(name));
+        auctionNames.forEach((name) => attachAuctionNameListener(name));
 
         const attachAuctionPriceListener = (price) => {
             price.addEventListener('dblclick', (event) => {
@@ -3591,17 +3983,17 @@ async function loadAuctions() {
                     blurEvent.target.replaceWith(p);
                     changeCardPricesBasedOnAuctionPrice(auctionDiv);
                     attachAuctionPriceListener(p);
-                })
+                });
                 input.addEventListener('keydown', (keyEvent) => {
                     if (keyEvent.key == 'Enter') {
                         input.blur();
                     }
-                })
+                });
             });
         };
 
         const auctionPrices = document.querySelectorAll('.auction-price');
-        auctionPrices.forEach(price => attachAuctionPriceListener(price));
+        auctionPrices.forEach((price) => attachAuctionPriceListener(price));
 
         //Attach event listener for changing date
         const auctionDateListener = (date) => {
@@ -3609,9 +4001,9 @@ async function loadAuctions() {
                 const currValue = event.target.textContent;
                 const input = document.createElement('INPUT');
                 input.type = 'date';
-                const maxDate = new Date().toISOString().split("T")[0];
+                const maxDate = new Date().toISOString().split('T')[0];
                 input.max = `${maxDate}`;
-                const [day, month, year] = currValue.split(". ").map(s => s.trim());
+                const [day, month, year] = currValue.split('. ').map((s) => s.trim());
                 const dateValue = `${year}-${month}-${day}`;
                 input.value = dateValue;
                 input.classList.add(...event.target.classList);
@@ -3629,7 +4021,11 @@ async function loadAuctions() {
                     const p = document.createElement('p');
 
                     value = new Date(value);
-                    let formatedDate = value.toLocaleDateString('sk-SK', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                    let formatedDate = value.toLocaleDateString('sk-SK', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                    });
                     p.textContent = formatedDate;
                     p.classList.add('buy-date');
                     blurEvent.target.replaceWith(p);
@@ -3639,20 +4035,20 @@ async function loadAuctions() {
                     if (keyEvent.key === 'Enter') {
                         input.blur();
                     }
-                })
+                });
             });
-        }
+        };
 
         const dateElements = document.querySelectorAll('.buy-date');
-        dateElements.forEach(date => auctionDateListener(date));
+        dateElements.forEach((date) => auctionDateListener(date));
         // Attach event listeners after auctions are loaded
         const viewButtons = document.querySelectorAll('.view-auction');
-        viewButtons.forEach(button => {
+        viewButtons.forEach((button) => {
             button.addEventListener('click', () => loadAuctionContent(button));
         });
 
         const auctionsTabs = document.querySelectorAll('.auction-tab');
-        auctionsTabs.forEach(tab => {
+        auctionsTabs.forEach((tab) => {
             tab.addEventListener('click', async (event) => {
                 // Only trigger if the click is on the tab itself, not its children
                 if (event.target === tab) {
@@ -3665,14 +4061,14 @@ async function loadAuctions() {
         });
 
         const deleteButton = document.querySelectorAll('.delete-auction');
-        deleteButton.forEach(button => {
+        deleteButton.forEach((button) => {
             button.addEventListener('click', () => {
                 const auctionId = button.getAttribute('data-id');
                 if (auctionId != 1) {
                     if (button.textContent === 'Confirm') {
                         const auctionDiv = button.closest('.auction-tab');
                         deleteAuction(auctionId, auctionDiv);
-                        updateInventoryValueAndTotalProfit()
+                        updateInventoryValueAndTotalProfit();
                     } else {
                         button.textContent = 'Confirm';
                         const timerID = setTimeout(() => {
@@ -3687,7 +4083,6 @@ async function loadAuctions() {
                             }
                         });
                     }
-
                 }
             });
         });

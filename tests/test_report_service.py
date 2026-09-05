@@ -64,7 +64,10 @@ def test_wrap_table_text_builds_header_and_values_from_dictionaries():
         font_name="Helvetica",
     )
 
-    assert [[cell.getPlainText() if hasattr(cell, "getPlainText") else cell for cell in row] for row in wrapped] == [
+    assert [
+        [cell.getPlainText() if hasattr(cell, "getPlainText") else cell for cell in row]
+        for row in wrapped
+    ] == [
         ["item name", "buy price"],
         ["Pikachu", 10],
         ["Mew", 12],

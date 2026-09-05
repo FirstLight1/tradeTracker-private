@@ -1,11 +1,11 @@
-import { csrfFetch } from "./sanitizers.js";
-import { renderAlert } from "./renderUtil.js";
+import { csrfFetch } from './sanitizers.js';
+import { renderAlert } from './renderUtil.js';
 
 export async function searchCard(query, cartIds = [], individualCards = false) {
     const response = await csrfFetch('/searchCard', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
         },
         body: JSON.stringify({ query: query.toUpperCase(), cartIds, individualCards }),
     });

@@ -1,11 +1,11 @@
 :root {
-    --condition-colors-mint: #17A2B8;
-    --condition-colors-near-mint: #3CAF56;
-    --condition-colors-excellent: #82891E;
-    --condition-colors-good: #FFC107;
-    --condition-colors-light-played: #FD8B2B;
-    --condition-colors-played: #E56874;
-    --condition-colors-poor: #DC3545;
+    --condition-colors-mint: #17a2b8;
+    --condition-colors-near-mint: #3caf56;
+    --condition-colors-excellent: #82891e;
+    --condition-colors-good: #ffc107;
+    --condition-colors-light-played: #fd8b2b;
+    --condition-colors-played: #e56874;
+    --condition-colors-poor: #dc3545;
 }
 
 .creditnote-grid {
@@ -20,9 +20,7 @@
 }
 
 .creditnote-box {
-    background: linear-gradient(135deg,
-            rgba(26, 31, 46, 0.9) 0%,
-            rgba(13, 17, 23, 0.9) 100%);
+    background: linear-gradient(135deg, rgba(26, 31, 46, 0.9) 0%, rgba(13, 17, 23, 0.9) 100%);
     border: 1px solid rgba(127, 255, 212, 0.1);
     border-radius: 15px;
     box-shadow:
@@ -80,7 +78,9 @@
 .creditnote-address-block .address-name {
     font-size: 1.15rem;
     color: var(--accent-cyan);
-    text-shadow: 0 0 10px var(--glow-color), 0 0 20px rgba(127, 255, 212, 0.1);
+    text-shadow:
+        0 0 10px var(--glow-color),
+        0 0 20px rgba(127, 255, 212, 0.1);
     margin-bottom: 4px;
 }
 
@@ -128,7 +128,7 @@
     justify-self: end;
 }
 
-.creditnote-total>p {
+.creditnote-total > p {
     margin: 0 0 8px 0;
 }
 
@@ -140,7 +140,9 @@
     font-size: 1.3rem;
     font-weight: bold;
     color: var(--accent-cyan);
-    text-shadow: 0 0 10px var(--glow-color), 0 0 20px rgba(127, 255, 212, 0.1);
+    text-shadow:
+        0 0 10px var(--glow-color),
+        0 0 20px rgba(127, 255, 212, 0.1);
 }
 
 .total-price p,
@@ -255,7 +257,7 @@
     color: var(--condition-colors-poor);
 }
 
-.creditnote-item-content input[type="checkbox"] {
+.creditnote-item-content input[type='checkbox'] {
     width: 18px;
     height: 18px;
     margin: 0;
@@ -374,15 +376,17 @@
     border: 1px solid rgba(229, 104, 116, 0.4);
     border-radius: 4px;
     background: rgba(229, 104, 116, 0.1);
-    color: var(--condition-colors-played, #E56874);
+    color: var(--condition-colors-played, #e56874);
     font-size: 0.7rem;
     line-height: 1;
     cursor: pointer;
     justify-self: center;
-    transition: background 0.15s, border-color 0.15s;
+    transition:
+        background 0.15s,
+        border-color 0.15s;
 }
 
 .creditnote-item-content .creditnote-item-row.debitnote-item-row .item-remove-btn:hover {
     background: rgba(229, 104, 116, 0.3);
-    border-color: var(--condition-colors-played, #E56874);
+    border-color: var(--condition-colors-played, #e56874);
 }

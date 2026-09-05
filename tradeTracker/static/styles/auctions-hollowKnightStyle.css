@@ -20,67 +20,64 @@
 
 .mint,
 .mt {
-    color: #17A2B8;
+    color: #17a2b8;
 }
 
 .near_mint,
 .nm {
-    color: #3CAF56;
+    color: #3caf56;
 }
 
 .excellent,
 .ex {
-    color: #82891E;
+    color: #82891e;
 }
 
 .good,
 .gd {
-    color: #FFC107;
+    color: #ffc107;
 }
 
 .light_played,
 .lp {
-    color: #FD8B2B;
+    color: #fd8b2b;
 }
 
 .played,
 .pl {
-    color: #E56874;
+    color: #e56874;
 }
 
 .poor,
 .po {
-    color: #DC3545;
+    color: #dc3545;
 }
 
 .condition.graded,
 .result-condition.graded,
 .item-condition.graded,
 .cart-condition.graded {
-    color: #D8B4FE;
+    color: #d8b4fe;
 }
 
 .condition.at-grader {
-    color: #FACC15;
+    color: #facc15;
 }
-
-
 
 body {
     color: var(--text-color);
-    font-family: var(--primary-font), "Cinzel", serif;
+    font-family: var(--primary-font), 'Cinzel', serif;
     position: relative;
     overflow-x: hidden;
     min-height: 100vh;
-    background: linear-gradient(rgba(13, 17, 23, 0.85),
-            rgba(26, 31, 46, 0.95)),
+    background:
+        linear-gradient(rgba(13, 17, 23, 0.85), rgba(26, 31, 46, 0.95)),
         url('../images/CityOfTearsBG.jpg');
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
     background-repeat: no-repeat;
 }
-
 
 /* Headers */
 h1 {
@@ -147,14 +144,18 @@ h1 {
 }
 
 .search-results .card-search-result {
-    grid-template-columns:
-        minmax(140px, 1.6fr) minmax(85px, 0.9fr) minmax(125px, 1.2fr) 45px 70px 60px minmax(60px, 0.7fr) 130px 90px;
+    grid-template-columns: minmax(140px, 1.6fr) minmax(85px, 0.9fr) minmax(
+            125px,
+            1.2fr
+        ) 45px 70px 60px minmax(60px, 0.7fr) 130px 90px;
     column-gap: clamp(8px, 1.1vw, 18px);
 }
 
 .search-results .sealed-search-result {
-    grid-template-columns:
-        minmax(160px, 1.8fr) 45px 80px minmax(85px, 0.8fr) minmax(100px, 1fr) 90px 70px;
+    grid-template-columns: minmax(160px, 1.8fr) 45px 80px minmax(85px, 0.8fr) minmax(
+            100px,
+            1fr
+        ) 90px 70px;
     column-gap: clamp(8px, 1.1vw, 18px);
 }
 
@@ -168,7 +169,10 @@ h1 {
 .search-results div:hover,
 .search-results div:focus {
     border-color: var(--glow-color, 0.6);
-    box-shadow: 0 0 24px var(--glow-color), 0 0 12px var(--mist-color), 0 0 10px var(--mist-color);
+    box-shadow:
+        0 0 24px var(--glow-color),
+        0 0 12px var(--mist-color),
+        0 0 10px var(--mist-color);
     color: var(--text-accent);
     cursor: pointer;
 }
@@ -185,16 +189,21 @@ h1 {
 
 .highlighted-search-result {
     border: 1px solid var(--glow-color);
-    box-shadow: 0 0 24px var(--glow-color), 0 0 12px var(--mist-color), 0 0 10px var(--mist-color);
+    box-shadow:
+        0 0 24px var(--glow-color),
+        0 0 12px var(--mist-color),
+        0 0 10px var(--mist-color);
     background: rgba(13, 17, 23, 0.65);
 }
 
 /* Navigation */
 .nav-bar {
-    background: linear-gradient(90deg,
-            var(--primary-light) 0%,
-            rgba(26, 31, 46, 0.8) 50%,
-            var(--primary-dark) 100%);
+    background: linear-gradient(
+        90deg,
+        var(--primary-light) 0%,
+        rgba(26, 31, 46, 0.8) 50%,
+        var(--primary-dark) 100%
+    );
     box-shadow:
         0 5px 15px rgba(0, 0, 0, 0.3),
         0 0 40px rgba(127, 255, 212, 0.1);
@@ -219,10 +228,12 @@ h1 {
 
 /* Buttons */
 button {
-    background: linear-gradient(135deg,
-            transparent 0%,
-            rgba(127, 255, 212, 0.05) 50%,
-            transparent 100%);
+    background: linear-gradient(
+        135deg,
+        transparent 0%,
+        rgba(127, 255, 212, 0.05) 50%,
+        transparent 100%
+    );
     border: none;
     border-radius: 25px;
     color: var(--text-color);
@@ -258,13 +269,18 @@ a.sale-link {
     border: 1px solid rgba(127, 255, 212, 0.25);
     border-radius: 16px;
     padding: 6px 12px;
-    background: linear-gradient(135deg,
-            rgba(127, 255, 212, 0.08) 0%,
-            rgba(147, 112, 219, 0.08) 100%);
+    background: linear-gradient(
+        135deg,
+        rgba(127, 255, 212, 0.08) 0%,
+        rgba(147, 112, 219, 0.08) 100%
+    );
     box-shadow:
         inset 0 0 8px rgba(127, 255, 212, 0.12),
         0 0 12px rgba(127, 255, 212, 0.1);
-    transition: box-shadow 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+    transition:
+        box-shadow 0.25s ease,
+        border-color 0.25s ease,
+        color 0.25s ease;
 }
 
 a.sale-link:hover,
@@ -311,12 +327,9 @@ a.sale-link:focus {
     outline: none;
 }
 
-
 .auction-tab select,
 .sold-tab select {
-    background: linear-gradient(135deg,
-            rgba(26, 31, 46, 0.94) 0%,
-            rgba(13, 17, 23, 0.96) 100%);
+    background: linear-gradient(135deg, rgba(26, 31, 46, 0.94) 0%, rgba(13, 17, 23, 0.96) 100%);
     color: var(--text-color);
     border: 1px solid rgba(127, 255, 212, 0.35);
     border-radius: 12px;
@@ -332,14 +345,15 @@ a.sale-link:focus {
     background-image:
         linear-gradient(45deg, transparent 50%, var(--accent-cyan) 50%),
         linear-gradient(135deg, var(--accent-cyan) 50%, transparent 50%),
-        linear-gradient(135deg,
-            rgba(26, 31, 46, 0.94) 0%,
-            rgba(13, 17, 23, 0.96) 100%);
+        linear-gradient(135deg, rgba(26, 31, 46, 0.94) 0%, rgba(13, 17, 23, 0.96) 100%);
     background-position:
         calc(100% - 16px) calc(50% - 2px),
         calc(100% - 11px) calc(50% - 2px),
         0 0;
-    background-size: 5px 5px, 5px 5px, 100% 100%;
+    background-size:
+        5px 5px,
+        5px 5px,
+        100% 100%;
     background-repeat: no-repeat;
 }
 
@@ -361,7 +375,11 @@ a.sale-link:focus {
 
 .auction-tab select option:checked,
 .sold-tab select option:checked {
-    background: linear-gradient(135deg, rgba(127, 255, 212, 0.22) 0%, rgba(147, 112, 219, 0.22) 100%);
+    background: linear-gradient(
+        135deg,
+        rgba(127, 255, 212, 0.22) 0%,
+        rgba(147, 112, 219, 0.22) 100%
+    );
     color: #e6ffff;
 }
 
@@ -372,9 +390,7 @@ a.sale-link:focus {
 
 /* Auction tabs */
 .auction-tab {
-    background: linear-gradient(135deg,
-            rgba(26, 31, 46, 0.9) 0%,
-            rgba(13, 17, 23, 0.9) 100%);
+    background: linear-gradient(135deg, rgba(26, 31, 46, 0.9) 0%, rgba(13, 17, 23, 0.9) 100%);
     border: 1px solid rgba(127, 255, 212, 0.1);
     box-shadow:
         0 10px 30px rgba(0, 0, 0, 0.4),
@@ -398,7 +414,10 @@ a.sale-link:focus {
 .card:hover,
 .sealed-item:hover {
     border-color: var(--glow-color, 0.6);
-    box-shadow: 0 0 24px var(--glow-color), 0 0 12px var(--mist-color), 0 0 10px var(--mist-color);
+    box-shadow:
+        0 0 24px var(--glow-color),
+        0 0 12px var(--mist-color),
+        0 0 10px var(--mist-color);
     color: var(--text-accent);
     background: var(--primary-dark, 0.65);
 }
@@ -409,9 +428,9 @@ a.sale-link:focus {
 }
 
 /* Input fields */
-input[type="text"],
-input[type="number"],
-input[type="date"] {
+input[type='text'],
+input[type='number'],
+input[type='date'] {
     background: var(--primary-light);
     color: var(--text-color);
     border: 1px solid var(--accent-cyan);
@@ -423,15 +442,17 @@ input[type="date"] {
     backdrop-filter: blur(5px);
 }
 
-input[type="checkbox"] {
+input[type='checkbox'] {
     accent-color: var(--accent-cyan);
 }
 
-input[type="text"]:focus,
+input[type='text']:focus,
 select:focus,
 textarea:focus {
     border-color: var(--accent-cyan);
-    box-shadow: 0 0 18px var(--accent-cyan) inset, 0 0 8px var(--accent-cyan);
+    box-shadow:
+        0 0 18px var(--accent-cyan) inset,
+        0 0 8px var(--accent-cyan);
     outline: none;
 }
 
@@ -510,7 +531,7 @@ textarea:focus {
     cursor: pointer;
 }
 
-input[type="file"] {
+input[type='file'] {
     cursor: pointer;
 }
 
@@ -525,8 +546,6 @@ input[type="file"] {
     padding-bottom: 6px;
     cursor: pointer;
 }
-
-
 
 .sold-report-container {
     height: 120px;
@@ -557,7 +576,10 @@ input[type="file"] {
 
 .sold-report-container button:hover {
     border-radius: 15px;
-    box-shadow: 0 0 24px var(--glow-color), 0 0 12px var(--mist-color), 0 0 10px var(--mist-color);
+    box-shadow:
+        0 0 24px var(--glow-color),
+        0 0 12px var(--mist-color),
+        0 0 10px var(--mist-color);
 }
 
 .sold-report-container button {
@@ -579,9 +601,7 @@ input[type="file"] {
         0 0 20px rgba(147, 112, 219, 0.1);
     transition: all 0.3s ease;
     backdrop-filter: blur(5px);
-
 }
-
 
 /* Profit values */
 .profit,
@@ -614,8 +634,7 @@ input[type="file"] {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: linear-gradient(var(--accent-cyan),
-            var(--accent-purple));
+    background: linear-gradient(var(--accent-cyan), var(--accent-purple));
     border-radius: 5px;
     border: 2px solid var(--primary-dark);
 }
@@ -632,9 +651,7 @@ input[type="file"] {
     top: 150px;
     width: 350px;
     height: 150px;
-    background: linear-gradient(135deg,
-            rgba(26, 31, 46, 0.95) 0%,
-            rgba(13, 17, 23, 0.95) 100%);
+    background: linear-gradient(135deg, rgba(26, 31, 46, 0.95) 0%, rgba(13, 17, 23, 0.95) 100%);
     border: 1px solid var(--accent-cyan);
     border-right: none;
     border-radius: 15px 0 0 15px;
@@ -660,7 +677,7 @@ input[type="file"] {
 }
 
 .shopping-cart::after {
-    content: "CART";
+    content: 'CART';
     position: absolute;
     left: 25px;
     top: 75px;
@@ -680,13 +697,13 @@ input[type="file"] {
     opacity: 0;
 }
 
-.shopping-cart>* {
+.shopping-cart > * {
     opacity: 0;
     transition: opacity 0.3s;
     pointer-events: none;
 }
 
-.shopping-cart.expanded>* {
+.shopping-cart.expanded > * {
     opacity: 1;
     pointer-events: auto;
 }
@@ -741,33 +758,33 @@ input[type="file"] {
     background-color: rgba(255, 255, 255, 0.1);
     border: 1px solid var(--text-color);
     box-sizing: border-box;
-    -webkit-transition: .4s;
-    transition: .4s;
+    -webkit-transition: 0.4s;
+    transition: 0.4s;
 }
 
 .slider:before {
     position: absolute;
-    content: "";
+    content: '';
     height: 16px;
     width: 16px;
     left: 3px;
     bottom: 3px;
     background-color: var(--text-color);
-    -webkit-transition: .4s;
-    transition: .4s;
+    -webkit-transition: 0.4s;
+    transition: 0.4s;
 }
 
-input:checked+.slider {
+input:checked + .slider {
     background-color: var(--accent-cyan);
     border-color: var(--accent-cyan);
     box-shadow: 0 0 15px var(--accent-cyan);
 }
 
-input:focus+.slider {
+input:focus + .slider {
     box-shadow: 0 0 1px var(--accent-cyan);
 }
 
-input:checked+.slider:before {
+input:checked + .slider:before {
     background-color: var(--primary-dark);
     -webkit-transform: translateX(16px);
     -ms-transform: translateX(16px);

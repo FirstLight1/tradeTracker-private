@@ -36,15 +36,22 @@
     padding-right: 38px;
     border-color: rgba(127, 255, 212, 0.35);
     border-radius: 12px;
-    background-image: linear-gradient(45deg, transparent 50%, var(--accent-cyan) 50%),
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--accent-cyan) 50%),
         linear-gradient(135deg, var(--accent-cyan) 50%, transparent 50%),
         linear-gradient(135deg, rgba(26, 31, 46, 0.94) 0%, rgba(13, 17, 23, 0.96) 100%);
-    background-position: calc(100% - 16px) calc(50% - 2px),
+    background-position:
+        calc(100% - 16px) calc(50% - 2px),
         calc(100% - 11px) calc(50% - 2px),
         0 0;
-    background-size: 5px 5px, 5px 5px, 100% 100%;
+    background-size:
+        5px 5px,
+        5px 5px,
+        100% 100%;
     background-repeat: no-repeat;
-    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.35), 0 0 12px rgba(127, 255, 212, 0.1);
+    box-shadow:
+        inset 0 0 10px rgba(0, 0, 0, 0.35),
+        0 0 12px rgba(127, 255, 212, 0.1);
 }
 
 .grading-submission-form select option {
@@ -54,7 +61,11 @@
 }
 
 .grading-submission-form select option:checked {
-    background: linear-gradient(135deg, rgba(127, 255, 212, 0.22) 0%, rgba(147, 112, 219, 0.22) 100%);
+    background: linear-gradient(
+        135deg,
+        rgba(127, 255, 212, 0.22) 0%,
+        rgba(147, 112, 219, 0.22) 100%
+    );
     color: #e6ffff;
 }
 
@@ -137,7 +148,9 @@
 .creditnote-item-content .creditnote-item-row.grading-card-row:hover {
     z-index: auto;
     border-color: transparent;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 30px rgba(147, 112, 219, 0.1);
+    box-shadow:
+        0 4px 15px rgba(0, 0, 0, 0.3),
+        0 0 30px rgba(147, 112, 219, 0.1);
     color: var(--text-color);
     background: transparent;
 }
@@ -170,12 +183,12 @@
     border: 1px solid rgba(229, 104, 116, 0.4);
     border-radius: 4px;
     background: rgba(229, 104, 116, 0.1);
-    color: var(--condition-colors-played, #E56874);
+    color: var(--condition-colors-played, #e56874);
     cursor: pointer;
 }
 
 .creditnote-item-content .grading-card-row .item-remove-btn:hover {
-    border-color: var(--condition-colors-played, #E56874);
+    border-color: var(--condition-colors-played, #e56874);
     background: rgba(229, 104, 116, 0.3);
 }
 
@@ -199,7 +212,6 @@ textarea {
 }
 
 @media (max-width: 1600px) {
-
     .creditnote-grid,
     .back-btn-container {
         width: min(100%, 1530px);

@@ -1284,11 +1284,11 @@ def generateBuyReport():
     try:
         auctionName, pdf = report.generatePurchaseReport(auctionId)
         response = send_file(
-                BytesIO(pdf),
-                as_attachment=True,
-                mimetype="application/pdf",
-                download_name=f"report_{auctionName.replace(' ', '_')}.pdf",
-            )
+            BytesIO(pdf),
+            as_attachment=True,
+            mimetype="application/pdf",
+            download_name=f"report_{auctionName.replace(' ', '_')}.pdf",
+        )
         return response, 200
 
     except Exception as e:
@@ -1351,7 +1351,7 @@ def generateReports():
         return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax08"}), 500
 
 
-#TODO: move to utils
+# TODO: move to utils
 def format_iso_date(iso_str):
     """Convert an ISO formatted date string to DD.MM.YYYY."""
     if not iso_str:
@@ -1412,6 +1412,7 @@ def generateSoldReport(month, year):
     report = report_service.ReportService(get_db())
     return report.generateSoldReport(None, None, month, year, pdf_path)
 
+
 def createBuyReport(month, year):
     if os.getenv("FLASK_ENV") == "prod":
         data_dir = os.getenv("DATA_DIR", current_app.instance_path)
@@ -1423,7 +1424,6 @@ def createBuyReport(month, year):
         reports_dir = os.path.join(current_app.instance_path, "reports")
         os.makedirs(reports_dir, exist_ok=True)
         xls_path = os.path.join(reports_dir, f"Nakupy_{month}_{year}.xlsx")
-
 
     report = report_service.ReportService(get_db())
     return report.generateBuyReport(None, None, month, year, xls_path)
@@ -2147,8 +2147,8 @@ def _process_inventory_csv(file):
     return dataList
 
 
-#TODO: merge with the add endpoint
-#TODO: if date not found use today
+# TODO: merge with the add endpoint
+# TODO: if date not found use today
 def _create_inventory(db, dataList=None):
 
     if dataList is None:

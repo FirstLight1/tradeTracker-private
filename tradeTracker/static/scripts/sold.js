@@ -1,16 +1,16 @@
-import { renderField, renderAlert, scrollOnLoad, downloadFile } from "./utils/renderUtil.js";
-import { sanitizeNumericId, sanitizeClassToken, csrfFetch } from "./utils/sanitizers.js";
+import { renderField, renderAlert, scrollOnLoad, downloadFile } from './utils/renderUtil.js';
+import { sanitizeNumericId, sanitizeClassToken, csrfFetch } from './utils/sanitizers.js';
 
 const BULK_TYPE_BUY_PRICES = {
     bulk: 0.01,
     holo: 0.03,
-    ex: 0.15
+    ex: 0.15,
 };
 
 function cardConditionDisplay(card) {
     if (card.grading_is_current === 1) {
         const fullGrade = [card.grader, card.grade_numeric, card.grade_label, card.qualifier]
-            .filter(value => value !== null && value !== undefined && value !== '')
+            .filter((value) => value !== null && value !== undefined && value !== '')
             .join(' ');
         return fullGrade || 'Graded';
     }
@@ -48,15 +48,13 @@ async function loadContent(button, soldDate) {
             const sealedSales = soldItems.sealed;
             const bulkSales = soldItems.bulk_sales;
 
-            soldCards.forEach(card => {
+            soldCards.forEach((card) => {
                 const safeConditionClass = sanitizeClassToken(card.condition || 'Unknown');
                 const gradingClass = card.grading_is_current === 1 ? ' graded' : '';
                 const conditionDisplay = cardConditionDisplay(card);
                 const safeCardId = sanitizeNumericId(card.id);
                 const cardElement = document.createElement('div');
                 cardElement.classList.add('card');
-
-
 
                 cardElement.innerHTML = `
                     ${renderField(DOMPurify.sanitize(card.card_name), 'text', ['card-info', 'card-name'], 'Card Name', 'card_name')}
@@ -73,7 +71,7 @@ async function loadContent(button, soldDate) {
                 `;
                 cardsContainer.appendChild(cardElement);
             });
-            sealedSales.forEach(item => {
+            sealedSales.forEach((item) => {
                 const safeSealedId = sanitizeNumericId(item.id);
                 const sealedDiv = document.createElement('div');
                 sealedDiv.classList.add('card');
@@ -93,7 +91,7 @@ async function loadContent(button, soldDate) {
                 cardsContainer.appendChild(sealedDiv);
             });
 
-            bulkSales.forEach(bulk => {
+            bulkSales.forEach((bulk) => {
                 const safeBulkId = sanitizeNumericId(bulk.id);
                 const bulkElement = document.createElement('div');
                 bulkElement.classList.add('card');
@@ -113,7 +111,6 @@ async function loadContent(button, soldDate) {
                 `;
                 cardsContainer.appendChild(bulkElement);
             });
-
         }
     } else {
         cardsContainer.hidden = true;
@@ -125,7 +122,7 @@ async function loadHistory() {
     const response = await csrfFetch('/loadSoldHistory');
     const sales = await response.json();
     const historyContainer = document.querySelector('.sales-history-container');
-    sales.forEach(sale => {
+    sales.forEach((sale) => {
         const safeSaleId = sanitizeNumericId(sale.id);
         const safeAuctionId = sanitizeNumericId(sale.auction_id);
         const saleElement = document.createElement('div');
@@ -135,7 +132,7 @@ async function loadHistory() {
         saleElement.setAttribute('data-id', safeSaleId);
         const saleDate = new Date(sale.sale_date);
         const formattedDate = `${saleDate.getDate().toString().padStart(2, '0')}.${(saleDate.getMonth() + 1).toString().padStart(2, '0')}.${saleDate.getFullYear()}`;
-        let name = "";
+        let name = '';
         try {
             const recieverInfo = JSON.parse(sale.notes);
             name = recieverInfo.nameAndSurname;
@@ -161,9 +158,10 @@ async function loadHistory() {
                     </div>
                 </div>
             </div>
-            ${sale.auction_id === null ?
-                `<p></p>`
-                : `<span class='auction-link-hint'><a href='/#${safeAuctionId}'><img class='link-img' src="/static/images/logo.png" alt="Show auction"></a></span>`
+            ${
+                sale.auction_id === null
+                    ? `<p></p>`
+                    : `<span class='auction-link-hint'><a href='/#${safeAuctionId}'><img class='link-img' src="/static/images/logo.png" alt="Show auction"></a></span>`
             } 
             <div class="cards-container">
             <!-- Cards will be loaded here -->
@@ -189,7 +187,7 @@ async function loadHistory() {
                 returnButton.disabled = true;
                 returnButton.textContent = 'Processing...';
                 const queryParams = new URLSearchParams({
-                    saleId: saleId
+                    saleId: saleId,
                 });
                 window.location.href = `/createCreditNote/?${queryParams}`;
             } else {
@@ -214,7 +212,7 @@ async function loadHistory() {
             if (debitButton.textContent === 'Confirm') {
                 debitButton.textContent = 'Processing...';
                 const queryParams = new URLSearchParams({
-                    saleId: saleId
+                    saleId: saleId,
                 });
                 window.location.href = `/createDebitNote/?${queryParams}`;
             } else {
@@ -231,8 +229,6 @@ async function loadHistory() {
                 });
             }
         });
-
-
     });
 }
 

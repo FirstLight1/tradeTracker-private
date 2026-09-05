@@ -1,6 +1,6 @@
-import {renderAlert, createNewCard} from "./utils/renderUtil.js";
-import {CardStruct} from './utils/classes.js';
-import { csrfFetch } from "./utils/sanitizers.js";
+import { renderAlert, createNewCard } from './utils/renderUtil.js';
+import { CardStruct } from './utils/classes.js';
+import { csrfFetch } from './utils/sanitizers.js';
 
 const ALLOWED_PAYMENT_TYPES = new Set([
     'Hotovosť',
@@ -9,40 +9,40 @@ const ALLOWED_PAYMENT_TYPES = new Set([
     'Bankový prevod',
     'Online platba',
     'Dobierka',
-    'Online platobný systém'
+    'Online platobný systém',
 ]);
 
 function validatePayments(payments) {
     if (!payments || payments.length === 0) {
         return { valid: true }; // Payments are optional
     }
-    
+
     if (payments.length > 10) {
         return { valid: false, error: 'Too many payment methods (max 10)' };
     }
-    
+
     for (const payment of payments) {
         if (!ALLOWED_PAYMENT_TYPES.has(payment.type)) {
             return { valid: false, error: 'Invalid payment type selected' };
         }
-        
+
         const amount = parseFloat(payment.amount);
         if (isNaN(amount) || amount < 0) {
             return { valid: false, error: 'Invalid payment amount' };
         }
-        
+
         if (amount > 1000000) {
             return { valid: false, error: 'Payment amount too large' };
         }
     }
-    
+
     return { valid: true };
 }
 
 const cardsArr = [];
 
 let auctionValueCalculated = 0;
-const saveButton = document.querySelector('.save-btn')
+const saveButton = document.querySelector('.save-btn');
 const initialMarketValueInput = document.querySelector('.card .marketValue');
 
 if (initialMarketValueInput) {
@@ -51,29 +51,30 @@ if (initialMarketValueInput) {
     });
 }
 //add typechecks
-saveButton.addEventListener('click', () =>{
+saveButton.addEventListener('click', () => {
     const auctionName = DOMPurify.sanitize(document.querySelector('.auction-name').value);
     const auctionBuy = DOMPurify.sanitize(document.querySelector('.auction-buy-price').value);
     const date = new Date().toISOString();
-    
+
     // Collect all payment rows
     const paymentRows = document.querySelectorAll('.payment-row');
     const payments = [];
-    paymentRows.forEach(row => {
+    paymentRows.forEach((row) => {
         const type = DOMPurify.sanitize(row.querySelector('.payment-type-select').value);
-        const amount = parseFloat(DOMPurify.sanitize(row.querySelector('.payment-amount-input').value)) || 0;
+        const amount =
+            parseFloat(DOMPurify.sanitize(row.querySelector('.payment-amount-input').value)) || 0;
         if (type) {
-            payments.push({type, amount});
+            payments.push({ type, amount });
         }
     });
-    
+
     let auction = {
         name: auctionName.trim() || null,
-        buy: auctionBuy ? parseFloat(auctionBuy.replace(',','.')) : null,
+        buy: auctionBuy ? parseFloat(auctionBuy.replace(',', '.')) : null,
         date: date.trim() || null,
-        payments: payments.length > 0 ? payments : null
+        payments: payments.length > 0 ? payments : null,
     };
-    
+
     // Validate payments
     if (auction.payments) {
         const validation = validatePayments(auction.payments);
@@ -82,20 +83,21 @@ saveButton.addEventListener('click', () =>{
             return;
         }
     }
-    
-    if(cardsArr.length === 0){
+
+    if (cardsArr.length === 0) {
         cardsArr.push(auction);
     }
 
     const cards = document.querySelectorAll('.card');
-    cards.forEach(ell =>{
+    cards.forEach((ell) => {
         let card = new CardStruct();
-        const input = (selector) => DOMPurify.sanitize(ell.querySelector(selector)?.value.trim().toUpperCase()) || null;
+        const input = (selector) =>
+            DOMPurify.sanitize(ell.querySelector(selector)?.value.trim().toUpperCase()) || null;
         const inputNumber = (selector) => {
             const val = DOMPurify.sanitize(ell.querySelector(selector)?.value.trim());
-                if(!val){
-                    return null;
-                }
+            if (!val) {
+                return null;
+            }
             return parseFloat(val.replace(',', '.'));
         };
         card.cardName = input('input[name=cardName]');
@@ -105,62 +107,61 @@ saveButton.addEventListener('click', () =>{
         card.buyPrice = inputNumber('input[name=buyPrice]');
         card.marketValue = inputNumber('input[name=marketValue]');
         card.sellPrice = inputNumber('input[name=sellPrice]');
-        if(card.sellPrice === null){
+        if (card.sellPrice === null) {
             card.sellPrice = card.marketValue;
         }
-        if(card.buyPrice === null && card.marketValue !== null){
-            card.buyPrice = parseFloat((DOMPurify.sanitize(card.marketValue) * 0.80).toFixed(2));
+        if (card.buyPrice === null && card.marketValue !== null) {
+            card.buyPrice = parseFloat((DOMPurify.sanitize(card.marketValue) * 0.8).toFixed(2));
         }
         auctionValueCalculated += card.buyPrice || 0;
-        if(card.cardName !== null && card.marketValue !== null){
+        if (card.cardName !== null && card.marketValue !== null) {
             cardsArr.push(card);
         }
     });
 
-
-    if(!cardsArr[0].buy){
+    if (!cardsArr[0].buy) {
         cardsArr[0].buy = parseFloat(DOMPurify.sanitize(auctionValueCalculated.toFixed(2)));
     }
 
-    if (cardsArr.length !== 1){
+    if (cardsArr.length !== 1) {
         const jsonbody = JSON.stringify(cardsArr);
         csrfFetch('/add', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
             },
-            body: jsonbody
+            body: jsonbody,
         })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(err => {
-                    throw new Error(err.message || 'Server error');
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.status === 'success') {
-                window.location.href = '/';
-            } else {
-                renderAlert('Error: ' + (data.message || 'Unknown error'), 'error');
-            }
-        })
-        .catch(error => {
-            renderAlert('Failed to save auction: ' + error.message, 'error');
-        });
+            .then((response) => {
+                if (!response.ok) {
+                    return response.json().then((err) => {
+                        throw new Error(err.message || 'Server error');
+                    });
+                }
+                return response.json();
+            })
+            .then((data) => {
+                if (data.status === 'success') {
+                    window.location.href = '/';
+                } else {
+                    renderAlert('Error: ' + (data.message || 'Unknown error'), 'error');
+                }
+            })
+            .catch((error) => {
+                renderAlert('Failed to save auction: ' + error.message, 'error');
+            });
     }
-})
+});
 
 const addCardButton = document.querySelector('.add-card');
-addCardButton.addEventListener('click', () =>{
+addCardButton.addEventListener('click', () => {
     const cards = document.querySelectorAll('.card');
     const card = cards[0];
-    const container = document.querySelector(".cards-container")
+    const container = document.querySelector('.cards-container');
     const newCard = createNewCard(card.cloneNode(true));
 
     container.append(newCard);
-})
+});
 
 // Payment row management
 const addPaymentRowBtn = document.querySelector('.add-payment-row-btn');

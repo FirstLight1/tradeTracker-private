@@ -1,27 +1,27 @@
-.content-container{
+.content-container {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
 }
 
-.cards-header{
+.cards-header {
     display: grid;
     grid-template-columns: 200px 120px 150px 110px 80px 100px 80px;
     gap: 17px;
-    text-align:center;
+    text-align: center;
 }
 
-.card{
+.card {
     display: grid;
     grid-template-columns: 200px 120px 150px 110px 80px 100px 80px;
     gap: 17px;
-    text-align:center;
+    text-align: center;
     padding: 0px;
     margin-top: 10px;
 }
 
-.buttons-container{
+.buttons-container {
     display: flex;
     justify-content: center;
     align-items: center;

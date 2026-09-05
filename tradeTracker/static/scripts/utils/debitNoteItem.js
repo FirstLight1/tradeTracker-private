@@ -1,8 +1,21 @@
-import { csrfFetch, escapeHtml, sanitizeNumericId, sanitizeClassToken } from "./sanitizers.js";
-import { renderAlert } from "./renderUtil.js";
+import { csrfFetch, escapeHtml, sanitizeNumericId, sanitizeClassToken } from './sanitizers.js';
+import { renderAlert } from './renderUtil.js';
 
 export class DebitNoteItem {
-    constructor({ type, cardName, cardNum, condition, language, marketValue, grading, sid, cardIds, quantity, auctionId, addedIds }) {
+    constructor({
+        type,
+        cardName,
+        cardNum,
+        condition,
+        language,
+        marketValue,
+        grading,
+        sid,
+        cardIds,
+        quantity,
+        auctionId,
+        addedIds,
+    }) {
         this.type = type;
         this.cardName = cardName;
         this.cardNum = cardNum;
@@ -29,7 +42,10 @@ export class DebitNoteItem {
             if (!totalEl) return;
             const newValue = Number(input.value) || 0;
             const oldValue = Number(input.dataset.prev) || 0;
-            totalEl.textContent = (Number(totalEl.textContent) + (newValue - oldValue) * multiplier).toFixed(2);
+            totalEl.textContent = (
+                Number(totalEl.textContent) +
+                (newValue - oldValue) * multiplier
+            ).toFixed(2);
             input.dataset.prev = input.value;
         });
     }
@@ -37,14 +53,20 @@ export class DebitNoteItem {
     render() {
         this.elements = [];
         if (this.type === 'card') {
-            this.cardIds.forEach(id => {
+            this.cardIds.forEach((id) => {
                 const row = document.createElement('div');
                 row.classList.add('card', 'creditnote-item-row', 'debitnote-item-row');
                 row.setAttribute('data-id', sanitizeNumericId(id));
                 const condClass = sanitizeClassToken(this.condition || '');
                 const conditionDisplay = this.grading
-                    ? [this.grading.grader, this.grading.grade_numeric, this.grading.grade_label, this.grading.qualifier]
-                        .filter(value => value !== null && value !== undefined && value !== '').join(' ') || 'Graded'
+                    ? [
+                          this.grading.grader,
+                          this.grading.grade_numeric,
+                          this.grading.grade_label,
+                          this.grading.qualifier,
+                      ]
+                          .filter((value) => value !== null && value !== undefined && value !== '')
+                          .join(' ') || 'Graded'
                     : this.condition;
                 row.innerHTML = `
                     <div class="item-info">
@@ -64,8 +86,12 @@ export class DebitNoteItem {
                 row.querySelector('.item-remove-btn').addEventListener('click', () => {
                     row.remove();
                     this.addedIds.delete(id);
-                    this.elements = this.elements.filter(el => el !== row);
-                    document.querySelector('.creditnote-total .total-amount').textContent = (Number(document.querySelector('.creditnote-total .total-amount').textContent) - (Number(priceInput.value) || 0)).toFixed(2);
+                    this.elements = this.elements.filter((el) => el !== row);
+                    document.querySelector('.creditnote-total .total-amount').textContent = (
+                        Number(
+                            document.querySelector('.creditnote-total .total-amount').textContent,
+                        ) - (Number(priceInput.value) || 0)
+                    ).toFixed(2);
                 });
                 this.elements.push(row);
             });
@@ -91,8 +117,11 @@ export class DebitNoteItem {
             row.querySelector('.item-remove-btn').addEventListener('click', () => {
                 row.remove();
                 this.addedIds.delete(this.sid);
-                this.elements = this.elements.filter(el => el !== row);
-                document.querySelector('.creditnote-total .total-amount').textContent = (Number(document.querySelector('.creditnote-total .total-amount').textContent) - (Number(priceInput.value) || 0) * this.quantity).toFixed(2);
+                this.elements = this.elements.filter((el) => el !== row);
+                document.querySelector('.creditnote-total .total-amount').textContent = (
+                    Number(document.querySelector('.creditnote-total .total-amount').textContent) -
+                    (Number(priceInput.value) || 0) * this.quantity
+                ).toFixed(2);
             });
             this.elements.push(row);
         }
@@ -128,7 +157,7 @@ export class DebitNoteItem {
             renderAlert(`Only ${ids.length} available (requested ${pendingQty})`, 'error');
         }
         const taken = ids.slice(0, pendingQty);
-        taken.forEach(id => addedIds.add(id));
+        taken.forEach((id) => addedIds.add(id));
         return new DebitNoteItem({
             type: 'card',
             cardName: result.card_name,
@@ -136,12 +165,14 @@ export class DebitNoteItem {
             condition: result.condition,
             language: result.language || 'en',
             marketValue: result.market_value,
-            grading: result.is_graded ? {
-                grader: result.grader,
-                grade_numeric: result.grade_numeric,
-                grade_label: result.grade_label,
-                qualifier: result.qualifier,
-            } : null,
+            grading: result.is_graded
+                ? {
+                      grader: result.grader,
+                      grade_numeric: result.grade_numeric,
+                      grade_label: result.grade_label,
+                      qualifier: result.qualifier,
+                  }
+                : null,
             cardIds: taken,
             addedIds,
         });
@@ -164,6 +195,6 @@ export class DebitNoteItem {
             }),
         });
         const data = await resp.json();
-        return data.status === 'success' ? (data.card_ids || []) : [];
+        return data.status === 'success' ? data.card_ids || [] : [];
     }
 }

@@ -1,7 +1,17 @@
-import { queue } from "./utils/classes.js";
-import { clearFieldErrors, renderAlert, renderServerErrors, scrollOnLoad } from "./utils/renderUtil.js";
-import { csrfFetch, escapeHtml, sanitizeClassToken, sanitizeNumericId } from "./utils/sanitizers.js";
-import { searchCard } from "./utils/searchApi.js";
+import { queue } from './utils/classes.js';
+import {
+    clearFieldErrors,
+    renderAlert,
+    renderServerErrors,
+    scrollOnLoad,
+} from './utils/renderUtil.js';
+import {
+    csrfFetch,
+    escapeHtml,
+    sanitizeClassToken,
+    sanitizeNumericId,
+} from './utils/sanitizers.js';
+import { searchCard } from './utils/searchApi.js';
 
 const addedIds = new Set();
 let currentResultsQueue = null;
@@ -11,7 +21,7 @@ function searchBar() {
     const searchBtn = document.querySelector('.grading-card-search .search-btn');
     const searchContainer = document.querySelector('.grading-card-search .search-results');
 
-    searchInput.addEventListener('keydown', event => {
+    searchInput.addEventListener('keydown', (event) => {
         if (!currentResultsQueue) return;
         if (event.key === 'ArrowDown') {
             event.preventDefault();
@@ -30,15 +40,15 @@ function searchBar() {
             searchContainer.replaceChildren();
             return;
         }
-        const results = (await searchCard(query, [...addedIds], true) || [])
-            .filter(result => !Object.prototype.hasOwnProperty.call(result, 'sid'))
+        const results = ((await searchCard(query, [...addedIds], true)) || [])
+            .filter((result) => !Object.prototype.hasOwnProperty.call(result, 'sid'))
             .slice(0, 7);
         currentResultsQueue = new queue(results.length + 1);
         currentResultsQueue.enqueue(searchInput);
         displayResults(results, currentResultsQueue, searchInput, searchContainer);
     };
 
-    searchInput.addEventListener('keydown', event => {
+    searchInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             event.preventDefault();
             search();
@@ -57,7 +67,7 @@ function displayResults(results, resultsQueue, searchInput, searchContainer) {
         return;
     }
 
-    results.forEach(result => {
+    results.forEach((result) => {
         const row = document.createElement('div');
         row.className = 'search-result-item';
         row.tabIndex = 0;
@@ -78,7 +88,7 @@ function displayResults(results, resultsQueue, searchInput, searchContainer) {
         };
 
         row.addEventListener('click', add);
-        row.addEventListener('keydown', async event => {
+        row.addEventListener('keydown', async (event) => {
             if (event.key === 'ArrowDown') {
                 event.preventDefault();
                 resultsQueue.moveNext();
@@ -147,24 +157,32 @@ function renderCard(result, cardId) {
         }
         updateTotal();
     });
-    row.querySelectorAll('input').forEach(input => input.addEventListener('input', updateTotal));
+    row.querySelectorAll('input').forEach((input) => input.addEventListener('input', updateTotal));
     itemsContainer.appendChild(row);
     updateTotal();
 }
 
 function updateTotal() {
     const sharedCosts = [
-        '#outbound-shipping-cost', '#return-shipping-cost', '#insurance-cost', '#customs-duty-cost', '#other-shared-cost',
+        '#outbound-shipping-cost',
+        '#return-shipping-cost',
+        '#insurance-cost',
+        '#customs-duty-cost',
+        '#other-shared-cost',
     ].reduce((total, selector) => total + (Number(document.querySelector(selector).value) || 0), 0);
-    const cardCosts = [...document.querySelectorAll('.grading-card-row')].reduce((total, row) => total
-        + (Number(row.querySelector('.grading-fee-input').value) || 0)
-        + (Number(row.querySelector('.prep-fee-input').value) || 0)
-        + (Number(row.querySelector('.upcharge-input').value) || 0), 0);
+    const cardCosts = [...document.querySelectorAll('.grading-card-row')].reduce(
+        (total, row) =>
+            total +
+            (Number(row.querySelector('.grading-fee-input').value) || 0) +
+            (Number(row.querySelector('.prep-fee-input').value) || 0) +
+            (Number(row.querySelector('.upcharge-input').value) || 0),
+        0,
+    );
     document.querySelector('.total-amount').textContent = (sharedCosts + cardCosts).toFixed(2);
 }
 
 function submissionPayload() {
-    const value = selector => document.querySelector(selector).value;
+    const value = (selector) => document.querySelector(selector).value;
     return {
         submission: {
             grader: value('#grader'),
@@ -179,7 +197,7 @@ function submissionPayload() {
             customs_duty_cost: Number(value('#customs-duty-cost')) || 0,
             other_shared_cost: Number(value('#other-shared-cost')) || 0,
         },
-        cards: [...document.querySelectorAll('.grading-card-row')].map(row => ({
+        cards: [...document.querySelectorAll('.grading-card-row')].map((row) => ({
             card_id: Number(row.dataset.id),
             grader: null,
             submitted_value: Number(row.querySelector('.submitted-value-input').value) || 0,
@@ -194,7 +212,7 @@ function setupForm() {
     const form = document.querySelector('.grading-submission-form');
     const submittedAt = form.querySelector('#submitted-at');
 
-    form.addEventListener('submit', async event => {
+    form.addEventListener('submit', async (event) => {
         event.preventDefault();
         clearFieldErrors(form);
         if (!form.reportValidity()) return;
@@ -211,13 +229,23 @@ function setupForm() {
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) {
-                renderServerErrors(data, form, {
-                    grader: '#grader', service_level: '#service-level', status: '#status',
-                    submitted_at: '#submitted-at', notes: '#notes',
-                    outbound_shipping_cost: '#outbound-shipping-cost',
-                    return_shipping_cost: '#return-shipping-cost', insurance_cost: '#insurance-cost',
-                    customs_duty_cost: '#customs-duty-cost', other_shared_cost: '#other-shared-cost',
-                }, 'Unable to create submission');
+                renderServerErrors(
+                    data,
+                    form,
+                    {
+                        grader: '#grader',
+                        service_level: '#service-level',
+                        status: '#status',
+                        submitted_at: '#submitted-at',
+                        notes: '#notes',
+                        outbound_shipping_cost: '#outbound-shipping-cost',
+                        return_shipping_cost: '#return-shipping-cost',
+                        insurance_cost: '#insurance-cost',
+                        customs_duty_cost: '#customs-duty-cost',
+                        other_shared_cost: '#other-shared-cost',
+                    },
+                    'Unable to create submission',
+                );
                 return;
             }
             window.location.href = '/grading';
@@ -225,7 +253,9 @@ function setupForm() {
             renderAlert(`Error creating grading submission: ${error.message || error}`, 'error');
         }
     });
-    document.querySelectorAll('.creditnote-receiver input').forEach(input => input.addEventListener('input', updateTotal));
+    document
+        .querySelectorAll('.creditnote-receiver input')
+        .forEach((input) => input.addEventListener('input', updateTotal));
 }
 
 searchBar();

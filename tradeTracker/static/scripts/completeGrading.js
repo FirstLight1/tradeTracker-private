@@ -1,5 +1,10 @@
-import { clearFieldErrors, renderAlert, renderServerErrors, scrollOnLoad } from "./utils/renderUtil.js";
-import { csrfFetch, sanitizeNumericId } from "./utils/sanitizers.js";
+import {
+    clearFieldErrors,
+    renderAlert,
+    renderServerErrors,
+    scrollOnLoad,
+} from './utils/renderUtil.js';
+import { csrfFetch, sanitizeNumericId } from './utils/sanitizers.js';
 
 const main = document.querySelector('main[data-submission-id]');
 const submissionId = sanitizeNumericId(main.dataset.submissionId);
@@ -32,7 +37,15 @@ function setInitialValue(input, value) {
 function renderHeader() {
     const header = document.createElement('div');
     header.className = 'completion-card-header';
-    ['Card', 'Condition', 'Grade number', 'Grade label', 'Qualifier', 'Certificate', 'Market value'].forEach(label => {
+    [
+        'Card',
+        'Condition',
+        'Grade number',
+        'Grade label',
+        'Qualifier',
+        'Certificate',
+        'Market value',
+    ].forEach((label) => {
         const cell = document.createElement('span');
         cell.textContent = label;
         header.appendChild(cell);
@@ -59,13 +72,24 @@ function renderCard(card) {
     condition.className = 'completion-condition';
     condition.textContent = card.condition || 'Unknown';
 
-    const gradeNumeric = createInput('grade-numeric-input', `${card.card_name || 'Card'} grade number`, 'number');
+    const gradeNumeric = createInput(
+        'grade-numeric-input',
+        `${card.card_name || 'Card'} grade number`,
+        'number',
+    );
     gradeNumeric.min = '0';
     gradeNumeric.max = '10';
     const gradeLabel = createInput('grade-label-input', `${card.card_name || 'Card'} grade label`);
     const qualifier = createInput('qualifier-input', `${card.card_name || 'Card'} qualifier`);
-    const certNumber = createInput('cert-number-input', `${card.card_name || 'Card'} certificate number`);
-    const marketValue = createInput('market-value-input', `${card.card_name || 'Card'} post-grade market value`, 'number');
+    const certNumber = createInput(
+        'cert-number-input',
+        `${card.card_name || 'Card'} certificate number`,
+    );
+    const marketValue = createInput(
+        'market-value-input',
+        `${card.card_name || 'Card'} post-grade market value`,
+        'number',
+    );
     marketValue.min = '0';
 
     setInitialValue(gradeNumeric, card.grade_numeric);
@@ -81,10 +105,11 @@ function renderCard(card) {
 async function loadCards() {
     try {
         const submissionsResponse = await csrfFetch('/grading/submissions');
-        if (!submissionsResponse.ok) throw new Error(`request failed with status ${submissionsResponse.status}`);
+        if (!submissionsResponse.ok)
+            throw new Error(`request failed with status ${submissionsResponse.status}`);
         const submissions = await submissionsResponse.json();
         const submission = Array.isArray(submissions)
-            ? submissions.find(item => Number(item.id) === Number(submissionId))
+            ? submissions.find((item) => Number(item.id) === Number(submissionId))
             : null;
         if (!submission) throw new Error('submission was not found');
         if (['graded', 'returned', 'cancelled'].includes(submission.status)) {
@@ -114,7 +139,7 @@ async function loadCards() {
 }
 
 function completionPayload() {
-    return [...cardList.querySelectorAll('.completion-card-row')].map(row => ({
+    return [...cardList.querySelectorAll('.completion-card-row')].map((row) => ({
         card_id: Number(row.dataset.cardId),
         grade_numeric: nullableNumber(row.querySelector('.grade-numeric-input')),
         grade_label: nullableText(row.querySelector('.grade-label-input')),
@@ -124,7 +149,7 @@ function completionPayload() {
     }));
 }
 
-form.addEventListener('submit', async event => {
+form.addEventListener('submit', async (event) => {
     event.preventDefault();
     clearFieldErrors(form);
     if (!form.reportValidity()) return;
@@ -141,19 +166,26 @@ form.addEventListener('submit', async event => {
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
-            const cardField = className => ({ parts }) => {
-                const cardId = parts[1];
-                return cardList.querySelector(
-                    `.completion-card-row[data-card-id="${CSS.escape(cardId)}"] ${className}`
-                );
-            };
-            renderServerErrors(result, form, {
-                grade_numeric: cardField('.grade-numeric-input'),
-                grade_label: cardField('.grade-label-input'),
-                qualifier: cardField('.qualifier-input'),
-                cert_number: cardField('.cert-number-input'),
-                post_grade_market_value: cardField('.market-value-input'),
-            }, 'Unable to complete submission');
+            const cardField =
+                (className) =>
+                ({ parts }) => {
+                    const cardId = parts[1];
+                    return cardList.querySelector(
+                        `.completion-card-row[data-card-id="${CSS.escape(cardId)}"] ${className}`,
+                    );
+                };
+            renderServerErrors(
+                result,
+                form,
+                {
+                    grade_numeric: cardField('.grade-numeric-input'),
+                    grade_label: cardField('.grade-label-input'),
+                    qualifier: cardField('.qualifier-input'),
+                    cert_number: cardField('.cert-number-input'),
+                    post_grade_market_value: cardField('.market-value-input'),
+                },
+                'Unable to complete submission',
+            );
             submitButton.disabled = false;
             submitButton.textContent = 'Complete submission';
             return;

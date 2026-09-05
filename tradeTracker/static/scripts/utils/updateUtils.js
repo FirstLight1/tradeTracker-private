@@ -1,4 +1,4 @@
-import { getInventoryValue } from "./renderUtil.js";
+import { getInventoryValue } from './renderUtil.js';
 
 export async function updateInventoryValueAndTotalProfit() {
     const value = await getInventoryValue();

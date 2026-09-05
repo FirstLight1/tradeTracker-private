@@ -1,7 +1,11 @@
-import { renderField, renderAlert, scrollOnLoad, downloadFile } from "./utils/renderUtil.js";
-import { escapeHtml, sanitizeNumericId, sanitizeClassToken, csrfFetch } from "./utils/sanitizers.js";
-import "./headerActions.js";
-
+import { renderField, renderAlert, scrollOnLoad, downloadFile } from './utils/renderUtil.js';
+import {
+    escapeHtml,
+    sanitizeNumericId,
+    sanitizeClassToken,
+    csrfFetch,
+} from './utils/sanitizers.js';
+import './headerActions.js';
 
 function parsePaymentMethods(paymentMethodData) {
     if (!paymentMethodData) return [];
@@ -10,7 +14,10 @@ function parsePaymentMethods(paymentMethodData) {
         const parsed = JSON.parse(paymentMethodData);
         if (Array.isArray(parsed)) return parsed;
     } catch (e) {
-        return paymentMethodData.trim().split(' ').map(type => ({ type: type, amount: 0 }));
+        return paymentMethodData
+            .trim()
+            .split(' ')
+            .map((type) => ({ type: type, amount: 0 }));
     }
 
     return [];
@@ -19,11 +26,13 @@ function parsePaymentMethods(paymentMethodData) {
 function formatPaymentDisplay(payments) {
     if (!payments || payments.length === 0) return 'No payment method';
 
-    return payments.map(p => {
-        const type = escapeHtml(p.type || '');
-        const amount = parseFloat(p.amount || 0).toFixed(2);
-        return `${type}: ${amount}€`;
-    }).join('<br>');
+    return payments
+        .map((p) => {
+            const type = escapeHtml(p.type || '');
+            const amount = parseFloat(p.amount || 0).toFixed(2);
+            return `${type}: ${amount}€`;
+        })
+        .join('<br>');
 }
 
 function isEmpty(obj) {
@@ -69,8 +78,10 @@ async function loadAuctionContent(button) {
                         <p></p>
                     </div>
                 `;
-                    cards.forEach(card => {
-                        const safeCardConditionClass = sanitizeClassToken(card.condition || 'Unknown');
+                    cards.forEach((card) => {
+                        const safeCardConditionClass = sanitizeClassToken(
+                            card.condition || 'Unknown',
+                        );
                         const cardDiv = document.createElement('div');
                         cardDiv.classList.add('card');
                         cardDiv.innerHTML = `
@@ -93,7 +104,7 @@ async function loadAuctionContent(button) {
                     const responseSealed = await csrfFetch(sealedUrl);
                     const sealedData = await responseSealed.json();
 
-                    sealedData.forEach(sealedItem => {
+                    sealedData.forEach((sealedItem) => {
                         const sealedDiv = document.createElement('div');
                         sealedDiv.classList.add('sealed-item');
                         console.log(sealedItem);
@@ -104,7 +115,9 @@ async function loadAuctionContent(button) {
                             state = 'Sold';
                         }
 
-                        const margin = (Number(sealedItem.market_value) - Number(sealedItem.price)).toFixed(2);
+                        const margin = (
+                            Number(sealedItem.market_value) - Number(sealedItem.price)
+                        ).toFixed(2);
 
                         sealedDiv.innerHTML = `
                             <p class='sealed-quantity'>${DOMPurify.sanitize(sealedItem.quantity)}</p>
@@ -139,7 +152,7 @@ async function loadAuctions() {
     try {
         const response = await csrfFetch('/loadPurchases');
         const data = await response.json();
-        data.forEach(auction => {
+        data.forEach((auction) => {
             const safeAuctionId = sanitizeNumericId(auction.id);
             const auctionDiv = document.createElement('div');
             auctionDiv.classList.add('auction-tab');
@@ -148,12 +161,22 @@ async function loadAuctions() {
                 auctionDiv.classList.add('singles');
             }
             auctionDiv.setAttribute('data-id', safeAuctionId);
-            const auctionName = auction.auction_name || "Auction " + (auction.id - 1);
+            const auctionName = auction.auction_name || 'Auction ' + (auction.id - 1);
             const auctionPrice = auction.auction_price;
             const buyDate = new Date(auction.date_created);
-            let formatedDate = buyDate.toLocaleDateString('sk-SK', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            let formatedDate = buyDate.toLocaleDateString('sk-SK', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+            });
             if (formatedDate === 'Invalid Date') {
-                formatedDate = new Date(String(auction.date_created).split('T')[0]).toLocaleDateString('sk-SK', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                formatedDate = new Date(
+                    String(auction.date_created).split('T')[0],
+                ).toLocaleDateString('sk-SK', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                });
             }
 
             const payments = parsePaymentMethods(auction.payment_method);
@@ -175,9 +198,8 @@ async function loadAuctions() {
             auctionContainer.appendChild(auctionDiv);
         });
 
-
         const buyReportButtons = document.querySelectorAll('.auction-container .buy-report');
-        buyReportButtons.forEach(button => {
+        buyReportButtons.forEach((button) => {
             button.addEventListener('click', async () => {
                 const auctionId = Number(button.getAttribute('data-id'));
                 const response = await csrfFetch(`/generateBuyReport?auctionId=${auctionId}`);
@@ -189,21 +211,20 @@ async function loadAuctions() {
                     return;
                 }
                 try {
-                    downloadFile(response)
+                    downloadFile(response);
                 } catch (e) {
                     renderAlert('Error: ' + e, 'error');
                 }
-
             });
         });
 
         const viewButtons = document.querySelectorAll('.auction-container .view-auction');
-        viewButtons.forEach(button => {
+        viewButtons.forEach((button) => {
             button.addEventListener('click', () => loadAuctionContent(button));
         });
 
         const auctionsTabs = document.querySelectorAll('.auction-container .auction-tab');
-        auctionsTabs.forEach(tab => {
+        auctionsTabs.forEach((tab) => {
             tab.addEventListener('click', async (event) => {
                 if (event.target === tab) {
                     const viewButton = tab.querySelector('.view-auction');
@@ -245,7 +266,10 @@ async function loadSealed(viewButton) {
                 data.data.forEach((sealedData) => {
                     const sealedDiv = document.createElement('div');
                     sealedDiv.classList.add('sealed-item');
-                    const margin = (Number(DOMPurify.sanitize(sealedData.market_value)) - Number(DOMPurify.sanitize(sealedData.price))).toFixed(2);
+                    const margin = (
+                        Number(DOMPurify.sanitize(sealedData.market_value)) -
+                        Number(DOMPurify.sanitize(sealedData.price))
+                    ).toFixed(2);
                     const formatedDate = formatSealedDate(sealedData.date);
                     let state = '';
                     console.log(sealedData);

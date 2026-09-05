@@ -1,11 +1,7 @@
-import { renderAlert, renderServerErrors, scrollOnLoad } from "./utils/renderUtil.js";
-import { sanitizeNumericId, csrfFetch } from "./utils/sanitizers.js";
+import { renderAlert, renderServerErrors, scrollOnLoad } from './utils/renderUtil.js';
+import { sanitizeNumericId, csrfFetch } from './utils/sanitizers.js';
 
-const GRADING_STATUSES = [
-    'preparing',
-    'sent_for_grading',
-    'received_by_grader',
-];
+const GRADING_STATUSES = ['preparing', 'sent_for_grading', 'received_by_grader'];
 const ACTIVE_STATUSES = ['preparing', 'sent_for_grading', 'received_by_grader'];
 const TERMINAL_STATUSES = ['graded', 'returned', 'cancelled'];
 
@@ -28,7 +24,7 @@ function formatStatus(value) {
     if (value === 'returned') return 'Returned ungraded';
     return String(value)
         .split('_')
-        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
         .join(' ');
 }
 
@@ -59,20 +55,30 @@ function renderCards(cardsContainer, cards) {
         'Qualifier',
         'Certificate',
         'Market value',
-    ].forEach(label => appendTextCell(header, label));
+    ].forEach((label) => appendTextCell(header, label));
     cardsContainer.appendChild(header);
 
-    cards.forEach(card => {
+    cards.forEach((card) => {
         const cardElement = document.createElement('div');
         cardElement.className = 'card';
         cardElement.dataset.id = sanitizeNumericId(card.card_id);
 
-        const gradeParts = [card.grade_numeric, card.grade_label].filter(value => value !== null && value !== undefined && value !== '');
+        const gradeParts = [card.grade_numeric, card.grade_label].filter(
+            (value) => value !== null && value !== undefined && value !== '',
+        );
         appendTextCell(cardElement, card.card_name || 'Unknown', 'card-info card-name');
         appendTextCell(cardElement, card.card_num || '', 'card-info card-num');
         appendTextCell(cardElement, card.condition || 'Unknown', 'card-info condition');
-        appendTextCell(cardElement, formatCurrency(card.submitted_value), 'card-info submitted-value');
-        appendTextCell(cardElement, formatCurrency(card.total_grading_cost), 'card-info grading-cost');
+        appendTextCell(
+            cardElement,
+            formatCurrency(card.submitted_value),
+            'card-info submitted-value',
+        );
+        appendTextCell(
+            cardElement,
+            formatCurrency(card.total_grading_cost),
+            'card-info grading-cost',
+        );
         appendTextCell(cardElement, gradeParts.join(' - ') || '', 'card-info grade');
         appendTextCell(cardElement, card.qualifier || '', 'card-info qualifier');
         appendTextCell(cardElement, card.cert_number || '', 'card-info cert-number');
@@ -155,9 +161,10 @@ function openStatusModal(button, submission, terminalStatus = null) {
 
     const title = document.createElement('h2');
     title.id = 'grading-status-title';
-    title.textContent = terminalStatus === 'returned'
-        ? 'Mark submission returned ungraded'
-        : 'Update grading submission';
+    title.textContent =
+        terminalStatus === 'returned'
+            ? 'Mark submission returned ungraded'
+            : 'Update grading submission';
 
     const statusLabel = document.createElement('label');
     statusLabel.htmlFor = 'grading-status-select';
@@ -167,7 +174,7 @@ function openStatusModal(button, submission, terminalStatus = null) {
     statusSelect.id = 'grading-status-select';
     statusSelect.name = 'status';
     const availableStatuses = terminalStatus ? [terminalStatus] : GRADING_STATUSES;
-    availableStatuses.forEach(status => {
+    availableStatuses.forEach((status) => {
         const option = document.createElement('option');
         option.value = status;
         option.textContent = formatStatus(status);
@@ -228,8 +235,15 @@ function openStatusModal(button, submission, terminalStatus = null) {
 
     buttonContainer.append(cancelButton, saveButton);
     content.append(
-        closeButton, title, statusLabel, statusSelect,
-        returnedDateLabel, returnedDate, notesLabel, notes, buttonContainer,
+        closeButton,
+        title,
+        statusLabel,
+        statusSelect,
+        returnedDateLabel,
+        returnedDate,
+        notesLabel,
+        notes,
+        buttonContainer,
     );
     modal.appendChild(content);
     document.body.appendChild(modal);
@@ -243,18 +257,18 @@ function openStatusModal(button, submission, terminalStatus = null) {
             : submissionElement?.querySelector('.view-auction');
         focusTarget?.focus();
     };
-    const handleKeydown = event => {
+    const handleKeydown = (event) => {
         if (event.key === 'Escape') close();
     };
 
     closeButton.addEventListener('click', close);
     cancelButton.addEventListener('click', close);
-    modal.addEventListener('click', event => {
+    modal.addEventListener('click', (event) => {
         if (event.target === modal) close();
     });
     document.addEventListener('keydown', handleKeydown);
 
-    content.addEventListener('submit', async event => {
+    content.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!content.reportValidity()) return;
         saveButton.disabled = true;
@@ -274,10 +288,15 @@ function openStatusModal(button, submission, terminalStatus = null) {
             });
             const result = await response.json();
             if (!response.ok) {
-                renderServerErrors(result, content, {
-                    notes: '#grading-notes',
-                    returned_at: '#grading-returned-at',
-                }, 'Unable to update grading submission');
+                renderServerErrors(
+                    result,
+                    content,
+                    {
+                        notes: '#grading-notes',
+                        returned_at: '#grading-returned-at',
+                    },
+                    'Unable to update grading submission',
+                );
                 saveButton.disabled = false;
                 saveButton.textContent = 'Save';
                 return;
@@ -286,10 +305,14 @@ function openStatusModal(button, submission, terminalStatus = null) {
             submission.status = statusSelect.value;
             submission.notes = updatedNotes || null;
             const submissionElement = button.closest('.auction-tab');
-            submissionElement.querySelector('.grading-status').textContent = formatStatus(submission.status);
+            submissionElement.querySelector('.grading-status').textContent = formatStatus(
+                submission.status,
+            );
             if (submission.status === 'returned') {
                 submission.returned_at = returnedDate.value;
-                submissionElement.querySelector('.returned-date').textContent = formatDate(submission.returned_at);
+                submissionElement.querySelector('.returned-date').textContent = formatDate(
+                    submission.returned_at,
+                );
             }
             if (TERMINAL_STATUSES.includes(submission.status)) {
                 removeMutationButtons(submissionElement);
@@ -375,19 +398,27 @@ function renderSubmission(container, submission) {
     const returnedButton = buttonContainer.querySelector('.mark-returned');
     const cancelSubmissionButton = buttonContainer.querySelector('.cancel-submission');
     viewButton.addEventListener('click', () => loadSubmissionCards(viewButton));
-    changeStatusButton?.addEventListener('click', () => openStatusModal(changeStatusButton, submission));
-    returnedButton?.addEventListener('click', () => openStatusModal(returnedButton, submission, 'returned'));
+    changeStatusButton?.addEventListener('click', () =>
+        openStatusModal(changeStatusButton, submission),
+    );
+    returnedButton?.addEventListener('click', () =>
+        openStatusModal(returnedButton, submission, 'returned'),
+    );
     cancelSubmissionButton?.addEventListener('click', async () => {
-        if (!window.confirm('Cancel this submission and release its cards back to raw inventory?')) return;
+        if (!window.confirm('Cancel this submission and release its cards back to raw inventory?'))
+            return;
         cancelSubmissionButton.disabled = true;
         try {
             const response = await csrfFetch(`/grading/submissions/${submissionId}/cancel`, {
                 method: 'POST',
             });
             const result = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(result.message || `request failed with status ${response.status}`);
+            if (!response.ok)
+                throw new Error(result.message || `request failed with status ${response.status}`);
             submission.status = 'cancelled';
-            submissionElement.querySelector('.grading-status').textContent = formatStatus(submission.status);
+            submissionElement.querySelector('.grading-status').textContent = formatStatus(
+                submission.status,
+            );
             removeMutationButtons(submissionElement);
             renderAlert('Grading submission cancelled', 'message');
         } catch (error) {
@@ -395,10 +426,9 @@ function renderSubmission(container, submission) {
             cancelSubmissionButton.disabled = false;
         }
     });
-    submissionElement.addEventListener('click', event => {
+    submissionElement.addEventListener('click', (event) => {
         if (event.target === submissionElement) loadSubmissionCards(viewButton);
     });
-
 
     if (submission.notes) submissionElement.title = submission.notes;
     container.appendChild(submissionElement);
@@ -421,7 +451,7 @@ async function loadSubmissions() {
             return;
         }
 
-        submissions.forEach(submission => renderSubmission(container, submission));
+        submissions.forEach((submission) => renderSubmission(container, submission));
     } catch (error) {
         container.replaceChildren();
         renderAlert(`Error loading grading submissions: ${error}`, 'error');
