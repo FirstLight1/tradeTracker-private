@@ -13,7 +13,6 @@ import unicodedata
 from dateutil import parser as dateutil_parser
 from Crypto.Cipher import AES
 import os
-import fpdf
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
@@ -41,6 +40,7 @@ from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaRe
 from tradeTracker.services.cfAuth import verify_token, require_api_token
 from tradeTracker.services.eph_service import EPHService
 from tradeTracker.services.pdf_utils import wrap_table_text
+from tradeTracker.services import report_service
 # Packeta integration disabled — service hits the network (WSDL fetch) at construction
 # and requires the `postal` native dep. Re-enable together with the blocks in importCSV.
 # from tradeTracker.services.packeta_service import PacketaService
@@ -1546,6 +1546,7 @@ def parse_date_to_iso(value):
     )
 
 
+#TODO: rename this
 def generatePDF(month, year, cards, sealed, bulkAndHoloList, shipping):
 
     # Determine the save path based on environment
@@ -1562,269 +1563,8 @@ def generatePDF(month, year, cards, sealed, bulkAndHoloList, shipping):
 
     font_dir = os.path.join(os.path.dirname(__file__), "fonts")
 
-    from tradeTracker.services import report_service
-
     report = report_service.ReportService(get_db())
     return report.generatePurchaseReport(None, None, month, year, pdf_path)
-    # Create PDF
-    pdf = fpdf.FPDF()
-    pdf.add_page()
-
-    # Add Unicode-compatible font
-    font_family = "DejaVu"
-    pdf.add_font(font_family, "", os.path.join(font_dir, "DejaVuSans.ttf"), uni=True)
-    pdf.add_font(font_family, "B", os.path.join(font_dir, "DejaVuSans-Bold.ttf"), uni=True)
-
-    # Set title
-    pdf.set_font(font_family, "", 16)
-    pdf.cell(0, 10, f"Sales Report - {month}/{year}", 0, 1, "C")
-    pdf.ln(10)
-
-    # Add summary
-    pdf.set_font(font_family, "", 12)
-    pdf.cell(
-        0,
-        10,
-        f"Total Cards Sold: {len(cards) + sum(item['quantity'] for item in bulkAndHoloList) + sum(item['quantity'] for item in sealed)}",
-        0,
-        1,
-    )
-    pdf.ln(5)
-
-    # Calculate totals
-    total_buy_price = (
-        sum(card["card_price"] or 0 for card in cards)
-        + sum((item["price"] * item["quantity"]) or 0 for item in sealed)
-        + sum(
-            item["quantity"] * get_bulk_item_unit_price(item["item_type"])
-            for item in bulkAndHoloList
-        )
-    )
-    total_sell_price = (
-        sum(card["sell_price"] or 0 for card in cards)
-        + sum((item["sell_price"] * item["quantity"]) or 0 for item in sealed)
-        + sum(item["total_price"] or 0 for item in bulkAndHoloList)
-    )
-    total_profit = total_sell_price - total_buy_price
-    total_neg_margin = 0
-    total_pos_margin = 0
-    total_shipping_with_VAT = 0
-    total_shipping_without_VAT = 0
-    total_shipping_VAT = 0
-    for card in cards:
-        curr_margin = Decimal(card["sell_price"] - card["card_price"])
-        if curr_margin > 0:
-            total_pos_margin += curr_margin
-        else:
-            total_neg_margin += curr_margin
-
-    for item in sealed:
-        if item["auction_id"] is not None:
-            curr_margin = Decimal(
-                item["sell_price"] * item["quantity"] - item["price"] * item["quantity"]
-            )
-            if curr_margin > 0:
-                total_pos_margin += curr_margin
-            else:
-                total_neg_margin += curr_margin
-
-    for item in bulkAndHoloList:
-        unit_price = get_bulk_item_unit_price(item["item_type"])
-        total_pos_margin += Decimal(item["total_price"] - item["quantity"] * unit_price)
-
-    total_margin_profit = total_pos_margin + total_neg_margin
-    for s in shipping:
-        s = Decimal(s)
-        removeVat = Decimal(1.23)
-        total_shipping_with_VAT += s
-        total_shipping_without_VAT += Decimal(s / removeVat)
-        total_shipping_VAT += Decimal(s - (s / removeVat))
-
-    pdf.cell(0, 8, f"Total Buy Price: {total_buy_price:.2f}€", 0, 1)
-    pdf.cell(0, 8, f"Total Sell Price: {total_sell_price:.2f}€", 0, 1)
-    pdf.cell(0, 8, f"Total Profit: {total_profit:.2f}€", 0, 1)
-    pdf.cell(w=0, h=8, text=f"Total Margin Profit: {total_margin_profit:.2f}€", border=0, ln=1)
-    pdf.cell(0, 8, f"Total Negative Margin: {total_neg_margin:.2f}€", 0, 1)
-    pdf.cell(0, 8, f"Total Positive Margin: {total_pos_margin:.2f}€", 0, 1)
-    pdf.cell(0, 8, f"Shipping + DPH: {total_shipping_with_VAT:.2f}€", 0, 1)
-    pdf.cell(0, 8, f"Shipping: {total_shipping_without_VAT:.2f}€", 0, 1)
-    pdf.cell(0, 8, f"Shipping DPH: {total_shipping_VAT:.2f}€", 0, 1)
-    pdf.ln(10)
-
-    # Add bulk and holo summary
-    # Table header for bulk and holo
-    pdf.set_font(font_family, "", 10)
-    pdf.cell(50, 10, "Item type", 1, 0, "C")
-    pdf.cell(35, 10, "Quantity", 1, 0, "C")
-    pdf.cell(30, 10, "Buy Price", 1, 0, "C")
-    pdf.cell(30, 10, "Total Price", 1, 0, "C")
-    pdf.cell(30, 10, "Margin", 1, 0, "C")
-    pdf.ln()
-
-    # Table content for bulk and holo
-    pdf.set_font(font_family, "", 9)
-    for item in bulkAndHoloList:
-        item_type = item["item_type"] or "N/A"
-        quantity = str(item["quantity"]) if item["quantity"] else "N/A"
-        buy_price = f"{item['buy_price']:.2f}€" if item["buy_price"] else "N/A"
-        total_price = f"{item['total_price']:.2f}€" if item["total_price"] else "N/A"
-        margin = (
-            f"{(item['total_price'] - (item['quantity'] * item['buy_price'])):.2f}€"
-            if item["total_price"] and item["buy_price"]
-            else "N/A"
-        )
-
-        pdf.cell(50, 8, item_type, 1, 0, "L")
-        pdf.cell(35, 8, quantity, 1, 0, "C")
-        pdf.cell(30, 8, buy_price, 1, 0, "R")
-        pdf.cell(30, 8, total_price, 1, 0, "R")
-        pdf.cell(30, 8, margin, 1, 0, "R")
-        pdf.ln()
-
-    # Table header
-    pdf.set_font(font_family, "", 10)
-    pdf.cell(35, 10, "Card Name", 1, 0, "C")
-    pdf.cell(24, 10, "Card Number", 1, 0, "C")
-    pdf.cell(14, 10, "Lang.", 1, 0, "C")
-    pdf.cell(17, 10, "Graded", 1, 0, "C")
-    pdf.cell(25, 10, "Buy Price", 1, 0, "C")
-    pdf.cell(25, 10, "Sell Price", 1, 0, "C")
-    pdf.cell(25, 10, "Margin", 1, 0, "C")
-    pdf.cell(25, 10, "Sold Date", 1, 0, "C")
-    pdf.ln()
-
-    # Table content
-    pdf.set_font(font_family, "", 9)
-    for card in cards:
-        card_name = card["card_name"] or "N/A"
-        card_num = card["card_num"] or "N/A"
-        language = card["language"] or "N/A"
-        is_graded = "Yes" if card["is_graded"] else "No"
-        buy_price = f"{card['card_price']:.2f}€" if card["card_price"] else "N/A"
-        sell_price = f"{card['sell_price']:.2f}€" if card["sell_price"] else "N/A"
-        card_profit = (
-            f"{(card['sell_price'] - card['card_price']):.2f}€"
-            if card["sell_price"] and card["card_price"]
-            else "N/A"
-        )
-        sold_date = format_iso_date(card["sale_date"])
-
-        # Estimate height needed for card name (more conservative)
-        # With font size 9 and line height 4, approximately 17 chars per line in 35mm width
-        chars_per_line = 17
-        estimated_lines = max(1, (len(card_name) + chars_per_line - 1) // chars_per_line)
-        estimated_height = estimated_lines * 4
-
-        # Check if we need a page break BEFORE drawing anything
-        if pdf.get_y() + estimated_height > pdf.h - pdf.b_margin - 10:
-            pdf.add_page()
-            # Redraw table header on new page
-            pdf.set_font(font_family, "", 10)
-            pdf.cell(35, 10, "Card Name", 1, 0, "C")
-            pdf.cell(24, 10, "Card Number", 1, 0, "C")
-            pdf.cell(14, 10, "Lang.", 1, 0, "C")
-            pdf.cell(17, 10, "Graded", 1, 0, "C")
-            pdf.cell(25, 10, "Buy Price", 1, 0, "C")
-            pdf.cell(25, 10, "Sell Price", 1, 0, "C")
-            pdf.cell(25, 10, "Margin", 1, 0, "C")
-            pdf.cell(25, 10, "Sold Date", 1, 0, "C")
-            pdf.ln()
-            pdf.set_font(font_family, "", 9)
-
-        # Store starting position
-        x_start = pdf.get_x()
-        y_start = pdf.get_y()
-
-        # Draw card name with multi_cell
-        pdf.multi_cell(35, 4, card_name, border=1, align="L")
-
-        # Calculate actual height used
-        y_after_name = pdf.get_y()
-        actual_height = y_after_name - y_start
-
-        # Draw other cells aligned with the card name
-        pdf.set_xy(x_start + 35, y_start)
-        pdf.cell(24, actual_height, card_num, 1, 0, "C")
-        pdf.cell(14, actual_height, language, 1, 0, "C")
-        pdf.cell(17, actual_height, is_graded, 1, 0, "C")
-        pdf.cell(25, actual_height, buy_price, 1, 0, "R")
-        pdf.cell(25, actual_height, sell_price, 1, 0, "R")
-        pdf.cell(25, actual_height, card_profit, 1, 0, "R")
-        pdf.cell(25, actual_height, sold_date, 1, 0, "C")
-
-        # Move to next row
-        pdf.set_xy(x_start, y_after_name)
-
-    # Table header
-    pdf.set_font(font_family, "", 10)
-    pdf.cell(60, 10, "Product Name", 1, 0, "C")
-    pdf.cell(10, 10, "Qty", 1, 0, "C")
-    pdf.cell(30, 10, "Buy Price", 1, 0, "C")
-    pdf.cell(30, 10, "Sell Price", 1, 0, "C")
-    pdf.cell(20, 10, "Margin", 1, 0, "C")
-    pdf.cell(25, 10, "Sold Date", 1, 0, "C")
-    pdf.ln()
-
-    # Table content
-    # Sealed items
-    pdf.set_font(font_family, "", 9)
-    for item in sealed:
-        name = item["name"] or "N/A"
-        quantity = str(item["quantity"]) or "1"
-        buy_price = f"{item['price']:.2f}€" if item["price"] else "N/A"
-        sell_price = f"{item['sell_price']:.2f}€" if item["sell_price"] else "N/A"
-        card_profit = (
-            f"{((item['sell_price'] - item['price']) * item['quantity']):.2f}€"
-            if item["sell_price"] and item["price"]
-            else "N/A"
-        )
-        sold_date = format_iso_date(item["sale_date"])
-
-        # Estimate height needed for product name
-        # With font size 9 and line height 4, approximately 33 chars per line in 70mm width
-        chars_per_line = 33
-        estimated_lines = max(1, (len(name) + chars_per_line - 1) // chars_per_line)
-        estimated_height = estimated_lines * 4
-
-        # Check if we need a page break BEFORE drawing anything
-        if pdf.get_y() + estimated_height > pdf.h - pdf.b_margin - 10:
-            pdf.add_page()
-            # Redraw table header on new page
-            pdf.set_font(font_family, "", 10)
-            pdf.cell(60, 10, "Product Name", 1, 0, "C")
-            pdf.cell(10, 10, "Quantity", 1, 0, "C")
-            pdf.cell(30, 10, "Buy Price", 1, 0, "C")
-            pdf.cell(30, 10, "Sell Price", 1, 0, "C")
-            pdf.cell(20, 10, "Margin", 1, 0, "C")
-            pdf.cell(25, 10, "Sold Date", 1, 0, "C")
-            pdf.ln()
-            pdf.set_font(font_family, "", 9)
-
-        # Store starting position
-        x_start = pdf.get_x()
-        y_start = pdf.get_y()
-
-        # Draw product name with multi_cell
-        pdf.multi_cell(60, 4, name, border=1, align="L")
-
-        # Calculate actual height used
-        y_after_name = pdf.get_y()
-        actual_height = y_after_name - y_start
-
-        # Draw other cells aligned with the product name
-        pdf.set_xy(x_start + 60, y_start)
-        pdf.cell(10, actual_height, quantity, 1, 0, "R")
-        pdf.cell(30, actual_height, buy_price, 1, 0, "R")
-        pdf.cell(30, actual_height, sell_price, 1, 0, "R")
-        pdf.cell(20, actual_height, card_profit, 1, 0, "R")
-        pdf.cell(25, actual_height, sold_date, 1, 0, "C")
-
-        # Move to next row
-        pdf.set_xy(x_start, y_after_name)
-    # Save PDF
-    pdf.output(pdf_path)
-    return pdf_path
-
 
 def createBuyReport(month, year, db):
     if os.getenv("FLASK_ENV") == "prod":

@@ -3,7 +3,7 @@ from ast import Tuple
 from reportlab.lib import colors
 from reportlab.lib import styles
 from reportlab.lib.pagesizes import landscape, letter
-from reportlab.lib.units import mm
+from reportlab.lib.units import mm, cm
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.pdfbase import pdfmetrics
@@ -47,6 +47,13 @@ class ReportService:
                 ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
             ]
         )
+
+    def format_value(self,key, value):
+        count_keys = ("card_count", "sealed_count") 
+        if key in count_keys:
+            return str(value)
+
+        return f"{value:.2f}€"
 
     def _calculate_header(self, items: list[dict[str, Any]], bulk: list[dict[str, Any]]) -> dict[str, Any]:
         card_count, sealed_count = (
@@ -183,20 +190,75 @@ class ReportService:
 
         return data
 
-    def generateSoldReport(self, start_date, end_date):
+    def add_info_header(self, infoHeader: dict[str, Any]) -> Table:
+        items = list(infoHeader.items())
+        split = (len(items) + 1) // 2
+
+        left = items[:split]
+        right = items[split:]
+
+        rows = []
+
+        for i in range(split):
+            left_key, left_value = left[i]
+
+            if i < len(right):
+                right_key, right_value = right[i]
+            else:
+                right_key, right_value = "", ""
+
+            rows.append([
+                f"{CONSTANTS.LABELS[left_key]}:",
+                self.format_value(left_key, left_value),
+                f"{CONSTANTS.LABELS[right_key]}:" if right_key else "",
+                self.format_value(right_key, right_value) if right_key else "",
+            ])
+
+        table = Table(
+            rows,
+            colWidths=[4 * cm, 2.5 * cm, 4 * cm, 2.5 * cm],
+        )
+        table.setStyle(TableStyle([
+    # No GRID / BOX at all
+
+    ("FONTNAME", (0, 0), (-1, -1), "DejaVuSans"),
+    ("FONTSIZE", (0, 0), (-1, -1), 10),
+
+    # Labels
+    ("FONTNAME", (0, 0), (0, -1), "DejaVuSans-Bold"),
+    ("FONTNAME", (2, 0), (2, -1), "DejaVuSans-Bold"),
+
+    # Values aligned nicely
+    ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+    ("ALIGN", (3, 0), (3, -1), "RIGHT"),
+
+    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+
+    # Vertical spacing
+    ("TOPPADDING", (0, 0), (-1, -1), 4),
+    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+
+    # Gap between the two halves
+    ("LEFTPADDING", (2, 0), (2, -1), 20),
+
+    # Otherwise minimal padding
+    ("LEFTPADDING", (0, 0), (1, -1), 0),
+    ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+]))
+        return table
+
+    def generatePurchaseReport(self, start_date, end_date, month, year, pdf_path):
         pass
 
     def generateBuyReport(self, start_date, end_date):
         pass
 
-    def generatePurchaseReport(self, start_date, end_date, month, year, pdf_path):
+    def generateSoldReport(self, start_date, end_date, month, year, pdf_path):
         doc = SimpleDocTemplate(pdf_path, pagesize=landscape(letter))
         elements = []
         styles = self._styles()
 
         #TODO: allow periodic report
-        #TODO: format headers
-        #TODO: format time
         elements.append(
             Paragraph(
                 "Sales Report - {month}/{year}".format(month=month, year=year), styles["Heading1"]
@@ -211,12 +273,7 @@ class ReportService:
         infoHeader['shipping'] = sum(
             float(row.get("shipping_info", 0)) or 0 for row in soldData.get("shipping", [])
         )
-        for key, value in infoHeader.items():
-            if 'count' not in key:
-                value = f"{value:.2f}€"
-
-            key = key.replace("_", " ").capitalize()
-            elements.append(Paragraph(f"{key}: {value}", styles["Heading2"]))
+        elements.append(self.add_info_header(infoHeader))
         elements.append(Spacer(1, 12))
 
         if itemsData:

@@ -141,3 +141,15 @@ EUROPE_COUNTRY_CODES = {
     "united kingdom": "GB",
     "vatican city": "VA",
 }
+
+LABELS = {
+    "card_count": "Card count",
+    "sealed_count": "Sealed count",
+    "total_buy_price": "Total buy price",
+    "total_sell_price": "Total sell price",
+    "total_profit": "Total profit",
+    "total_pos_margin": "Positive margin",
+    "total_neg_margin": "Negative margin",
+    "total_margin_profit": "Margin profit",
+    "shipping": "Shipping",
+}
