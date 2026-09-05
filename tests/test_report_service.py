@@ -4,7 +4,7 @@ from tradeTracker.services.pdf_utils import wrap_table_text
 from tradeTracker.services.report_service import ReportService
 
 
-def test_get_sold_data_returns_dictionary_rows_and_generates_pdf(tmp_path):
+def test_generate_sold_report_uses_monthly_data_and_writes_pdf(tmp_path):
     db = sqlite3.connect(":memory:")
     db.row_factory = sqlite3.Row
     db.executescript(
@@ -18,9 +18,15 @@ def test_get_sold_data_returns_dictionary_rows_and_generates_pdf(tmp_path):
             language TEXT
         );
         CREATE TABLE sale_items (card_id INTEGER, sale_id INTEGER, sell_price REAL);
-        CREATE TABLE grading_submission_cards (card_id INTEGER, is_current INTEGER);
+        CREATE TABLE grading_submission_cards (
+            card_id INTEGER,
+            grader TEXT,
+            grade_numeric REAL,
+            is_current INTEGER
+        );
         CREATE TABLE sealed (
             name TEXT,
+            language TEXT,
             price REAL,
             sell_price REAL,
             market_value REAL,
@@ -38,35 +44,17 @@ def test_get_sold_data_returns_dictionary_rows_and_generates_pdf(tmp_path):
         INSERT INTO sales VALUES (1, '2026-08-15', 4.5);
         INSERT INTO cards VALUES (1, 'Pikachu', '025', 10, 'EN');
         INSERT INTO sale_items VALUES (1, 1, 15);
-        INSERT INTO grading_submission_cards VALUES (1, 1);
-        INSERT INTO sealed VALUES ('Booster Box', 20, 30, 25, 2, 7, 1);
+        INSERT INTO grading_submission_cards VALUES (1, 'PSA', 9, 1);
+        INSERT INTO sealed VALUES ('Booster Box', 'EN', 20, 30, 25, 2, 7, 1);
         INSERT INTO bulk_sales VALUES ('holo', 10, 5, 1);
         """
     )
     service = ReportService(db)
 
-    data = service._get_sold_data_month("08", "2026")
-
-    assert all(isinstance(row, dict) for rows in data.values() for row in rows)
-    assert list(data["items"][0]) == [
-        "name",
-        "item_num",
-        "buy_price",
-        "language",
-        "sell_price",
-        "sale_date",
-        "is_graded",
-        "item_type",
-        "quantity",
-        "auction_id",
-    ]
-    assert data["items"][0]["buy_price"] == 10
-    assert data["items"][0]["is_graded"] == "True"
-    assert data["shipping"] == [{"shipping_info": 4.5}]
-
     pdf_path = tmp_path / "sold-report.pdf"
-    service.generatePurchaseReport(None, None, "08", "2026", str(pdf_path))
+    result = service.generateSoldReport(None, None, "08", "2026", str(pdf_path))
 
+    assert result == str(pdf_path)
     assert pdf_path.read_bytes().startswith(b"%PDF")
 
 
@@ -83,29 +71,41 @@ def test_wrap_table_text_builds_header_and_values_from_dictionaries():
     ]
 
 
-def test_calculate_header_accepts_dictionary_rows_without_mutating_them():
-    service = ReportService.__new__(ReportService)
-    items = [
-        {
-            "item_type": "card",
-            "buy_price": 10,
-            "sell_price": 15,
-            "quantity": 1,
-            "auction_id": None,
-        },
-        {
-            "item_type": "sealed",
-            "buy_price": 20,
-            "sell_price": 30,
-            "quantity": 2,
-            "auction_id": 7,
-        },
-    ]
+def test_generate_purchase_report_returns_auction_name_and_pdf():
+    db = sqlite3.connect(":memory:")
+    db.row_factory = sqlite3.Row
+    db.executescript(
+        """
+        CREATE TABLE auctions (id INTEGER PRIMARY KEY, auction_name TEXT, date_created TEXT);
+        CREATE TABLE cards (
+            auction_id INTEGER,
+            card_name TEXT,
+            card_num TEXT,
+            condition TEXT,
+            language TEXT,
+            card_price REAL,
+            market_value REAL,
+            sold_date TEXT
+        );
+        CREATE TABLE sealed (
+            auction_id INTEGER,
+            name TEXT,
+            price REAL,
+            market_value REAL,
+            sale_id INTEGER,
+            opened INTEGER
+        );
+        CREATE TABLE bulk_items (auction_id INTEGER, item_type TEXT, quantity INTEGER);
 
-    header = service._calculate_header(items, [])
+        INSERT INTO auctions VALUES (7, 'Summer Auction', '2026-08-15T12:00:00');
+        INSERT INTO cards VALUES (7, 'Pikachu', '025', 'NM', 'EN', 10, 15, NULL);
+        INSERT INTO sealed VALUES (7, 'Booster Box', 20, 30, NULL, 0);
+        INSERT INTO bulk_items VALUES (7, 'holo', 10);
+        """
+    )
+    service = ReportService(db)
 
-    assert len(items) == 2
-    assert header["card_count"] == 1
-    assert header["sealed_count"] == 1
-    assert header["total_buy_price"] == 50
-    assert header["total_sell_price"] == 75
+    auction_name, pdf = service.generatePurchaseReport(7)
+
+    assert auction_name == "Summer Auction"
+    assert pdf.startswith(b"%PDF")
