@@ -133,11 +133,62 @@ class ReportService:
         df = pd.DataFrame(bought)
         return df
 
+    def get_auction_data(self, id: int) -> dict[str, Any]:
+        auctionInfo = self.db.execute("SELECT id, auction_name, date_created FROM auctions "
+                                  "WHERE id = ?", (id,)).fetchone()
+        auctionName = (
+            auctionInfo[1] if auctionInfo[1] is not None else f"auction {int(auctionInfo[0]) - 1}"
+        )
+        dateCreated = format_iso_date(auctionInfo[2])
+        data = { "auctionName": auctionName, "dateCreated": dateCreated }
+        return data
+
     def _get_purchased_data_month(self, month: int, year: int, id=None) -> list:
         raise NotImplementedError
 
-    def _get_purchased_data_by_id(self, id: int) -> list:
-        raise NotImplementedError
+    def _get_purchased_data_by_id(self, id: int) -> dict[str,Any]:
+        curr = self.db.cursor()
+        curr.execute(
+            """
+            SELECT
+    card_name AS name,
+    card_num AS item_num,
+    condition,
+    language,
+    card_price AS 'buy price',
+    market_value AS 'market value',
+    CASE WHEN sold_date IS NOT NULL THEN 'true' ELSE '' END AS sold,
+    NULL AS opened,
+    'card' AS item_type
+FROM cards
+WHERE auction_id = ?
+
+UNION ALL
+
+SELECT
+    name,
+    NULL AS item_num,
+    NULL AS condition,
+    NULL AS language,
+    price AS 'buy price',
+    market_value AS 'market value',
+    CASE WHEN sale_id IS NOT NULL THEN 'true' ELSE '' END AS sold,
+    CASE WHEN opened = 1 THEN 'true' ELSE '' END AS opened,
+    'sealed' AS item_type
+FROM sealed
+WHERE auction_id = ?
+        """
+        ,(id, id))
+
+        itemsData = [dict(row) for row in curr.fetchall()]
+
+        bulk = curr.execute("SELECT item_type, SUM(quantity) as quantity FROM bulk_items "
+                                 "WHERE auction_id = ? GROUP BY item_type", (id,)).fetchall()
+        bulkData = [dict(row) for row in bulk]
+
+        purchasedData = { 'items': itemsData, 'bulk': bulkData }
+
+        return purchasedData
 
     def _get_sold_data_month(self, month: int, year: int, id=None) -> dict:
 
@@ -275,8 +326,43 @@ class ReportService:
 ]))
         return table
 
-    def generatePurchaseReport(self, start_date, end_date, month, year):
-        pass
+    def generatePurchaseReport(self, id: int):
+        auctionData = self.get_auction_data(id)
+        purchasedData = self._get_purchased_data_by_id(id)
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=landscape(letter))
+        elements = []
+        styles = self._styles()
+
+        elements.append(
+            Paragraph(f"Sales Report - {auctionData['auctionName']} - Added: {auctionData['dateCreated']}", styles["Heading1"])
+        )
+        elements.append(Spacer(1, 12))
+
+        itemsData = purchasedData.get("items", [])
+        bulkData = purchasedData.get("bulk", [])
+
+        if itemsData:
+            elements.append(Paragraph("Items", styles["Heading2"]))
+            elements.append(Spacer(1, 12))
+            table = Table(
+                wrap_table_text(itemsData),
+                colWidths=[width * mm for width in [35, 24, 14, 25, 25, 25, 25, 17, 20, 15, 17]],
+                repeatRows=1,
+            )
+            table.setStyle(self._table_style())
+            elements.append(table)
+            elements.append(Spacer(1, 12))
+
+        if bulkData:
+            elements.append(Paragraph("Bulk", styles["Heading2"]))
+            elements.append(Spacer(1, 12))
+            table = Table(wrap_table_text(bulkData), repeatRows=1)
+
+        doc.build(elements)
+        pdf = buffer.getvalue()
+        buffer.close()
+        return auctionData["auctionName"], pdf
 
     def generateBuyReport(self, start_date, end_date, month, year, xls_path):
         df = self._get_auction_data_month(month, year)

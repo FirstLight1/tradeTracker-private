@@ -1280,118 +1280,15 @@ def generateBuyReport():
         return jsonify({"status": "error", "message": "Missing auctionId"}), 400
     auctionId = int(auctionId)
     buffer = BytesIO()
-
+    report = report_service.ReportService(get_db())
     try:
-        doc = SimpleDocTemplate(buffer, pagesize=letter)
-
-        # Add custom font
-        font_dir = os.path.join(os.path.dirname(__file__), "fonts")
-        pdfmetrics.registerFont(TTFont("DejaVuSans", os.path.join(font_dir, "DejaVuSans.ttf")))
-        pdfmetrics.registerFont(
-            TTFont("DejaVuSans-Bold", os.path.join(font_dir, "DejaVuSans-Bold.ttf"))
-        )
-        pdfmetrics.registerFontFamily("DejaVuSans", normal="DejaVuSans", bold="DejaVuSans-Bold")
-
-        elements = []
-        auctionInfo = curr.execute(
-            "SELECT id, auction_name, date_created FROM auctions WHERE id = ?", (auctionId,)
-        ).fetchone()
-        auctionName = (
-            auctionInfo[1] if auctionInfo[1] is not None else f"auction {int(auctionInfo[0]) - 1}"
-        )
-        dateCreated = format_iso_date(auctionInfo[2])
-
-        styles = getSampleStyleSheet()
-        styles["Heading1"].fontName = "DejaVuSans"
-        styles["Heading2"].fontName = "DejaVuSans"
-
-        elements.append(
-            Paragraph(f"Sales Report - {auctionName} - Added: {dateCreated}", styles["Heading1"])
-        )
-        elements.append(Spacer(1, 12))
-
-        # join auctions
-        # union cards and sealed items
-        # dont forget grade
-        curr.execute(
-            "SELECT card_name, card_num, condition, language, card_price AS 'buy price', market_value as 'market value', sold_date as 'sold' "
-            "FROM cards WHERE auction_id = ?",
-            (auctionId,),
-        )
-
-        cardsDesc = [desc[0] for desc in curr.description]
-        cardRows = [row[:-1] + ("True" if row[-1] is not None else "",) for row in curr.fetchall()]
-        if cardRows:
-            elements.append(Paragraph("Cards Sold", styles["Heading2"]))
-            elements.append(Spacer(1, 12))
-
-            cardsData = [cardsDesc] + cardRows
-
-            table = Table(
-                wrap_table_text(cardsData, header_font_size=11), repeatRows=1
-            )
-            table.setStyle(
-                TableStyle(
-                    [
-                        ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
-                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                        ("FONTNAME", (0, 0), (-1, -1), "DejaVuSans"),
-                        ("FONTSIZE", (0, 0), (-1, 0), 11),
-                        ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
-                        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                        ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
-                    ]
-                )
-            )
-
-            elements.append(table)
-
-            elements.append(Spacer(1, 12))
-
-        curr.execute(
-            "SELECT name, quantity, price as 'buy price', market_value as 'market value', sale_id as 'sold', opened "
-            "FROM sealed WHERE auction_id = ?",
-            (auctionId,),
-        )
-        sealedDesc = [desc[0] for desc in curr.description]
-        sealedRows = [
-            row[:-1] + ("True" if row[-1] is not None else "",) for row in curr.fetchall()
-        ]
-        if sealedRows:
-            sealedData = [sealedDesc] + sealedRows
-            elements.append(Paragraph("Sealed Items", styles["Heading2"]))
-            elements.append(Spacer(1, 12))
-            table = Table(
-                wrap_table_text(sealedData, header_font_size=11), repeatRows=1
-            )
-            table.setStyle(
-                TableStyle(
-                    [
-                        ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
-                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                        ("FONTNAME", (0, 0), (-1, -1), "DejaVuSans"),
-                        ("FONTSIZE", (0, 0), (-1, 0), 11),
-                        ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
-                        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                        ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
-                    ]
-                )
-            )
-
-            elements.append(table)
-        doc.build(elements)
-
-        pdf = buffer.getvalue()
-        buffer.close()
-
+        auctionName, pdf = report.generatePurchaseReport(auctionId)
         response = send_file(
-            BytesIO(pdf),
-            as_attachment=True,
-            mimetype="application/pdf",
-            download_name=f"report_{auctionName.replace(' ', '_')}.pdf",
-        )
+                BytesIO(pdf),
+                as_attachment=True,
+                mimetype="application/pdf",
+                download_name=f"report_{auctionName.replace(' ', '_')}.pdf",
+            )
         return response, 200
 
     except Exception as e:
