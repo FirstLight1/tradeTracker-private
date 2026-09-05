@@ -58,11 +58,13 @@ def norm_text(value):
 def card_key(name, num):
     return (norm_text(name), norm_text(num))
 
+
 def whole_number(set, num):
     # Mirror how card_num is stored on import (actions.py): "<setCode> <number>",
     # but just the set when there is no collector number.
     set, num = (set or "").strip(), (num or "").strip()
     return f"{set} {num}".strip() if num else set
+
 
 # --- Per-table behaviour. Picked by --table. ----------------------------------
 # Each spec knows which CSV columns it needs, how to read the matching rows out
@@ -78,9 +80,7 @@ TABLE_SPECS = {
         "db_key": lambda row: card_key(row[1], row[2]),
         # DB card_num is stored as "<setCode> <number>" (see actions.py),
         # so rebuild the same combined form from the CSV's expansionCode + number.
-        "csv_key": lambda row: card_key(
-            row[COL_NAME], whole_number(row[COL_SET], row[COL_NUM])
-        ),
+        "csv_key": lambda row: card_key(row[COL_NAME], whole_number(row[COL_SET], row[COL_NUM])),
     },
     "sealed": {
         # Sealed products have no number/condition -- match on name alone.
@@ -111,14 +111,14 @@ def backfill_table(conn, table, csv_path, commit, overwrite):
 
     # Which rows already have an ID, so we can skip unless --overwrite.
     already_set = {
-        row[0] for row in conn.execute(
-            f"SELECT id FROM {table} "
-            "WHERE cardMarketID IS NOT NULL AND cardMarketID != ''"
+        row[0]
+        for row in conn.execute(
+            f"SELECT id FROM {table} WHERE cardMarketID IS NOT NULL AND cardMarketID != ''"
         )
     }
 
-    updates = {}          # row_id -> cardMarketID (dict de-dups shared rows)
-    not_found = []        # csv row number
+    updates = {}  # row_id -> cardMarketID (dict de-dups shared rows)
+    not_found = []  # csv row number
     skipped_existing = 0
     missing_id = 0
 
@@ -180,14 +180,22 @@ def backfill_table(conn, table, csv_path, commit, overwrite):
 
 def main():
     parser = argparse.ArgumentParser(description="Backfill cardMarketID from a CSV.")
-    parser.add_argument("--table", choices=[*sorted(TABLE_SPECS), "both"], default="cards",
-                        help="Which table to backfill: cards, sealed, or both (default: cards).")
+    parser.add_argument(
+        "--table",
+        choices=[*sorted(TABLE_SPECS), "both"],
+        default="cards",
+        help="Which table to backfill: cards, sealed, or both (default: cards).",
+    )
     parser.add_argument("--csv", required=True, help="Path to the source CSV.")
     parser.add_argument("--db", required=True, help="Path to the SQLite DB file.")
-    parser.add_argument("--commit", action="store_true",
-                        help="Actually write changes. Without this it's a dry run.")
-    parser.add_argument("--overwrite", action="store_true",
-                        help="Also overwrite rows that already have a cardMarketID.")
+    parser.add_argument(
+        "--commit", action="store_true", help="Actually write changes. Without this it's a dry run."
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Also overwrite rows that already have a cardMarketID.",
+    )
     args = parser.parse_args()
 
     if not os.path.exists(args.db):

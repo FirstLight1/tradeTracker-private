@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 slow_log = logging.getLogger("tradetracker.db.slow")
 SLOW_QUERY_THRESHOLD_MS = 200
 
+
 class LoggingCursor:
     def __init__(self, cursor):
         self._cursor = cursor
@@ -20,21 +21,21 @@ class LoggingCursor:
 
             if duration_ms > SLOW_QUERY_THRESHOLD_MS:
                 slow_log.warning(
-                        "Slow query | %.2fms | %s | params: %s",
-                        duration_ms, query, params,
-                        )
+                    "Slow query | %.2fms | %s | params: %s",
+                    duration_ms,
+                    query,
+                    params,
+                )
             else:
                 pass
             # logger.debug(
-                    #     "Query OK | %.2fms | %s", duration_ms, query
-                    # )
+            #     "Query OK | %.2fms | %s", duration_ms, query
+            # )
 
-            return self   # ← important: lets cursor.lastrowid work
+            return self  # ← important: lets cursor.lastrowid work
 
         except Exception:
-            logger.exception(
-                    "Query failed | %s | params: %s", query, params
-                    )
+            logger.exception("Query failed | %s | params: %s", query, params)
             raise
 
     def executemany(self, query, params_list):
@@ -45,22 +46,23 @@ class LoggingCursor:
 
             if duration_ms > SLOW_QUERY_THRESHOLD_MS:
                 slow_log.warning(
-                        "Slow executemany | %.2fms | %s | %d rows",
-                        duration_ms, query, len(params_list),
-                        )
+                    "Slow executemany | %.2fms | %s | %d rows",
+                    duration_ms,
+                    query,
+                    len(params_list),
+                )
             else:
                 logger.debug(
-                        "Executemany OK | %.2fms | %s | %d rows",
-                        duration_ms, query, len(params_list),
-                        )
+                    "Executemany OK | %.2fms | %s | %d rows",
+                    duration_ms,
+                    query,
+                    len(params_list),
+                )
 
             return self
 
         except Exception:
-            logger.exception(
-                    "Executemany failed | %s | %d rows",
-                    query, len(params_list)
-                    )
+            logger.exception("Executemany failed | %s | %d rows", query, len(params_list))
             raise
 
     @property
@@ -91,7 +93,7 @@ class LoggingConnection:
         return LoggingCursor(self._conn.cursor()).execute(query, params)
 
     def commit(self):
-        #logger.debug("Transaction committed")
+        # logger.debug("Transaction committed")
         self._conn.commit()
 
     def rollback(self):
@@ -104,33 +106,33 @@ class LoggingConnection:
     def __getattr__(self, name):
         return getattr(self._conn, name)
 
+
 def get_db():
-    if 'db' not in g:
-        conn  = sqlite3.connect(
-            current_app.config['DATABASE'],
-            detect_types=sqlite3.PARSE_DECLTYPES
-        )
+    if "db" not in g:
+        conn = sqlite3.connect(current_app.config["DATABASE"], detect_types=sqlite3.PARSE_DECLTYPES)
         conn.row_factory = sqlite3.Row
         g.db = LoggingConnection(conn)
-        g.db.execute('PRAGMA foreign_keys = ON')
-        g.db.execute('PRAGMA journal_mode = WAL')
-        g.db.execute('PRAGMA busy_timeout = 5000')   # wait up to 5s before failing
-        g.db.execute('PRAGMA synchronous = NORMAL')  # safe with WAL, faster than FULL
+        g.db.execute("PRAGMA foreign_keys = ON")
+        g.db.execute("PRAGMA journal_mode = WAL")
+        g.db.execute("PRAGMA busy_timeout = 5000")  # wait up to 5s before failing
+        g.db.execute("PRAGMA synchronous = NORMAL")  # safe with WAL, faster than FULL
     return g.db
 
+
 def close_db(e=None):
-    db = g.pop('db', None)
+    db = g.pop("db", None)
 
     if db is not None:
-        db.execute('PRAGMA wal_checkpoint(PASSIVE)')
+        db.execute("PRAGMA wal_checkpoint(PASSIVE)")
         db.close()
+
 
 def init_db():
     db = get_db()
 
     try:
         # Schema is included directly in the code to avoid file access issues
-        schema = '''
+        schema = """
 DROP TABLE IF EXISTS info;
 DROP TABLE IF EXISTS sale_items;
 DROP TABLE IF EXISTS sales;
@@ -144,6 +146,8 @@ DROP TABLE IF EXISTS sealed;
 DROP TABLE IF EXISTS sales_correction;
 DROP TABLE IF EXISTS barter;
 DROP TABLE IF EXISTS external;
+DROP TABLE IF EXISTS grading_submission_cards;
+DROP TABLE IF EXISTS grading_submissions;
 
 CREATE TABLE auctions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -209,6 +213,8 @@ CREATE TABLE sale_items (
     sold_cm INTEGER DEFAULT 0,
     sold INTEGER DEFAULT 0,
     profit REAL,
+    internal_cost REAL,
+    internal_profit REAL,
     FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE SET NULL,
     FOREIGN KEY (card_id) REFERENCES cards (id) ON DELETE CASCADE
 );
@@ -299,17 +305,69 @@ CREATE TABLE external(
     );
 
 CREATE INDEX idx_external_card_name ON external(card_name, card_num);
-'''
+
+CREATE TABLE grading_submissions(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        grader TEXT NOT NULL,
+        service_level TEXT,
+        status TEXT NOT NULL DEFAULT 'DRAFT',
+        outbound_shipping_cost REAL NOT NULL DEFAULT 0,
+        return_shipping_cost REAL NOT NULL DEFAULT 0,
+        insurance_cost REAL NOT NULL DEFAULT 0,
+        customs_duty_cost REAL NOT NULL DEFAULT 0,
+        other_shared_cost REAL NOT NULL DEFAULT 0,
+        submitted_at TEXT,
+        returned_at TEXT,
+        notes TEXT
+        );
+
+    CREATE TABLE grading_submission_cards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        submission_id INTEGER,
+        card_id INTEGER NOT NULL,
+        grader TEXT NOT NULL,
+        is_current INTEGER NOT NULL DEFAULT 1,
+        submitted_value REAL NOT NULL DEFAULT 0,
+        grading_fee REAL NOT NULL DEFAULT 0,
+        prep_fee REAL DEFAULT 0,
+        upcharge_fee REAL DEFAULT 0,
+        allocated_shared_cost REAL DEFAULT 0,
+        total_grading_cost REAL NOT NULL DEFAULT 0,
+        landed_cost REAL,
+        grade_numeric REAL,
+        grade_label TEXT,
+        qualifier TEXT,
+        cert_number TEXT COLLATE NOCASE DEFAULT '',
+        post_grade_market_value REAL,
+        notes TEXT,
+        FOREIGN KEY (submission_id) REFERENCES grading_submissions(id) ON DELETE RESTRICT,
+        FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE RESTRICT,
+        UNIQUE (submission_id, card_id),
+        UNIQUE (grader, cert_number)
+    );
+
+    CREATE UNIQUE INDEX idx_grading_current_card
+    ON grading_submission_cards(card_id)
+    WHERE is_current = 1;
+
+    CREATE INDEX idx_grading_submission_cards_submission
+    ON grading_submission_cards(submission_id);
+
+    CREATE INDEX idx_grading_submission_cards_card
+    ON grading_submission_cards(card_id);
+"""
         db.executescript(schema)
     except Exception as e:
         print(f"Error initializing database: {e}")
         raise
 
-@click.command('init-db')
+
+@click.command("init-db")
 def init_db_command():
     """Clear the existing data and create new tables."""
     init_db()
-    click.echo('Initialized the database.')
+    click.echo("Initialized the database.")
+
 
 def init_app(app):
     app.teardown_appcontext(close_db)

@@ -1,13 +1,28 @@
-import { csrfFetch, escapeHtml, sanitizeNumericId, sanitizeClassToken } from "./sanitizers.js";
-import { renderAlert } from "./renderUtil.js";
+import { csrfFetch, escapeHtml, sanitizeNumericId, sanitizeClassToken } from './sanitizers.js';
+import { renderAlert } from './renderUtil.js';
 
 export class DebitNoteItem {
-    constructor({ type, cardName, cardNum, condition, marketValue, sid, cardIds, quantity, auctionId, addedIds }) {
+    constructor({
+        type,
+        cardName,
+        cardNum,
+        condition,
+        language,
+        marketValue,
+        grading,
+        sid,
+        cardIds,
+        quantity,
+        auctionId,
+        addedIds,
+    }) {
         this.type = type;
         this.cardName = cardName;
         this.cardNum = cardNum;
         this.condition = condition;
+        this.language = language || 'en';
         this.marketValue = marketValue;
+        this.grading = grading || null;
         this.sid = sid;
         this.cardIds = cardIds;
         this.quantity = quantity;
@@ -27,7 +42,10 @@ export class DebitNoteItem {
             if (!totalEl) return;
             const newValue = Number(input.value) || 0;
             const oldValue = Number(input.dataset.prev) || 0;
-            totalEl.textContent = (Number(totalEl.textContent) + (newValue - oldValue) * multiplier).toFixed(2);
+            totalEl.textContent = (
+                Number(totalEl.textContent) +
+                (newValue - oldValue) * multiplier
+            ).toFixed(2);
             input.dataset.prev = input.value;
         });
     }
@@ -35,17 +53,28 @@ export class DebitNoteItem {
     render() {
         this.elements = [];
         if (this.type === 'card') {
-            this.cardIds.forEach(id => {
+            this.cardIds.forEach((id) => {
                 const row = document.createElement('div');
                 row.classList.add('card', 'creditnote-item-row', 'debitnote-item-row');
                 row.setAttribute('data-id', sanitizeNumericId(id));
                 const condClass = sanitizeClassToken(this.condition || '');
+                const conditionDisplay = this.grading
+                    ? [
+                          this.grading.grader,
+                          this.grading.grade_numeric,
+                          this.grading.grade_label,
+                          this.grading.qualifier,
+                      ]
+                          .filter((value) => value !== null && value !== undefined && value !== '')
+                          .join(' ') || 'Graded'
+                    : this.condition;
                 row.innerHTML = `
                     <div class="item-info">
                         <p class="item-name">${escapeHtml(this.cardName || '')}</p>
                         <p class="item-number">${escapeHtml(this.cardNum || '')}</p>
                     </div>
-                    <p class="item-condition ${condClass}">${escapeHtml(this.condition || '')}</p>
+                    <p class="item-condition ${condClass}${this.grading ? ' graded' : ''}">${escapeHtml(conditionDisplay || '')}</p>
+                    <p class="item-language">${escapeHtml(this.language)}</p>
                     <div class="market-value">
                         <input class="market-value-input" type="number" min="0" step="0.01" value="${escapeHtml(String(this.marketValue ?? ''))}">
                         <span class="currency">€</span>
@@ -57,8 +86,12 @@ export class DebitNoteItem {
                 row.querySelector('.item-remove-btn').addEventListener('click', () => {
                     row.remove();
                     this.addedIds.delete(id);
-                    this.elements = this.elements.filter(el => el !== row);
-                    document.querySelector('.creditnote-total .total-amount').textContent = (Number(document.querySelector('.creditnote-total .total-amount').textContent) - (Number(priceInput.value) || 0)).toFixed(2);
+                    this.elements = this.elements.filter((el) => el !== row);
+                    document.querySelector('.creditnote-total .total-amount').textContent = (
+                        Number(
+                            document.querySelector('.creditnote-total .total-amount').textContent,
+                        ) - (Number(priceInput.value) || 0)
+                    ).toFixed(2);
                 });
                 this.elements.push(row);
             });
@@ -72,6 +105,7 @@ export class DebitNoteItem {
             row.innerHTML = `
                 <p class="item-quantity">${sanitizeNumericId(this.quantity)}</p>
                 <p class="item-name">${escapeHtml(this.cardName || '')}</p>
+                <p class="item-language">${escapeHtml(this.language)}</p>
                 <div class="market-value">
                     <input class="market-value-input" type="number" min="0" step="0.01" value="${escapeHtml(String(this.marketValue ?? ''))}">
                     <span class="currency">€</span>
@@ -83,8 +117,11 @@ export class DebitNoteItem {
             row.querySelector('.item-remove-btn').addEventListener('click', () => {
                 row.remove();
                 this.addedIds.delete(this.sid);
-                this.elements = this.elements.filter(el => el !== row);
-                document.querySelector('.creditnote-total .total-amount').textContent = (Number(document.querySelector('.creditnote-total .total-amount').textContent) - (Number(priceInput.value) || 0) * this.quantity).toFixed(2);
+                this.elements = this.elements.filter((el) => el !== row);
+                document.querySelector('.creditnote-total .total-amount').textContent = (
+                    Number(document.querySelector('.creditnote-total .total-amount').textContent) -
+                    (Number(priceInput.value) || 0) * this.quantity
+                ).toFixed(2);
             });
             this.elements.push(row);
         }
@@ -103,6 +140,7 @@ export class DebitNoteItem {
                 type: 'sealed',
                 sid: result.sid,
                 cardName: result.name,
+                language: result.language || 'en',
                 marketValue: result.market_value,
                 quantity: pendingQty,
                 auctionId: result.auction_id ?? null,
@@ -119,13 +157,22 @@ export class DebitNoteItem {
             renderAlert(`Only ${ids.length} available (requested ${pendingQty})`, 'error');
         }
         const taken = ids.slice(0, pendingQty);
-        taken.forEach(id => addedIds.add(id));
+        taken.forEach((id) => addedIds.add(id));
         return new DebitNoteItem({
             type: 'card',
             cardName: result.card_name,
             cardNum: result.card_num,
             condition: result.condition,
+            language: result.language || 'en',
             marketValue: result.market_value,
+            grading: result.is_graded
+                ? {
+                      grader: result.grader,
+                      grade_numeric: result.grade_numeric,
+                      grade_label: result.grade_label,
+                      qualifier: result.qualifier,
+                  }
+                : null,
             cardIds: taken,
             addedIds,
         });
@@ -139,10 +186,15 @@ export class DebitNoteItem {
                 card_name: result.card_name,
                 card_num: result.card_num,
                 condition: result.condition,
+                is_graded: result.is_graded === 1,
+                grader: result.grader,
+                grade_numeric: result.grade_numeric,
+                grade_label: result.grade_label,
+                qualifier: result.qualifier,
                 exclude_ids: excludeIds,
             }),
         });
         const data = await resp.json();
-        return data.status === 'success' ? (data.card_ids || []) : [];
+        return data.status === 'success' ? data.card_ids || [] : [];
     }
 }

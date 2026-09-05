@@ -10,12 +10,12 @@ class RecieptService(ABC):
 
 class InvoiceReceiptService(RecieptService):
     def issue(self, sale_input, db) -> models.ReceiptResult:
-        invoice_num = 1
-        try:
-            invoice_num = db.execute('SELECT invoice_number FROM sales WHERE invoice_number NOT LIKE "S%" ORDER BY id DESC LIMIT 1').fetchone()[0]
-            invoice_num = int(invoice_num) + 1
-        except:
-            raise Exception("Failed to get invoice_number")
+        latest_invoice = db.execute(
+            "SELECT invoice_number FROM sales "
+            "WHERE invoice_number GLOB '[0-9]*' "
+            "AND invoice_number NOT GLOB '*[^0-9]*' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        invoice_num = int(latest_invoice[0]) + 1 if latest_invoice else 1
 
         pdf, invoice_num = generateInvoice.generate_invoice(
             reciever=sale_input.reciever or [],
@@ -29,9 +29,7 @@ class InvoiceReceiptService(RecieptService):
             shipping=sale_input.shipping,
             type="invoice",
         )
-        return models.ReceiptResult(
-            kind="invoice", number=invoice_num, raw=pdf
-        )
+        return models.ReceiptResult(kind="invoice", number=invoice_num, raw=pdf)
 
 
 class EKasaReceiptService(RecieptService):

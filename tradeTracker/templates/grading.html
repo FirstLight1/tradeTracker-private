@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="csrf-token" content="{{ csrf_token() }}" />
+        <link rel="stylesheet" href="../static/styles/auctions-aligment.css" />
+        <link rel="stylesheet" href="../static/styles/auctions-hollowKnightStyle.css" />
+        <link rel="stylesheet" href="../static/styles/header-align.css" />
+        <link rel="stylesheet" href="/static/styles/modal.css" />
+        <title>Grading - Trade Tracker</title>
+        <link rel="icon" type="image/x-icon" href="../static/images/cardanvil.ico" />
+    </head>
+
+    <body>
+        <main>
+            <h1>Grading<span class="shadow"></span> Submissions</h1>
+            <header class="header">
+                <nav class="nav-bar compact-nav" aria-label="Main navigation">
+                    <a class="nav-page-link" href="{{ url_for('renderers.renderAuctions') }}"
+                        >Home</a
+                    >
+                    <div class="nav-dropdown">
+                        <button class="nav-dropdown-trigger" type="button" aria-haspopup="true">
+                            Add
+                        </button>
+                        <div class="nav-dropdown-menu">
+                            <a href="{{ url_for('renderers.addAuction') }}">Auction</a>
+                            <a href="{{ url_for('renderers.addSingles') }}">Singles</a>
+                        </div>
+                    </div>
+                    <div class="nav-dropdown">
+                        <button class="nav-dropdown-trigger" type="button" aria-haspopup="true">
+                            History
+                        </button>
+                        <div class="nav-dropdown-menu">
+                            <a href="{{ url_for('renderers.sold') }}">Sold</a>
+                            <a href="{{ url_for('renderers.purchases') }}">Purchases</a>
+                        </div>
+                    </div>
+                    <a class="nav-page-link" href="{{ url_for('grading.grading_render') }}"
+                        >Grading</a
+                    >
+                    <button class="upload-csv-btn" type="button">Upload</button>
+                    <button class="sales-btn" type="button">Reports</button>
+                    <div class="inventory-value">
+                        <p class="inventory-value-header">Inventory</p>
+                        <p class="inventory-value-value"></p>
+                    </div>
+                </nav>
+            </header>
+            <div class="grading-actions">
+                <a
+                    class="create-submission-button"
+                    href="{{ url_for('grading.create_submission') }}"
+                    >Create new submission</a
+                >
+            </div>
+            <div id="alert-div"></div>
+            <div class="content-container">
+                <div class="auction-container">
+                    <div class="grading-header auction-tab">
+                        <p>Grader</p>
+                        <p>Service level</p>
+                        <p>Status</p>
+                        <p>Submitted</p>
+                        <p>Returned</p>
+                        <p>Shared costs</p>
+                        <p></p>
+                    </div>
+                    <div class="grading-submissions-container" aria-live="polite"></div>
+                </div>
+            </div>
+        </main>
+        <script type="module" src="../static/scripts/utils/sanitizers.js"></script>
+        <script type="module" src="../static/scripts/utils/renderUtil.js"></script>
+        <script type="module" src="../static/scripts/grading.js"></script>
+        <script type="module" src="/static/scripts/headerActions.js"></script>
+    </body>
+</html>

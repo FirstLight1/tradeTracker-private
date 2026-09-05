@@ -8,7 +8,9 @@ from Crypto.Cipher import AES
 
 if os.environ.get("FLASK_ENV") != "production":
     from dotenv import load_dotenv
+
     load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
 
 class SaleService:
     def __init__(self, db, receipt_service):
@@ -16,11 +18,17 @@ class SaleService:
         self.receipt_service = receipt_service
 
     def process_sale(self, sale_input) -> models.SaleResult:
-        self._check_inventory(sale_input)
-        receipt = self.receipt_service.issue(sale_input, self.db)
-        sale_id = self._insert_sale_header(sale_input, receipt)
-        self._insert_sale_items(sale_id, sale_input)
-        return models.SaleResult(sale_id=sale_id, receipt=receipt)
+        try:
+            self.db.execute("BEGIN IMMEDIATE")
+            self._check_inventory(sale_input)
+            self._prepare_cards(sale_input)
+            receipt = self.receipt_service.issue(sale_input, self.db)
+            sale_id = self._insert_sale_header(sale_input, receipt)
+            self._insert_sale_items(sale_id, sale_input)
+            return models.SaleResult(sale_id=sale_id, receipt=receipt)
+        except Exception:
+            self.db.rollback()
+            raise
 
     def _check_bulk_inventory(self, db, item_type, quantity_needed):
         """Check if sufficient inventory exists for the given item type."""
@@ -49,31 +57,90 @@ class SaleService:
         if sealed:
             for item in sealed:
                 name = item.get("sealedName")
-                needed = int(item.get("quantity", 1))
+                language = item.get("language", "en")
+                if language not in CONSTANTS.ALLOWED_LANGUAGES:
+                    raise ValueError("Invalid language code")
+                try:
+                    needed = int(item.get("quantity", 1))
+                except (TypeError, ValueError) as error:
+                    raise ValueError("Invalid sealed quantity") from error
+                if needed <= 0:
+                    raise ValueError("Invalid sealed quantity")
                 available = self.db.execute(
                     "SELECT COALESCE(SUM(quantity), 0) FROM sealed "
-                    "WHERE lower(name) = lower(?) AND sale_id IS NULL AND opened = 0",
-                    (name,),
+                    "WHERE lower(name) = lower(?) AND language = ? "
+                    "AND sale_id IS NULL AND opened = 0",
+                    (name, language),
                 ).fetchone()[0]
                 if available < needed:
                     raise ValueError
 
+    def _prepare_cards(self, sale_input):
+        seen_ids = set()
+        for card in sale_input.cards:
+            card_id = card.get("cardId")
+            if card_id is None or card_id in seen_ids:
+                raise ValueError("Card is not available")
+            seen_ids.add(card_id)
+
+            inventory_card = self.db.execute(
+                "SELECT c.card_name, c.card_num, c.condition, c.card_price, "
+                "gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, "
+                "gsc.cert_number, gsc.landed_cost, gsc.submission_id, gs.status "
+                "FROM cards c "
+                "LEFT JOIN sale_items si ON si.card_id = c.id "
+                "LEFT JOIN grading_submission_cards gsc "
+                "ON gsc.card_id = c.id AND gsc.is_current = 1 "
+                "LEFT JOIN grading_submissions gs ON gs.id = gsc.submission_id "
+                "WHERE c.id = ? AND c.sold_date IS NULL AND si.card_id IS NULL",
+                (card_id,),
+            ).fetchone()
+            if not inventory_card or (
+                inventory_card["submission_id"] is not None
+                and inventory_card["status"] != models.GradeStatus.GRADED
+            ):
+                raise ValueError(f"Card with id:{card_id} is not available")
+
+            grade_parts = [
+                inventory_card["grader"],
+                self._format_grade(inventory_card["grade_numeric"]),
+                inventory_card["grade_label"],
+                inventory_card["qualifier"],
+            ]
+            card["cardName"] = inventory_card["card_name"]
+            card["cardNum"] = inventory_card["card_num"] or ""
+            card["condition"] = inventory_card["condition"]
+            card["displayCondition"] = (
+                " ".join(filter(None, grade_parts)) or inventory_card["condition"]
+            )
+            card["certNumber"] = inventory_card["cert_number"] or None
+            card["internalCost"] = (
+                inventory_card["landed_cost"]
+                if inventory_card["landed_cost"] is not None
+                else inventory_card["card_price"]
+            )
+
+    @staticmethod
+    def _format_grade(grade):
+        if grade is None:
+            return None
+        return str(int(grade)) if float(grade).is_integer() else str(grade)
+
     def _insert_sale_header(self, sale_input, receipt):
         shippingPrice = None
-        if sale_input.shipping is not  None:
+        if sale_input.shipping is not None:
             shippingPrice = sale_input.shipping.get("shippingPrice", None)
 
         recieverInfoJson = json.dumps(sale_input.reciever).encode("utf-8")
-        key = base64.b64decode(os.environ['KEY'])
-        cipher = AES.new(key,AES.MODE_GCM)
-        recieverInfoCrypt, tag = cipher.encrypt_and_digest(recieverInfoJson) 
+        key = base64.b64decode(os.environ["KEY"])
+        cipher = AES.new(key, AES.MODE_GCM)
+        recieverInfoCrypt, tag = cipher.encrypt_and_digest(recieverInfoJson)
         nonce = cipher.nonce
 
-        result ={
+        result = {
             "nonce": base64.b64encode(nonce).decode(),
             "ciphertext": base64.b64encode(recieverInfoCrypt).decode(),
-            "tag": base64.b64encode(tag).decode()
-
+            "tag": base64.b64encode(tag).decode(),
         }
         result = json.dumps(result)
 
@@ -81,9 +148,7 @@ class SaleService:
             shippingPrice = 0
 
         sale_date = datetime.date.today().isoformat()
-        total_amount = round(
-            float(sale_input.reciever.get("total")) + float(shippingPrice), 2
-        )
+        total_amount = round(float(sale_input.reciever.get("total")) + float(shippingPrice), 2)
         invoice_num = receipt.number
 
         idOrder = None if sale_input.idOrder is None else str(sale_input.idOrder)
@@ -102,20 +167,32 @@ class SaleService:
         if len(cards) > 0:
             for card in cards:
                 sell_price = float(card.get("marketValue", 0))
-                self.db.execute(
-                    "UPDATE cards SET sold_date = ? WHERE id = ?",
-                    (sale_date, card.get("cardId")),
+                updated = self.db.execute(
+                    "UPDATE cards SET sold_date = ? WHERE id = ? AND sold_date IS NULL "
+                    "AND NOT EXISTS (SELECT 1 FROM sale_items WHERE card_id = ?) "
+                    "AND NOT EXISTS ("
+                    "SELECT 1 FROM grading_submission_cards gsc "
+                    "JOIN grading_submissions gs ON gs.id = gsc.submission_id "
+                    "WHERE gsc.card_id = cards.id AND gsc.is_current = 1 "
+                    "AND gs.status != ?)",
+                    (sale_date, card.get("cardId"), card.get("cardId"), models.GradeStatus.GRADED),
                 )
+                if updated.rowcount != 1:
+                    raise ValueError(f"Card with id:{card.get('cardId')} is not available")
 
                 self.db.execute(
-                    "INSERT INTO sale_items (sale_id, card_id, sell_price, profit) "
-                    "VALUES (?, ?, ?, ? - (SELECT card_price FROM cards WHERE id = ?))",
+                    "INSERT INTO sale_items "
+                    "(sale_id, card_id, sell_price, profit, internal_cost, internal_profit) "
+                    "VALUES (?, ?, ?, ? - (SELECT card_price FROM cards WHERE id = ?), ?, ? - ?)",
                     (
                         sale_id,
                         card.get("cardId"),
                         sell_price,
                         sell_price,
                         card.get("cardId"),
+                        card.get("internalCost"),
+                        sell_price,
+                        card.get("internalCost"),
                     ),
                 )
         sealed = sale_input.sealed
@@ -123,6 +200,7 @@ class SaleService:
             for item in sealed:
                 self._deduct_sealed_fifo(
                     item.get("sealedName"),
+                    item.get("language", "en"),
                     int(item.get("quantity", 1)),
                     sale_id,
                     float(item.get("marketValue") or 0),
@@ -217,7 +295,7 @@ class SaleService:
                 )
                 remaining = 0
 
-    def _deduct_sealed_fifo(self, name, sell_qty, sale_id, sell_price=None):
+    def _deduct_sealed_fifo(self, name, language, sell_qty, sale_id, sell_price=None):
         """Deduct sealed units for a product using FIFO (oldest rows first).
 
         When a row is only partially sold it is split: the inventory row's
@@ -230,9 +308,11 @@ class SaleService:
         remaining = sell_qty
 
         rows = self.db.execute(
-            "SELECT id, name, quantity, price, market_value, date, auction_id, cardMarketID FROM sealed "
-            "WHERE lower(name) = lower(?) AND sale_id IS NULL AND opened = 0 ORDER BY id ASC",
-            (name,),
+            "SELECT id, name, language, quantity, price, market_value, date, auction_id, "
+            "cardMarketID FROM sealed "
+            "WHERE lower(name) = lower(?) AND language = ? AND sale_id IS NULL "
+            "AND opened = 0 ORDER BY id ASC",
+            (name, language),
         ).fetchall()
 
         for row in rows:
@@ -253,11 +333,13 @@ class SaleService:
                     (remaining, row["id"]),
                 )
                 self.db.execute(
-                    "INSERT INTO sealed(name, normalized_name, quantity, price, market_value, sell_price, date, auction_id, sale_id, cardMarketID) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO sealed(name, normalized_name, language, quantity, price, "
+                    "market_value, sell_price, date, auction_id, sale_id, cardMarketID) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         row["name"],
                         normalize(row["name"]),
+                        language,
                         remaining,
                         row["price"],
                         row["market_value"],

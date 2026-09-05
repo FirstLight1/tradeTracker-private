@@ -1,14 +1,16 @@
-import {renderAlert} from './renderUtil.js';
+import { renderAlert } from './renderUtil.js';
 
 export class CardStruct {
     constructor() {
         this.cardName = null;
         this.cardNum = null;
         this.condition = null;
+        this.language = 'en';
         this.buyPrice = null;
         this.marketValue = null;
         this.sellPrice = null;
         this.soldDate = null;
+        this.grading = null;
     }
 }
 
@@ -50,7 +52,7 @@ export class queue {
 }
 
 export class CartLine {
-    constructor(cardName, cardNum, condition, auctionName, marketValue, allIds) {
+    constructor(cardName, cardNum, condition, auctionName, marketValue, allIds, grading = null) {
         this.cardName = cardName;
         this.cardNum = cardNum;
         this.condition = condition;
@@ -58,22 +60,33 @@ export class CartLine {
         this.marketValue = marketValue;
         this.cardIds = [allIds[0]];
         this.reservableIds = allIds.slice(1);
+        this.grading = grading;
         this.element = null;
     }
 
-    get quantity() { return this.cardIds.length; }
-    get canIncrement() { return this.reservableIds.length > 0; }
-    get canDecrement() { return this.cardIds.length > 0; }
+    get quantity() {
+        return this.cardIds.length;
+    }
+    get canIncrement() {
+        return this.reservableIds.length > 0;
+    }
+    get canDecrement() {
+        return this.cardIds.length > 0;
+    }
 
     increment() {
-        if (!this.canIncrement) { return null; }
+        if (!this.canIncrement) {
+            return null;
+        }
         const id = this.reservableIds.shift();
         this.cardIds.push(id);
         return id;
     }
 
     decrement() {
-        if (!this.canDecrement) { return null; }
+        if (!this.canDecrement) {
+            return null;
+        }
         const id = this.cardIds.pop();
         this.reservableIds.unshift(id);
         return id;
@@ -83,10 +96,13 @@ export class CartLine {
         return [...this.cardIds];
     }
 
-    matches(cardName, cardNum, condition) {
-        return this.cardName === cardName
-            && this.cardNum === cardNum
-            && this.condition === condition;
+    matches(cardName, cardNum, condition, grading = null) {
+        return (
+            this.cardName === cardName &&
+            this.cardNum === cardNum &&
+            this.condition === condition &&
+            JSON.stringify(this.grading) === JSON.stringify(grading)
+        );
     }
 
     maxQuantity() {
@@ -104,16 +120,21 @@ export class CartLine {
             auctionName: this.auctionName,
             marketValue: this.marketValue,
             cardIds: this.cardIds,
-            reservableIds: this.reservableIds
+            reservableIds: this.reservableIds,
+            grading: this.grading,
         };
     }
 
     // Restore from sessionStorage
     static fromJSON(data) {
         const line = new CartLine(
-            data.cardName, data.cardNum, data.condition,
-            data.auctionName, data.marketValue,
-            [...data.cardIds, ...(data.reservableIds || [])]
+            data.cardName,
+            data.cardNum,
+            data.condition,
+            data.auctionName,
+            data.marketValue,
+            [...data.cardIds, ...(data.reservableIds || [])],
+            data.grading || null,
         );
         // Override the constructor's default split
         line.cardIds = data.cardIds;
@@ -123,12 +144,23 @@ export class CartLine {
 
     // Expand for /invoice payload
     toInvoiceItems() {
-        return this.cardIds.map(id => ({
+        return this.cardIds.map((id) => ({
             cardId: id,
             cardName: this.cardName,
             cardNum: this.cardNum,
             condition: this.condition,
-            marketValue: this.marketValue
+            marketValue: this.marketValue,
+            displayCondition: this.grading
+                ? [
+                      this.grading.grader,
+                      this.grading.grade_numeric,
+                      this.grading.grade_label,
+                      this.grading.qualifier,
+                  ]
+                      .filter((value) => value !== null && value !== undefined && value !== '')
+                      .join(' ')
+                : this.condition,
+            certNumber: this.grading?.cert_number || null,
         }));
     }
 
@@ -143,8 +175,10 @@ export class CartLine {
                     card_name: this.cardName,
                     card_num: this.cardNum,
                     condition: this.condition,
-                    exclude_ids: [...excludeIds]
-                })
+                    is_graded: this.grading !== null,
+                    ...this.grading,
+                    exclude_ids: [...excludeIds],
+                }),
             });
             if (!response.ok) {
                 renderAlert('Failed to fetch card IDs: ' + response.status, 'error');
@@ -152,7 +186,7 @@ export class CartLine {
             }
             const data = await response.json();
             if (data.status === 'success' && data.card_ids) {
-                this.reservableIds = data.card_ids.filter(id => !this.cardIds.includes(id));
+                this.reservableIds = data.card_ids.filter((id) => !this.cardIds.includes(id));
             }
         } catch (e) {
             renderAlert('Error fetching card IDs: ' + e, 'error');

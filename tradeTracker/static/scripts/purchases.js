@@ -1,6 +1,11 @@
-import { renderField, renderAlert, scrollOnLoad, updateInventoryValueAndTotalProfit, downloadFile } from "./utils/renderUtil.js";
-import { escapeHtml, sanitizeNumericId, sanitizeClassToken, csrfFetch } from "./utils/sanitizers.js";
-
+import { renderField, renderAlert, scrollOnLoad, downloadFile } from './utils/renderUtil.js';
+import {
+    escapeHtml,
+    sanitizeNumericId,
+    sanitizeClassToken,
+    csrfFetch,
+} from './utils/sanitizers.js';
+import './headerActions.js';
 
 function parsePaymentMethods(paymentMethodData) {
     if (!paymentMethodData) return [];
@@ -9,7 +14,10 @@ function parsePaymentMethods(paymentMethodData) {
         const parsed = JSON.parse(paymentMethodData);
         if (Array.isArray(parsed)) return parsed;
     } catch (e) {
-        return paymentMethodData.trim().split(' ').map(type => ({ type: type, amount: 0 }));
+        return paymentMethodData
+            .trim()
+            .split(' ')
+            .map((type) => ({ type: type, amount: 0 }));
     }
 
     return [];
@@ -18,211 +26,17 @@ function parsePaymentMethods(paymentMethodData) {
 function formatPaymentDisplay(payments) {
     if (!payments || payments.length === 0) return 'No payment method';
 
-    return payments.map(p => {
-        const type = escapeHtml(p.type || '');
-        const amount = parseFloat(p.amount || 0).toFixed(2);
-        return `${type}: ${amount}€`;
-    }).join('<br>');
+    return payments
+        .map((p) => {
+            const type = escapeHtml(p.type || '');
+            const amount = parseFloat(p.amount || 0).toFixed(2);
+            return `${type}: ${amount}€`;
+        })
+        .join('<br>');
 }
 
 function isEmpty(obj) {
     return Object.keys(obj).length === 0;
-}
-
-function soldReportBtn() {
-    const salesBtn = document.querySelector('.sales-btn');
-    salesBtn.addEventListener('click', () => {
-        const div = document.createElement('div');
-        div.classList.add('sold-report-container');
-        div.innerHTML = `
-            <div class="sold-report-content">
-                <form class="sold-report-form" method="get">
-                <div>
-                    <label for="sold-month">Month:</label>
-                    <input type="number" id="sold-month" name="sold-month" min="1" max="12" required value=${new Date().getMonth()}>
-                </div>
-                <div>
-                    <label for="sold-year">Year:</label>
-                    <input type="number" id="sold-year" name="sold-year" min="2000" max="2100" required value=${new Date().getFullYear()}>
-                </div>
-                <div class="generate-report-button">
-                    <button type="submit">Generate Report</button>
-                </div>
-                </form>
-            </div>
-    `;
-        document.body.appendChild(div);
-        const form = div.querySelector('.sold-report-form');
-        form.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const month = form.querySelector('#sold-month').value;
-            const year = form.querySelector('#sold-year').value;
-            generateSoldReport(month, year, div);
-        });
-        div.addEventListener('click', (event) => {
-            if (event.target === div) {
-                div.remove();
-            }
-        });
-    });
-}
-
-async function generateSoldReport(month, year, div) {
-    const response = await csrfFetch(`/generateSoldReport?month=${month}&year=${year}`);
-    const contentType = response.headers.get('content-type') || '';
-
-    if (!response.ok || contentType.includes('application/json')) {
-        const err = await response.json();
-        renderAlert(`Error generating sold report: ${err}`, 'error');
-        return;
-    }
-    try {
-        downloadFile(response)
-        div.remove();
-    } catch (e) {
-        renderAlert('Error: ' + e, 'error');
-    }
-}
-
-function uploadCSVModal() {
-    const uploadBtn = document.querySelector('.upload-csv-btn');
-    if (!uploadBtn) return;
-    uploadBtn.addEventListener('click', () => {
-        const div = document.createElement('div');
-        div.classList.add('reciever-div');
-        div.innerHTML = `
-            <div class="modal-content upload-modal">
-                <span class="close-modal">&times;</span>
-                <div class="upload-option upload-option-disabled">
-                    <p>CM sold CSV</p>
-                    <label class="upload-file-label">
-                        <span>Choose file</span>
-                        <input type="file" accept=".csv" class="import-cm-sold-csv" disabled>
-                    </label>
-                </div>
-                <div class="upload-option ">
-                    <p>Sold CSV</p>
-                    <label class="upload-file-label">
-                        <span>Choose files</span>
-                        <input type="file" accept=".csv" class="import-sold-csv" multiple>
-                    </label>
-                </div>
-                <div class="upload-option">
-                    <p>Inventory CSV</p>
-                    <label class="upload-file-label">
-                        <span>Choose file</span>
-                        <input type="file" accept=".csv" class="import-inventory-csv" multiple>
-                    </label>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(div);
-
-        bindImportCSV('.import-inventory-csv', 'inventory', div);
-        bindImportCSV('.import-sold-csv', 'sold', div);
-
-        const close = () => div.remove();
-        div.querySelector('.close-modal').addEventListener('click', close);
-        div.addEventListener('click', (event) => {
-            if (event.target === div) close();
-        });
-    });
-}
-
-function bindImportCSV(selector, type, root = document) {
-    const input = root.querySelector(selector);
-    if (!input) return;
-    input.addEventListener('change', async (event) => {
-        const files = event.target.files;
-        if (files && files.length) {
-            const formData = new FormData();
-            for (const file of files) {
-                formData.append("csv-upload", file);
-            }
-            formData.append("type", type);
-            const spinner = showProcessingSpinner(root);
-            try {
-                const response = await csrfFetch('/importCSV', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-                switch (data.status) {
-                    case "success": {
-                        if (data.download_url) {
-                            const resp = await fetch(data.download_url);
-                            if (!resp.ok) throw new Error("download failed");
-                            const blob = await resp.blob();
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = "processed.zip";
-                            a.click();
-                            URL.revokeObjectURL(url);
-                        }
-                        const failed = Array.isArray(data.failed) ? data.failed : [];
-                        const rejected = Array.isArray(data.rejected) ? data.rejected : [];
-                        if (failed.length || rejected.length) {
-                            const lines = [];
-                            if (failed.length) {
-                                lines.push(`${failed.length} order(s) failed to process:`);
-                                failed.forEach(f => lines.push(`• #${f.idOrder} ${f.name || ''} — ${f.reason || 'unknown error'}`));
-                            }
-                            if (rejected.length) {
-                                lines.push(`${rejected.length} order(s) skipped (items not in inventory):`);
-                                rejected.forEach(r => lines.push(`• #${r.idOrder} ${r.name || ''}`));
-                            }
-                            renderAlert(lines.join('\n'), 'error');
-                        } else {
-                            window.location.reload();
-                        }
-                        break;
-                    }
-                    case "missing":
-                        renderAlert('No file uploaded', 'error')
-                        break;
-                    case "file":
-                        renderAlert('No file selected', 'error')
-                        break;
-                    case "extension":
-                        renderAlert('Please upload valid CSV file', 'error')
-                        break;
-                    case "duplicate":
-                        renderAlert('File already uploaded', 'error')
-                        break;
-                    case "error":
-                        renderAlert('Error processing CSV: ' + (data.message || ''), 'error')
-                        break;
-                }
-            } catch (e) {
-                renderAlert('Error processing CSV: ' + e + ', Error code: Px18', 'error')
-            } finally {
-                hideProcessingSpinner(spinner);
-            }
-        }
-    })
-}
-
-function showProcessingSpinner(root, delay = 400) {
-    const container = (root && root.querySelector && root.querySelector('.modal-content')) || document.body;
-    const handle = { overlay: null, timer: null };
-    handle.timer = setTimeout(() => {
-        const overlay = document.createElement('div');
-        overlay.className = 'processing-spinner-overlay';
-        overlay.innerHTML = `
-            <div class="processing-spinner"></div>
-            <p class="processing-spinner-text">Processing CSV…</p>
-        `;
-        container.appendChild(overlay);
-        handle.overlay = overlay;
-    }, delay);
-    return handle;
-}
-
-function hideProcessingSpinner(handle) {
-    if (!handle) return;
-    clearTimeout(handle.timer);
-    if (handle.overlay) handle.overlay.remove();
 }
 
 function formatSealedDate(rawDate) {
@@ -255,6 +69,7 @@ async function loadAuctionContent(button) {
                         <p>Card name</p>
                         <p>Card number</p>
                         <p>Condition</p>
+                        <p>Lang</p>
                         <p>Buy price</p>
                         <p>Market value</p>
                         <p>Margin</p>
@@ -263,14 +78,17 @@ async function loadAuctionContent(button) {
                         <p></p>
                     </div>
                 `;
-                    cards.forEach(card => {
-                        const safeCardConditionClass = sanitizeClassToken(card.condition || 'Unknown');
+                    cards.forEach((card) => {
+                        const safeCardConditionClass = sanitizeClassToken(
+                            card.condition || 'Unknown',
+                        );
                         const cardDiv = document.createElement('div');
                         cardDiv.classList.add('card');
                         cardDiv.innerHTML = `
                         ${renderField(card.card_name != null ? DOMPurify.sanitize(card.card_name) : '', 'text', ['card-info', 'card-name'], 'Card Name', 'card_name')}
                         ${renderField(card.card_num != null ? DOMPurify.sanitize(card.card_num) : '', 'text', ['card-info', 'card-num'], 'Card Number', 'card_num')}
                         <p class='card-info condition ${safeCardConditionClass}' data-field="condition">${DOMPurify.sanitize(card.condition) ? DOMPurify.sanitize(card.condition) : 'Unknown'}</p>
+                        ${renderField(card.language != null ? DOMPurify.sanitize(card.language) : '', 'text', ['card-info', 'language'], 'Lang', 'language')}
                         ${renderField(card.card_price != null ? DOMPurify.sanitize(card.card_price) + '€' : '', 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
                         ${renderField(card.market_value != null ? DOMPurify.sanitize(card.market_value) + '€' : '', 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
                         ${renderField(card.card_price !== null && card.market_value !== null ? (card.market_value - card.card_price).toFixed(2) + '€' : '', 'text', ['card-info', 'profit'], 'profit', true)}
@@ -286,7 +104,7 @@ async function loadAuctionContent(button) {
                     const responseSealed = await csrfFetch(sealedUrl);
                     const sealedData = await responseSealed.json();
 
-                    sealedData.forEach(sealedItem => {
+                    sealedData.forEach((sealedItem) => {
                         const sealedDiv = document.createElement('div');
                         sealedDiv.classList.add('sealed-item');
                         console.log(sealedItem);
@@ -297,18 +115,20 @@ async function loadAuctionContent(button) {
                             state = 'Sold';
                         }
 
-                        const margin = (Number(sealedItem.market_value) - Number(sealedItem.price)).toFixed(2);
+                        const margin = (
+                            Number(sealedItem.market_value) - Number(sealedItem.price)
+                        ).toFixed(2);
 
                         sealedDiv.innerHTML = `
                             <p class='sealed-quantity'>${DOMPurify.sanitize(sealedItem.quantity)}</p>
                             <p class="sealed-name">${DOMPurify.sanitize(sealedItem.name)}</p>
+                            <p class="sealed-language">${DOMPurify.sanitize(sealedItem.language || 'en')}</p>
                             <p class="sealed-price">${DOMPurify.sanitize(sealedItem.price)}€</p>
                             <p class="VAT-sealed">${(Number(DOMPurify.sanitize(sealedItem.price)) / 1.23).toFixed(2)}</p>
                             <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
                             <p></p>
                             <p>${state}</p>
-                            <p></p>
                             <p></p>
                         `;
 
@@ -332,7 +152,7 @@ async function loadAuctions() {
     try {
         const response = await csrfFetch('/loadPurchases');
         const data = await response.json();
-        data.forEach(auction => {
+        data.forEach((auction) => {
             const safeAuctionId = sanitizeNumericId(auction.id);
             const auctionDiv = document.createElement('div');
             auctionDiv.classList.add('auction-tab');
@@ -341,12 +161,22 @@ async function loadAuctions() {
                 auctionDiv.classList.add('singles');
             }
             auctionDiv.setAttribute('data-id', safeAuctionId);
-            const auctionName = auction.auction_name || "Auction " + (auction.id - 1);
+            const auctionName = auction.auction_name || 'Auction ' + (auction.id - 1);
             const auctionPrice = auction.auction_price;
             const buyDate = new Date(auction.date_created);
-            let formatedDate = buyDate.toLocaleDateString('sk-SK', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            let formatedDate = buyDate.toLocaleDateString('sk-SK', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+            });
             if (formatedDate === 'Invalid Date') {
-                formatedDate = new Date(String(auction.date_created).split('T')[0]).toLocaleDateString('sk-SK', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                formatedDate = new Date(
+                    String(auction.date_created).split('T')[0],
+                ).toLocaleDateString('sk-SK', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                });
             }
 
             const payments = parsePaymentMethods(auction.payment_method);
@@ -368,9 +198,8 @@ async function loadAuctions() {
             auctionContainer.appendChild(auctionDiv);
         });
 
-
         const buyReportButtons = document.querySelectorAll('.auction-container .buy-report');
-        buyReportButtons.forEach(button => {
+        buyReportButtons.forEach((button) => {
             button.addEventListener('click', async () => {
                 const auctionId = Number(button.getAttribute('data-id'));
                 const response = await csrfFetch(`/generateBuyReport?auctionId=${auctionId}`);
@@ -382,21 +211,20 @@ async function loadAuctions() {
                     return;
                 }
                 try {
-                    downloadFile(response)
+                    downloadFile(response);
                 } catch (e) {
                     renderAlert('Error: ' + e, 'error');
                 }
-
             });
         });
 
         const viewButtons = document.querySelectorAll('.auction-container .view-auction');
-        viewButtons.forEach(button => {
+        viewButtons.forEach((button) => {
             button.addEventListener('click', () => loadAuctionContent(button));
         });
 
         const auctionsTabs = document.querySelectorAll('.auction-container .auction-tab');
-        auctionsTabs.forEach(tab => {
+        auctionsTabs.forEach((tab) => {
             tab.addEventListener('click', async (event) => {
                 if (event.target === tab) {
                     const viewButton = tab.querySelector('.view-auction');
@@ -438,7 +266,10 @@ async function loadSealed(viewButton) {
                 data.data.forEach((sealedData) => {
                     const sealedDiv = document.createElement('div');
                     sealedDiv.classList.add('sealed-item');
-                    const margin = (Number(DOMPurify.sanitize(sealedData.market_value)) - Number(DOMPurify.sanitize(sealedData.price))).toFixed(2);
+                    const margin = (
+                        Number(DOMPurify.sanitize(sealedData.market_value)) -
+                        Number(DOMPurify.sanitize(sealedData.price))
+                    ).toFixed(2);
                     const formatedDate = formatSealedDate(sealedData.date);
                     let state = '';
                     console.log(sealedData);
@@ -450,13 +281,13 @@ async function loadSealed(viewButton) {
                     sealedDiv.innerHTML = `
                         <p class='sealed-quantity'>${DOMPurify.sanitize(sealedData.quantity)}</p>
                         <p class='sealed-name'>${DOMPurify.sanitize(sealedData.name)}</p>
+                        <p class='sealed-language'>${DOMPurify.sanitize(sealedData.language || 'en')}</p>
                         <p class='unit-price'>${DOMPurify.sanitize(sealedData.price)}</p>
                         <p class='VAT-sealed sealed-market-value'>${(DOMPurify.sanitize(sealedData.price) / 1.23).toFixed(2)}</p>
                         <p class='market-value-sealed'>${DOMPurify.sanitize(sealedData.market_value)}</p>
                         <p class='margin'>${margin}</p>
                         <p class='add-date'>${formatedDate}</p>
                         <p>${state}</p>
-                        <p></p>
                         <p></p>
                     `;
                     contentDiv.append(sealedDiv);
@@ -471,11 +302,6 @@ async function loadSealed(viewButton) {
     }
 }
 
-uploadCSVModal();
-soldReportBtn();
 loadAuctions();
 initializeSealed();
 scrollOnLoad();
-document.addEventListener('DOMContentLoaded', async () => {
-    await updateInventoryValueAndTotalProfit();
-}, false);

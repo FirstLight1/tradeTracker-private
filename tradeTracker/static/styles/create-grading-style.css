@@ -1,0 +1,241 @@
+.grading-submission-form label {
+    display: block;
+    margin: 14px 0 6px;
+    color: rgba(201, 209, 217, 0.85);
+    font-size: 0.9rem;
+}
+
+.grading-submission-form label:first-child {
+    margin-top: 0;
+}
+
+.grading-submission-form .field-help {
+    display: block;
+    margin: 5px 0 0;
+    color: rgba(201, 209, 217, 0.68);
+    font-size: 0.8rem;
+}
+
+.grading-submission-form input,
+.grading-submission-form select,
+.grading-submission-form textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 9px 11px;
+    border: 1px solid rgba(127, 255, 212, 0.25);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-color);
+    font: inherit;
+}
+
+.grading-submission-form select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding-right: 38px;
+    border-color: rgba(127, 255, 212, 0.35);
+    border-radius: 12px;
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--accent-cyan) 50%),
+        linear-gradient(135deg, var(--accent-cyan) 50%, transparent 50%),
+        linear-gradient(135deg, rgba(26, 31, 46, 0.94) 0%, rgba(13, 17, 23, 0.96) 100%);
+    background-position:
+        calc(100% - 16px) calc(50% - 2px),
+        calc(100% - 11px) calc(50% - 2px),
+        0 0;
+    background-size:
+        5px 5px,
+        5px 5px,
+        100% 100%;
+    background-repeat: no-repeat;
+    box-shadow:
+        inset 0 0 10px rgba(0, 0, 0, 0.35),
+        0 0 12px rgba(127, 255, 212, 0.1);
+}
+
+.grading-submission-form select option {
+    background: #141b2a;
+    color: var(--text-color);
+    font-family: var(--primary-font), serif;
+}
+
+.grading-submission-form select option:checked {
+    background: linear-gradient(
+        135deg,
+        rgba(127, 255, 212, 0.22) 0%,
+        rgba(147, 112, 219, 0.22) 100%
+    );
+    color: #e6ffff;
+}
+
+.grading-submission-form textarea {
+    resize: vertical;
+}
+
+.grading-submission-form input:focus,
+.grading-submission-form select:focus,
+.grading-submission-form textarea:focus {
+    outline: none;
+    border-color: rgba(127, 255, 212, 0.7);
+    box-shadow: 0 0 10px rgba(127, 255, 212, 0.2);
+}
+
+.grading-card-search {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.grading-card-search .search-btn {
+    min-width: 100px;
+}
+
+.grading-card-search .search-results {
+    position: absolute;
+    top: calc(100% + 12px);
+    left: 0;
+    right: 0;
+    width: 100%;
+    margin-top: 0;
+    z-index: 10;
+    border-radius: 8px;
+    background: rgba(13, 17, 23, 0.96);
+}
+
+.grading-card-search .search-results .search-result-item {
+    grid-template-columns: minmax(0, 1fr) 90px 110px minmax(120px, 0.7fr) 90px;
+    column-gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 4px;
+    padding: 5px 9px;
+    font-size: 0.84rem;
+}
+
+.grading-card-search .search-results .result-condition {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.grading-card-search .search-results .result-source,
+.grading-card-search .search-results .result-market-value {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.grading-submission-form .creditnote-item-content {
+    min-height: 190px;
+    max-height: 420px;
+    overflow: auto;
+}
+
+.creditnote-item-content .creditnote-item-row.grading-card-row,
+.creditnote-item-content .grading-card-header {
+    grid-template-columns: minmax(220px, 1fr) 120px repeat(4, 100px) 24px;
+    gap: 12px;
+    min-width: 900px;
+}
+
+.creditnote-item-content .creditnote-item-row.grading-card-row {
+    height: auto;
+    min-height: 46px;
+    padding: 10px 12px;
+}
+
+.creditnote-item-content .creditnote-item-row.grading-card-row:hover {
+    z-index: auto;
+    border-color: transparent;
+    box-shadow:
+        0 4px 15px rgba(0, 0, 0, 0.3),
+        0 0 30px rgba(147, 112, 219, 0.1);
+    color: var(--text-color);
+    background: transparent;
+}
+
+.creditnote-item-content .grading-card-header {
+    display: grid;
+    align-items: end;
+    padding: 0 12px;
+    color: rgba(201, 209, 217, 0.85);
+    font-size: 0.72rem;
+    line-height: 1.1;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.creditnote-item-content .grading-card-header span:first-child {
+    text-align: left;
+}
+
+.creditnote-item-content .grading-card-row input {
+    min-width: 0;
+    padding: 6px 7px;
+    text-align: right;
+}
+
+.creditnote-item-content .grading-card-row .item-remove-btn {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid rgba(229, 104, 116, 0.4);
+    border-radius: 4px;
+    background: rgba(229, 104, 116, 0.1);
+    color: var(--condition-colors-played, #e56874);
+    cursor: pointer;
+}
+
+.creditnote-item-content .grading-card-row .item-remove-btn:hover {
+    border-color: var(--condition-colors-played, #e56874);
+    background: rgba(229, 104, 116, 0.3);
+}
+
+.grading-submission-form .creditnote-confirm {
+    padding: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+}
+
+.grading-submission-form .creditnote-confirm:hover {
+    box-shadow: none;
+}
+
+.grading-submission-form .confirm-btn {
+    min-width: 210px;
+}
+
+textarea {
+    max-height: 120px;
+}
+
+@media (max-width: 1600px) {
+    .creditnote-grid,
+    .back-btn-container {
+        width: min(100%, 1530px);
+    }
+}
+
+@media (max-width: 760px) {
+    .creditnote-grid {
+        grid-template-columns: 1fr;
+        gap: 18px;
+        padding: 14px;
+    }
+
+    .creditnote-confirm {
+        grid-column: 1;
+        justify-self: stretch;
+    }
+
+    .grading-submission-form .confirm-btn {
+        width: 100%;
+    }
+
+    .back-btn-container {
+        padding: 0 14px 18px;
+        box-sizing: border-box;
+    }
+}

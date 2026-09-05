@@ -20,9 +20,7 @@ def configure_logging(app):
             "version": 1,
             "disable_existing_loggers": False,
             "formatters": {
-                "default": {
-                    "format": "[%(asctime)s] %(levelname)s %(name)s: %(message)s"
-                },
+                "default": {"format": "[%(asctime)s] %(levelname)s %(name)s: %(message)s"},
                 "detailed": {
                     "format": "[%(asctime)s] %(levelname)s %(name)s %(module)s:%(lineno)d - %(message)s"
                 },
@@ -42,12 +40,12 @@ def configure_logging(app):
                     "formatter": "detailed",
                 },
                 "slow_queries": {
-                "class": "logging.handlers.RotatingFileHandler",
-                "filename": os.path.join(log_dir, "slow_queries.log"),
-                "maxBytes": 1024 * 1024 * 5,
-                "backupCount": 3,
-                "encoding": "utf-8",
-                "formatter": "detailed",
+                    "class": "logging.handlers.RotatingFileHandler",
+                    "filename": os.path.join(log_dir, "slow_queries.log"),
+                    "maxBytes": 1024 * 1024 * 5,
+                    "backupCount": 3,
+                    "encoding": "utf-8",
+                    "formatter": "detailed",
                 },
             },
             "loggers": {

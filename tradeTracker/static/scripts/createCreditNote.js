@@ -1,5 +1,5 @@
-import { renderField, renderAlert, scrollOnLoad, downloadFile } from "./utils/renderUtil.js";
-import { sanitizeNumericId, sanitizeClassToken, csrfFetch } from "./utils/sanitizers.js";
+import { renderField, renderAlert, scrollOnLoad, downloadFile } from './utils/renderUtil.js';
+import { sanitizeNumericId, sanitizeClassToken, csrfFetch } from './utils/sanitizers.js';
 
 function conditionClass(condition) {
     if (!condition) return '';
@@ -56,7 +56,7 @@ async function loadContent() {
         renderAlert('Failed to load sale: ' + sale.message, 'error');
         return;
         //spawn try agian later type shit
-    };
+    }
     const res = await csrfFetch(`/partyInfo/${saleId}`);
     const partyInfo = await res.json();
     console.log(partyInfo);
@@ -80,7 +80,7 @@ async function loadContent() {
         country: recieverInfo.state,
     });
 
-    items.forEach(item => {
+    items.forEach((item) => {
         if (item.card_num) {
             const div = document.createElement('div');
             div.classList.add('card', 'creditnote-item-row');
@@ -105,6 +105,7 @@ async function loadContent() {
                     <input type="checkbox" class="item-checkbox" checked>
                     <p class="item-quantity">1</p>
                     <p class="item-name">${item.name}</p>
+                    <p class="item-language">${DOMPurify.sanitize(item.language || 'en')}</p>
                     <p class="market-value">${item.market_value * -1}<span class="currency">€</span></p>
                 `;
 
@@ -122,16 +123,18 @@ async function loadContent() {
         `;
     itemsContainer.appendChild(shippingDiv);
 
-
-
     const totalPriceDiv = document.querySelector('.total-price');
     totalPriceDiv.innerHTML = `<p class="total-amount">${saleInfo.total_amount * -1}</p><span class="total-price-currency">€</span>`;
 
     const checkboxes = document.querySelectorAll('.item-checkbox');
-    checkboxes.forEach(checkbox => {
+    checkboxes.forEach((checkbox) => {
         checkbox.addEventListener('change', (event) => {
             const checked = event.target.checked;
-            const marketValue = parseFloat(event.target.closest('.creditnote-item-row').querySelector('.market-value').textContent) || 0;
+            const marketValue =
+                parseFloat(
+                    event.target.closest('.creditnote-item-row').querySelector('.market-value')
+                        .textContent,
+                ) || 0;
             const totalAmountEl = document.querySelector('.total-amount');
             let totalValue = parseFloat(totalAmountEl.textContent) || 0;
             if (checked) {
@@ -146,7 +149,8 @@ async function loadContent() {
     const shippingCheckbox = document.querySelector('.shipping-checkbox');
     shippingCheckbox.addEventListener('change', (event) => {
         const checked = event.target.checked;
-        const shippingPrice = parseFloat(shippingDiv.querySelector('.shipping-price').textContent) || 0;
+        const shippingPrice =
+            parseFloat(shippingDiv.querySelector('.shipping-price').textContent) || 0;
         const totalAmountEl = document.querySelector('.total-amount');
         let totalValue = parseFloat(totalAmountEl.textContent) || 0;
         if (checked) {
@@ -161,10 +165,10 @@ async function loadContent() {
     confirmBtn.addEventListener('click', async (event) => {
         const returnNote = {
             items: [],
-            shipping: false
-        }
+            shipping: false,
+        };
         const payload = {};
-        itemsContainer.querySelectorAll('.creditnote-item-row').forEach(item => {
+        itemsContainer.querySelectorAll('.creditnote-item-row').forEach((item) => {
             if (item?.querySelector('.item-checkbox').checked) {
                 const id = item.getAttribute('data-id');
                 returnNote.items.push(id);
@@ -174,13 +178,13 @@ async function loadContent() {
             payload.shipping = {
                 shippingWay: 'Doprava / Poštovné – samostatná služba',
                 shippingPrice: shipping,
-            }
-        };
+            };
+        }
 
         const itemsToReturn = items.filter((item) => returnNote.items.includes(String(item.id)));
         payload.items = itemsToReturn.filter((item) => item.card_num);
         const sealedReturnCounts = {};
-        itemsContainer.querySelectorAll('.sealed-item .item-checkbox:checked').forEach(cb => {
+        itemsContainer.querySelectorAll('.sealed-item .item-checkbox:checked').forEach((cb) => {
             const id = cb.closest('.creditnote-item-row').getAttribute('data-id');
             sealedReturnCounts[id] = (sealedReturnCounts[id] || 0) + 1;
         });
@@ -188,10 +192,13 @@ async function loadContent() {
             .filter((item) => !item.card_num)
             .map((s) => ({ ...s, returnQuantity: sealedReturnCounts[s.id] || 0 }))
             .filter((s) => s.returnQuantity > 0);
-        //bulk, holo, ex 
+        //bulk, holo, ex
         payload.reciever = recieverInfo;
         payload.originalInvoiceNum = originalInvoiceNum;
-        payload.valueChanged = itemsToReturn.reduce((acc, curr) => acc + Number(curr.sell_price), 0);
+        payload.valueChanged = itemsToReturn.reduce(
+            (acc, curr) => acc + Number(curr.sell_price),
+            0,
+        );
         const body = JSON.stringify(payload);
 
         const response = await csrfFetch(`/generateCreditNote/${saleId}`, {
@@ -205,12 +212,10 @@ async function loadContent() {
         if (!response.ok || contentType.includes('application/json')) {
             renderAlert('Error: ' + (await response.json()).message, 'error');
             return;
-        };
+        }
         await downloadFile(response);
         window.location.href = `/sold`;
-
     });
-
 }
 
 loadContent();

@@ -3,7 +3,7 @@
     display: none !important;
 }
 
-.nav-bar{
+.nav-bar {
     display: flex;
     justify-content: space-evenly;
     margin-bottom: 50px;
@@ -13,13 +13,227 @@
     width: 1530px;
 }
 
-.nav-bar div{
+.nav-bar:not(.compact-nav) div {
     display: flex;
     justify-content: center;
     align-items: center;
 }
 
-.import-sold-csv-label{
+.nav-bar.compact-nav {
+    position: relative;
+    justify-content: space-around;
+    align-items: stretch;
+    gap: 12px;
+    padding: 0 24px;
+    height: auto;
+    min-height: 54px;
+    width: auto;
+}
+
+.compact-nav > .nav-dropdown,
+.compact-nav > .inventory-value {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.compact-nav > button,
+.compact-nav > .nav-page-link,
+.nav-dropdown-trigger {
+    min-width: 150px;
+    padding: 10px 18px;
+}
+
+.compact-nav > .nav-page-link {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 25px;
+    color: var(--text-color);
+    font-family: var(--primary-font), serif;
+    font-size: 16px;
+    letter-spacing: 0.2em;
+    text-decoration: none;
+    text-shadow:
+        0 0 2px rgba(255, 255, 255, 1),
+        0 0 6px rgba(255, 250, 240, 0.9),
+        0 0 14px rgba(255, 240, 220, 0.7);
+    text-transform: uppercase;
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.compact-nav > .nav-page-link:hover,
+.compact-nav > .nav-page-link:focus {
+    color: var(--text-accent);
+    letter-spacing: 0.25em;
+    outline: none;
+}
+
+.nav-dropdown {
+    position: relative;
+}
+
+.nav-dropdown-trigger::after {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin: 0 0 4px 12px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform 0.2s ease;
+}
+
+.nav-dropdown-menu {
+    position: absolute;
+    z-index: 50;
+    top: 100%;
+    left: 50%;
+    display: flex;
+    visibility: hidden;
+    flex-direction: column;
+    align-items: stretch;
+    width: 180px;
+    padding: 6px;
+    opacity: 0;
+    border: 1px solid rgba(127, 255, 212, 0.22);
+    border-radius: 0 0 14px 14px;
+    background: linear-gradient(135deg, rgba(26, 31, 46, 0.98), rgba(13, 17, 23, 0.98));
+    box-shadow:
+        0 14px 25px rgba(0, 0, 0, 0.45),
+        0 0 25px rgba(127, 255, 212, 0.08);
+    transform: translate(-50%, -6px);
+    transition:
+        opacity 0.2s ease,
+        transform 0.2s ease,
+        visibility 0.2s;
+}
+
+.nav-dropdown:hover .nav-dropdown-menu,
+.nav-dropdown:focus-within .nav-dropdown-menu {
+    visibility: visible;
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+.nav-dropdown:hover .nav-dropdown-trigger::after,
+.nav-dropdown:focus-within .nav-dropdown-trigger::after {
+    transform: rotate(225deg);
+}
+
+.nav-dropdown-menu a {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 11px 14px;
+    border-radius: 9px;
+    color: var(--text-color);
+    font-family: var(--primary-font), serif;
+    letter-spacing: 0.12em;
+    text-align: center;
+    text-decoration: none;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px var(--glow-color);
+    transition:
+        background 0.2s ease,
+        color 0.2s ease;
+}
+
+.nav-dropdown-menu a:hover,
+.nav-dropdown-menu a:focus {
+    color: var(--accent-cyan);
+    background: rgba(127, 255, 212, 0.08);
+    outline: none;
+}
+
+.compact-nav > .inventory-value {
+    margin: 0;
+    padding: 0 12px;
+    white-space: nowrap;
+}
+
+.compact-nav .inventory-value p {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.sold-report-container {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    height: auto;
+    padding: 20px;
+    background: rgba(13, 17, 23, 0.85);
+    backdrop-filter: blur(5px);
+}
+
+.sold-report-content {
+    position: relative;
+    width: 250px;
+    padding: 24px;
+    border: 1px solid rgba(127, 255, 212, 0.15);
+    background-color: var(--primary-dark);
+    box-shadow:
+        0 4px 15px rgba(0, 0, 0, 0.3),
+        0 0 30px rgba(147, 112, 219, 0.1);
+}
+
+.sold-report-content h2 {
+    margin: 0 0 12px;
+    font-size: 1.1rem;
+}
+
+.sold-report-content .close-report {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    padding: 2px 8px;
+    font-size: 20px;
+}
+
+.sold-report-container form div {
+    margin-top: 15px;
+}
+
+.sold-report-container label {
+    margin-right: 10px;
+}
+
+.sold-report-container button {
+    padding: 5px 15px;
+    border: 1px solid transparent;
+    font-size: 14px;
+    transition: all 0.2s ease-in-out;
+}
+
+.sold-report-container button:hover {
+    border-radius: 15px;
+    box-shadow:
+        0 0 24px var(--glow-color),
+        0 0 12px var(--mist-color),
+        0 0 10px var(--mist-color);
+}
+
+.sold-report-container input {
+    width: 60px;
+    padding: 5px;
+    border: 1px solid var(--primary-light);
+    border-radius: 10px;
+    color: var(--text-color);
+    background: var(--primary-light);
+    box-shadow:
+        inset 0 0 10px rgba(0, 0, 0, 0.3),
+        0 0 20px rgba(147, 112, 219, 0.1);
+    transition: all 0.3s ease;
+    backdrop-filter: blur(5px);
+}
+
+.import-sold-csv-label {
     position: relative;
     display: flex;
     justify-content: center;
@@ -27,10 +241,10 @@
     width: 160px;
 }
 
-.import-sold-csv-label input[type="file"]{
+.import-sold-csv-label input[type='file'] {
     width: 150px;
 }
 
-.upload-text{
+.upload-text {
     position: absolute;
 }

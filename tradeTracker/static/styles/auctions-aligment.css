@@ -25,17 +25,31 @@ p {
     margin: 5px;
 }
 
-
 .alert-error {
-    background-color: #D0342C;
+    background-color: #d0342c;
     border-radius: 15px;
     border: 2px solid red;
+    white-space: pre-line;
 }
 
 .alert-message {
-    background-color: #3B82F6;
+    background-color: #3b82f6;
     border-radius: 10px;
     border: 2px solid blue;
+    white-space: pre-line;
+}
+
+.field-error {
+    display: block;
+    margin: 5px 0 0;
+    color: #ff9aa4;
+    font-size: 0.82rem;
+    line-height: 1.3;
+}
+
+[aria-invalid='true'] {
+    border-color: #e56874 !important;
+    box-shadow: 0 0 8px rgba(229, 104, 116, 0.45) !important;
 }
 
 .header-container {
@@ -62,7 +76,7 @@ p {
 }
 
 .auction-tab:hover {
-    z-index: 1000;
+    z-index: 5;
 }
 
 .auction-options {
@@ -113,7 +127,9 @@ p {
     font-size: 13px;
     color: var(--text-color);
     font-family: var(--primary-font), serif;
-    transition: background 0.2s ease, color 0.2s ease;
+    transition:
+        background 0.2s ease,
+        color 0.2s ease;
 }
 
 .auction-options-list .auction-option button:hover {
@@ -137,12 +153,12 @@ p {
     margin-right: auto;
 }
 
-.auction-container .auction-tab>* {
+.auction-container .auction-tab > * {
     justify-self: center;
     align-self: center;
 }
 
-.sealed-container.auction-tab>* {
+.sealed-container.auction-tab > * {
     justify-self: center;
     align-self: center;
 }
@@ -236,13 +252,13 @@ p {
 }
 
 .edit-payments-btn {
-    background-color: #4CAF50;
+    background-color: #4caf50;
     color: white;
     border: none;
 }
 
 .save-payments-btn {
-    background-color: #2196F3;
+    background-color: #2196f3;
     color: white;
     border: none;
 }
@@ -272,7 +288,7 @@ p {
 
 .cards-header {
     display: grid;
-    grid-template-columns: 280px 120px 150px 80px 100px 80px 90px 180px 90px;
+    grid-template-columns: 280px 120px 150px 70px 80px 100px 80px 90px 180px 90px;
     gap: 5px;
     text-align: center;
     padding-bottom: 5px;
@@ -394,7 +410,7 @@ p {
 
 .card {
     display: grid;
-    grid-template-columns: 280px 120px 150px 80px 100px 80px 90px 180px 90px;
+    grid-template-columns: 280px 120px 150px 70px 80px 100px 80px 90px 180px 90px;
     gap: 5px;
     margin-top: 15px;
     margin-bottom: 15px;
@@ -412,7 +428,7 @@ p {
 .sealed-header,
 .sealed-item {
     display: grid;
-    grid-template-columns: 60px 280px 100px 100px 100px 80px 100px 80px 110px 80px;
+    grid-template-columns: 60px 280px 70px 100px 100px 100px 80px 100px 80px 80px;
     gap: 5px;
     text-align: center;
     align-items: center;
@@ -467,7 +483,9 @@ p {
     user-select: none;
     font-family: sans-serif, Arial;
     opacity: 0.7;
-    transition: opacity 0.2s ease, transform 0.2s ease;
+    transition:
+        opacity 0.2s ease,
+        transform 0.2s ease;
     z-index: 1002;
 }
 
@@ -506,7 +524,7 @@ p {
     pointer-events: auto;
 }
 
-.item-options-star:hover~.item-options-list,
+.item-options-star:hover ~ .item-options-list,
 .item-options-list:hover {
     visibility: visible;
 }
@@ -528,7 +546,9 @@ p {
     color: var(--text-color);
     font-family: var(--primary-font), serif;
     pointer-events: auto;
-    transition: background 0.2s ease, color 0.2s ease;
+    transition:
+        background 0.2s ease,
+        color 0.2s ease;
 }
 
 .item-options-list .item-option button:hover {

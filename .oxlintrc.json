@@ -1,0 +1,25 @@
+{
+    "$schema": "./node_modules/oxfmt/configuration_schema.json",
+    "env": {
+        "browser": true,
+        "es6": true
+    },
+
+    "categories": {
+        "correctness": "error",
+        "suspicious": "warn",
+        "perf": "warn"
+    },
+
+    "rules": {
+        "no-undef": "error",
+        "no-unused-vars": "warn",
+        "eqeqeq": "error",
+        "curly": "error",
+        "prefer-const": "warn",
+        "no-debugger": "error",
+        "no-console": "off"
+    },
+
+    "ignorePatterns": ["node_modules/**", "dist/**", "build/**", "vendor/**"]
+}

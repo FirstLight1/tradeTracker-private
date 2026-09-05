@@ -1,9 +1,9 @@
-import {CardStruct} from './utils/classes.js';
-import {renderAlert, createNewCard} from './utils/renderUtil.js';
-import { csrfFetch } from "./utils/sanitizers.js";
+import { CardStruct } from './utils/classes.js';
+import { renderAlert, createNewCard } from './utils/renderUtil.js';
+import { csrfFetch } from './utils/sanitizers.js';
 
 const cardsArr = [];
-const saveButton = document.querySelector('.save-btn')
+const saveButton = document.querySelector('.save-btn');
 const initialMarketValueInput = document.querySelector('.card .marketValue');
 
 if (initialMarketValueInput) {
@@ -14,66 +14,67 @@ if (initialMarketValueInput) {
 
 saveButton.addEventListener('click', () => {
     let auction = {};
-    if(cardsArr.length === 0){
+    if (cardsArr.length === 0) {
         cardsArr.push(auction);
     }
 
     const cards = document.querySelectorAll('.card');
-        cards.forEach(ell =>{
-            let card = new CardStruct();
-            const input = (selector) => DOMPurify.sanitize(ell.querySelector(selector)?.value.trim().toUpperCase()) || null;
-            const inputNumber = (selector) => {
-                const val = DOMPurify.sanitize(ell.querySelector(selector)?.value.trim());
-                    if(!val){
-                        return null;
-                    }
-                return parseFloat(val.replace(',', '.'));
-            };
-            card.cardName = input('input[name=cardName]');
-            card.cardNum = input('input[name=cardNum]');
-            card.condition = input('select[name=condition]');
-            card.buyPrice = inputNumber('input[name=buyPrice]');
-            card.marketValue = inputNumber('input[name=marketValue]');
-            card.sellPrice = inputNumber('input[name=sellPrice]');
-            card.soldDate = null;
-            if(card.sellPrice === null){
+    cards.forEach((ell) => {
+        let card = new CardStruct();
+        const input = (selector) =>
+            DOMPurify.sanitize(ell.querySelector(selector)?.value.trim().toUpperCase()) || null;
+        const inputNumber = (selector) => {
+            const val = DOMPurify.sanitize(ell.querySelector(selector)?.value.trim());
+            if (!val) {
+                return null;
+            }
+            return parseFloat(val.replace(',', '.'));
+        };
+        card.cardName = input('input[name=cardName]');
+        card.cardNum = input('input[name=cardNum]');
+        card.condition = input('select[name=condition]');
+        card.language = DOMPurify.sanitize(ell.querySelector('select[name=language]').value);
+        card.buyPrice = inputNumber('input[name=buyPrice]');
+        card.marketValue = inputNumber('input[name=marketValue]');
+        card.sellPrice = inputNumber('input[name=sellPrice]');
+        card.soldDate = null;
+        if (card.sellPrice === null) {
             card.sellPrice = card.marketValue;
-            }
-            if(card.buyPrice === null){
-                card.buyPrice = (DOMPurify.sanitize(card.marketValue) * 0.80).toFixed(2);
-            }
-            if(card.cardName !== null && card.marketValue !== null){
-                cardsArr.push(card);
-            }
-        });
+        }
+        if (card.buyPrice === null) {
+            card.buyPrice = (DOMPurify.sanitize(card.marketValue) * 0.8).toFixed(2);
+        }
+        if (card.cardName !== null && card.marketValue !== null) {
+            cardsArr.push(card);
+        }
+    });
 
-
-        if (cardsArr.length !== 1){
-            const jsonbody = JSON.stringify(cardsArr);
-            csrfFetch('/addToSingles', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: jsonbody,
-            })
-            .then(response => response.json())
-            .then(data => {
+    if (cardsArr.length !== 1) {
+        const jsonbody = JSON.stringify(cardsArr);
+        csrfFetch('/addToSingles', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: jsonbody,
+        })
+            .then((response) => response.json())
+            .then((data) => {
                 if (data.status === 'success') {
                     window.location.href = '/';
                 }
             })
-                .catch(error => {
-                    renderAlert('Error: ' + error, 'error');
-                });
-        }
+            .catch((error) => {
+                renderAlert('Error: ' + error, 'error');
+            });
+    }
 });
 
 const addCardButton = document.querySelector('.add-card');
-addCardButton.addEventListener('click', () =>{
+addCardButton.addEventListener('click', () => {
     const cards = document.querySelectorAll('.card');
     const card = cards[0];
-    const container = document.querySelector(".cards-container")
+    const container = document.querySelector('.cards-container');
     const newCard = createNewCard(card.cloneNode(true));
     container.append(newCard);
-})
+});

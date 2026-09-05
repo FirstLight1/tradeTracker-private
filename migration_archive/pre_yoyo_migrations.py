@@ -1,13 +1,17 @@
+"""Archived pre-Yoyo migrations. Kept for historical reference only."""
+
 import sqlite3
 import os
 import re
 import sys
 import unicodedata
+
 # Import the sales history migration logic
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
 from migrate_to_sales_history import migrate_to_sales_history
 from add_bulk import add_bulk_sales_table
+
 
 def migrate_database(db_path):
     """
@@ -23,17 +27,16 @@ def migrate_database(db_path):
 
         # Migration 1: Add 'sold_date' to 'cards' table
         _add_sold_date_to_cards(cursor)
-        
+
         # Migration 2: Add 'sold' column to 'sale_items' table
         _add_sold_to_sale_items(cursor)
 
-        #Mingration 3: Add 'payment_method' to 'auctions' table
+        # Mingration 3: Add 'payment_method' to 'auctions' table
         add_payment_method_to_auctions(cursor)
 
-        
         conn.commit()
         conn.close()
-        
+
         # Migration 4: Migrate to sales history structure (checks if sales table exists)
         _migrate_to_sales_history_wrapper(db_path)
         # Migration 5: Add bulk sales and counter tables if they don't exist
@@ -65,18 +68,20 @@ def migrate_database(db_path):
 
         addNormalizedNameToCardsTable(db_path)
         addNormalizedNameToSealedTable(db_path)
-        
+
         addOpenedFlagToSealedTable(db_path)
 
         createSalesCorrectionTable(db_path)
         addUniqueIndexOnSalesCorrectionRecord(db_path)
 
         addSellPriceToSealedTable(db_path)
-
         createExternalTable(db_path)
+        createGradingTables(db_path)
+        addGradedSaleCostColumns(db_path)
         print("Database migration check complete.")
     except sqlite3.Error as e:
         print(f"Database migration failed: {e}")
+
 
 def _add_sold_date_to_cards(cursor):
     """
@@ -86,7 +91,7 @@ def _add_sold_date_to_cards(cursor):
         # Check if the column already exists
         cursor.execute("PRAGMA table_info(cards)")
         columns = [info[1] for info in cursor.fetchall()]
-        if 'sold_date' not in columns:
+        if "sold_date" not in columns:
             print("Applying migration: Adding 'sold_date' to 'cards' table...")
             cursor.execute("ALTER TABLE cards ADD COLUMN sold_date TEXT")
             print("'sold_date' column added successfully.")
@@ -99,6 +104,7 @@ def _add_sold_date_to_cards(cursor):
         else:
             raise e
 
+
 def _add_sold_to_sale_items(cursor):
     """
     Adds the 'sold' column to the 'sale_items' table if it doesn't exist.
@@ -107,7 +113,7 @@ def _add_sold_to_sale_items(cursor):
         # Check if the column already exists
         cursor.execute("PRAGMA table_info(sale_items)")
         columns = [info[1] for info in cursor.fetchall()]
-        if 'sold' not in columns:
+        if "sold" not in columns:
             print("Applying migration: Adding 'sold' to 'sale_items' table...")
             cursor.execute("ALTER TABLE sale_items ADD COLUMN sold INTEGER DEFAULT 0")
             print("'sold' column added successfully.")
@@ -119,7 +125,8 @@ def _add_sold_to_sale_items(cursor):
             print("'sale_items' table not found, skipping 'sold' column migration.")
         else:
             raise e
-        
+
+
 def add_payment_method_to_auctions(cursor):
     """
     Adds the 'payment_method' column to the 'auctions' table if it doesn't exist.
@@ -128,7 +135,7 @@ def add_payment_method_to_auctions(cursor):
         # Check if the column already exists
         cursor.execute("PRAGMA table_info(auctions)")
         columns = [info[1] for info in cursor.fetchall()]
-        if 'payment_method' not in columns:
+        if "payment_method" not in columns:
             print("Applying migration: Adding 'payment_method' to 'auctions' table...")
             cursor.execute("ALTER TABLE auctions ADD COLUMN payment_method TEXT")
             print("'payment_method' column added successfully.")
@@ -141,6 +148,7 @@ def add_payment_method_to_auctions(cursor):
         else:
             raise e
 
+
 def _migrate_to_sales_history_wrapper(db_path):
     """
     Wrapper to check if sales table exists and run migration if needed.
@@ -148,24 +156,25 @@ def _migrate_to_sales_history_wrapper(db_path):
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        
+
         # Check if sales table exists
         cursor.execute("""
-            SELECT name FROM sqlite_master 
+            SELECT name FROM sqlite_master
             WHERE type='table' AND name='sales'
         """)
         sales_table_exists = cursor.fetchone() is not None
-        
+
         conn.close()
-        
+
         if not sales_table_exists:
             print("Sales table not found, running sales history migration...")
             migrate_to_sales_history(db_path)
         else:
             print("Sales table already exists, skipping sales history migration.")
-            
+
     except sqlite3.Error as e:
         print(f"Error checking for sales table: {e}")
+
 
 def addBarterTable(db_path):
     """
@@ -179,7 +188,6 @@ def addBarterTable(db_path):
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='barter'")
         barterTableExists = cursor.fetchone() is not None
 
-
         if not barterTableExists:
             print("Barter table not found, running migration...")
             cursor.execute("""
@@ -188,9 +196,9 @@ def addBarterTable(db_path):
                     auction_id INTEGER,
                     sale_id INTEGER,
                     FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE,
-                    FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE 
+                    FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
     );
- 
+
             """)
             conn.commit()
         else:
@@ -265,6 +273,7 @@ def ensureBarterOnDeleteCascade(db_path):
         if conn:
             conn.close()
 
+
 def _recoverStrandedOldTable(cursor, table):
     """
     If a prior un-transactioned rebuild of `table` crashed, the database may
@@ -286,7 +295,9 @@ def _recoverStrandedOldTable(cursor, table):
     mainExists = cursor.fetchone() is not None
 
     if not mainExists:
-        print(f"Recovering '{table}': renaming stranded '{oldName}' back (prior run crashed mid-rebuild).")
+        print(
+            f"Recovering '{table}': renaming stranded '{oldName}' back (prior run crashed mid-rebuild)."
+        )
         cursor.execute(f"ALTER TABLE {oldName} RENAME TO {table}")
         return
 
@@ -296,11 +307,15 @@ def _recoverStrandedOldTable(cursor, table):
     oldCount = cursor.fetchone()[0]
 
     if newCount == 0 and oldCount > 0:
-        print(f"Recovering '{table}': new table is empty ({newCount}), restoring from '{oldName}' ({oldCount} rows).")
+        print(
+            f"Recovering '{table}': new table is empty ({newCount}), restoring from '{oldName}' ({oldCount} rows)."
+        )
         cursor.execute(f"DROP TABLE {table}")
         cursor.execute(f"ALTER TABLE {oldName} RENAME TO {table}")
     elif newCount >= oldCount:
-        print(f"'{oldName}' looks like leftover residue (new={newCount}, old={oldCount}); dropping it.")
+        print(
+            f"'{oldName}' looks like leftover residue (new={newCount}, old={oldCount}); dropping it."
+        )
         cursor.execute(f"DROP TABLE {oldName}")
     else:
         print(
@@ -395,7 +410,9 @@ def ensureAuctionsOnDeleteCascade(db_path):
                 print(f"'{table}' already has ON DELETE CASCADE on auction_id.")
                 continue
 
-            print(f"Applying migration: Recreating '{table}' with ON DELETE CASCADE on auction_id...")
+            print(
+                f"Applying migration: Recreating '{table}' with ON DELETE CASCADE on auction_id..."
+            )
 
             cursor.execute(f"PRAGMA table_info({table})")
             existingColumns = [col[1] for col in cursor.fetchall()]
@@ -423,9 +440,7 @@ def ensureAuctionsOnDeleteCascade(db_path):
                 newColumns = [col[1] for col in cursor.fetchall()]
                 sharedColumns = [c for c in existingColumns if c in newColumns]
                 colList = ", ".join(sharedColumns)
-                cursor.execute(
-                    f"INSERT INTO {table} ({colList}) SELECT {colList} FROM {table}_old"
-                )
+                cursor.execute(f"INSERT INTO {table} ({colList}) SELECT {colList} FROM {table}_old")
                 cursor.execute(f"DROP TABLE {table}_old")
 
                 for idxSql in indexSqls:
@@ -459,7 +474,7 @@ def addSealedProductsTable(db_path):
                    """)
 
         exist = cursor.fetchone() is not None
-        
+
         if not exist:
             print("Applying migration: Creating 'sealed' table...")
             cursor.execute("""
@@ -481,7 +496,7 @@ def addSealedProductsTable(db_path):
             print("'sealed' table created successfully.")
         else:
             print("'sealed' table already exists.")
-            
+
         conn.close()
 
     except sqlite3.Error as e:
@@ -496,7 +511,7 @@ def addShippingInfoColumn(db_path):
         # Check if the column already exists
         cursor.execute("PRAGMA table_info(sales)")
         columns = [info[1] for info in cursor.fetchall()]
-        if 'shipping_info' not in columns:
+        if "shipping_info" not in columns:
             print("Applying migration: Adding 'shipping_info' to 'sales' table...")
             cursor.execute("ALTER TABLE sales ADD COLUMN shipping_info TEXT")
             print("'shipping_info' column added successfully.")
@@ -518,7 +533,7 @@ def addIdOrderToSalesTable(db_path):
         # Check if the column already exists
         cursor.execute("PRAGMA table_info(sales)")
         columns = [info[1] for info in cursor.fetchall()]
-        if 'idOrder' not in columns:
+        if "idOrder" not in columns:
             print("Applying migration: Adding 'idOrder' to 'sales' table...")
             cursor.execute("ALTER TABLE sales ADD COLUMN idOrder TEXT")
             print("'idOrder' column added successfully.")
@@ -555,8 +570,7 @@ def repairDanglingForeignKeys(db_path):
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT name FROM sqlite_master "
-            "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         )
         allTables = {row[0] for row in cursor.fetchall()}
 
@@ -605,9 +619,7 @@ def repairDanglingForeignKeys(db_path):
                     r"|\b" + re.escape(brokenName) + r"\b)",
                     re.IGNORECASE,
                 )
-                newCreateSql, n = pattern.subn(
-                    r"\g<1>" + fixName, newCreateSql
-                )
+                newCreateSql, n = pattern.subn(r"\g<1>" + fixName, newCreateSql)
                 if n == 0:
                     print(
                         f"WARNING: could not locate 'REFERENCES {brokenName}' "
@@ -643,8 +655,7 @@ def repairDanglingForeignKeys(db_path):
                 sharedColumns = [c for c in existingColumns if c in newColumns]
                 colList = ", ".join(sharedColumns)
                 cursor.execute(
-                    f"INSERT INTO {tableName} ({colList}) "
-                    f"SELECT {colList} FROM {tempName}"
+                    f"INSERT INTO {tableName} ({colList}) SELECT {colList} FROM {tempName}"
                 )
                 cursor.execute(f"DROP TABLE {tempName}")
 
@@ -668,6 +679,7 @@ def repairDanglingForeignKeys(db_path):
         if conn:
             conn.close()
 
+
 def addQuantityToSealedTable(db_path):
     try:
         conn = sqlite3.connect(db_path)
@@ -676,7 +688,7 @@ def addQuantityToSealedTable(db_path):
         # Check if the column already exists
         cursor.execute("PRAGMA table_info(sealed)")
         columns = [info[1] for info in cursor.fetchall()]
-        if 'quantity' not in columns:
+        if "quantity" not in columns:
             print("Applying migration: Adding 'quantity' to 'sealed' table...")
             cursor.execute("ALTER TABLE sealed ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1")
             print("'quantity' column added successfully.")
@@ -689,18 +701,19 @@ def addQuantityToSealedTable(db_path):
         else:
             raise e
 
+
 def addCardMarketIDToCardsTable(db_path):
     conn = None
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
-        for table in ('cards', 'sealed'):
+        for table in ("cards", "sealed"):
             cursor.execute(f"PRAGMA table_info({table})")
             columns = [info[1] for info in cursor.fetchall()]
             if not columns:
                 print(f"'{table}' table not found, skipping 'cardMarketID' column migration.")
-            elif 'cardMarketID' not in columns:
+            elif "cardMarketID" not in columns:
                 print(f"Applying migration: Adding 'cardMarketID' to '{table}' table...")
                 cursor.execute(f"ALTER TABLE {table} ADD COLUMN cardMarketID TEXT NULL")
                 print("'cardMarketID' column added successfully.")
@@ -722,7 +735,7 @@ def addOpenedFlagToSealedTable(db_path):
         # Check if the column already exists
         cursor.execute("PRAGMA table_info(sealed)")
         columns = [info[1] for info in cursor.fetchall()]
-        if 'opened' not in columns:
+        if "opened" not in columns:
             print("Applying migration: Adding 'opened' to 'sealed' table...")
             cursor.execute("ALTER TABLE sealed ADD COLUMN opened INTEGER DEFAULT 0")
             print("'opened' column added successfully.")
@@ -735,12 +748,14 @@ def addOpenedFlagToSealedTable(db_path):
         else:
             raise e
 
+
 def _normalize_name(s):
     # Keep in sync with actions.normalize — NFD decomposes é → e + combining accent,
     # then encode/decode drops the accent
     if s is None:
         return None
     return unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode("ascii").upper()
+
 
 def addNormalizedNameToCardsTable(db_path):
     try:
@@ -749,7 +764,7 @@ def addNormalizedNameToCardsTable(db_path):
 
         cursor.execute("PRAGMA table_info(cards)")
         columns = [info[1] for info in cursor.fetchall()]
-        if 'normalized_name' not in columns:
+        if "normalized_name" not in columns:
             print("Applying migration: Adding 'normalized_name' to 'cards' table...")
             cursor.execute("ALTER TABLE cards ADD COLUMN normalized_name TEXT")
             print("'normalized_name' column added successfully.")
@@ -763,7 +778,10 @@ def addNormalizedNameToCardsTable(db_path):
         if rows:
             print(f"Backfilling 'normalized_name' for {len(rows)} card rows...")
             for row_id, card_name in rows:
-                cursor.execute("UPDATE cards SET normalized_name = ? WHERE id = ?", (_normalize_name(card_name), row_id))
+                cursor.execute(
+                    "UPDATE cards SET normalized_name = ? WHERE id = ?",
+                    (_normalize_name(card_name), row_id),
+                )
             conn.commit()
             print("'normalized_name' backfill for 'cards' complete.")
         conn.close()
@@ -774,6 +792,7 @@ def addNormalizedNameToCardsTable(db_path):
         else:
             raise e
 
+
 def addNormalizedNameToSealedTable(db_path):
     try:
         conn = sqlite3.connect(db_path)
@@ -781,7 +800,7 @@ def addNormalizedNameToSealedTable(db_path):
 
         cursor.execute("PRAGMA table_info(sealed)")
         columns = [info[1] for info in cursor.fetchall()]
-        if 'normalized_name' not in columns:
+        if "normalized_name" not in columns:
             print("Applying migration: Adding 'normalized_name' to 'sealed' table...")
             cursor.execute("ALTER TABLE sealed ADD COLUMN normalized_name TEXT")
             print("'normalized_name' column added successfully.")
@@ -795,7 +814,10 @@ def addNormalizedNameToSealedTable(db_path):
         if rows:
             print(f"Backfilling 'normalized_name' for {len(rows)} sealed rows...")
             for row_id, name in rows:
-                cursor.execute("UPDATE sealed SET normalized_name = ? WHERE id = ?", (_normalize_name(name), row_id))
+                cursor.execute(
+                    "UPDATE sealed SET normalized_name = ? WHERE id = ?",
+                    (_normalize_name(name), row_id),
+                )
             conn.commit()
             print("'normalized_name' backfill for 'sealed' complete.")
         conn.close()
@@ -806,15 +828,17 @@ def addNormalizedNameToSealedTable(db_path):
         else:
             raise e
 
+
 def createSalesCorrectionTable(db_path):
     conn = None
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sales_correction'")
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='sales_correction'"
+        )
         exist = cursor.fetchone() is not None
-
 
         if not exist:
             print("Correction table not found, running migration...")
@@ -837,6 +861,7 @@ def createSalesCorrectionTable(db_path):
     finally:
         if conn:
             conn.close()
+
 
 def addUniqueIndexOnSalesCorrectionRecord(db_path):
     conn = None
@@ -865,6 +890,7 @@ def addUniqueIndexOnSalesCorrectionRecord(db_path):
         if conn:
             conn.close()
 
+
 def addSellPriceToSealedTable(db_path):
     """Store the price selected at checkout for sold sealed products."""
     conn = None
@@ -872,7 +898,7 @@ def addSellPriceToSealedTable(db_path):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         columns = [info[1] for info in cursor.execute("PRAGMA table_info(sealed)").fetchall()]
-        if 'sell_price' not in columns:
+        if "sell_price" not in columns:
             print("Applying migration: Adding 'sell_price' to 'sealed' table...")
             cursor.execute("ALTER TABLE sealed ADD COLUMN sell_price REAL")
             conn.commit()
@@ -896,7 +922,6 @@ def createExternalTable(db_path):
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='external'")
         exist = cursor.fetchone() is not None
 
-
         if not exist:
             print("Correction table not found, running migration...")
             cursor.execute("""
@@ -917,3 +942,92 @@ def createExternalTable(db_path):
     finally:
         if conn:
             conn.close()
+
+
+def createGradingTables(db_path):
+    """Create the grading submission schema for existing databases."""
+    conn = sqlite3.connect(db_path)
+    try:
+        with conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS grading_submissions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    grader TEXT NOT NULL,
+                    service_level TEXT,
+                    status TEXT NOT NULL DEFAULT 'DRAFT',
+                    outbound_shipping_cost REAL NOT NULL DEFAULT 0,
+                    return_shipping_cost REAL NOT NULL DEFAULT 0,
+                    insurance_cost REAL NOT NULL DEFAULT 0,
+                    customs_duty_cost REAL NOT NULL DEFAULT 0,
+                    other_shared_cost REAL NOT NULL DEFAULT 0,
+                    submitted_at TEXT,
+                    returned_at TEXT,
+                    notes TEXT
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS grading_submission_cards (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    submission_id INTEGER,
+                    card_id INTEGER NOT NULL,
+                    grader TEXT NOT NULL,
+                    is_current INTEGER NOT NULL DEFAULT 1,
+                    submitted_value REAL NOT NULL DEFAULT 0,
+                    grading_fee REAL NOT NULL DEFAULT 0,
+                    prep_fee REAL DEFAULT 0,
+                    upcharge_fee REAL DEFAULT 0,
+                    allocated_shared_cost REAL DEFAULT 0,
+                    total_grading_cost REAL NOT NULL DEFAULT 0,
+                    landed_cost REAL,
+                    grade_numeric REAL,
+                    grade_label TEXT,
+                    qualifier TEXT,
+                    cert_number TEXT COLLATE NOCASE DEFAULT '',
+                    post_grade_market_value REAL,
+                    notes TEXT,
+                    FOREIGN KEY (submission_id) REFERENCES grading_submissions(id) ON DELETE RESTRICT,
+                    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE RESTRICT,
+                    UNIQUE (submission_id, card_id),
+                    UNIQUE (grader, cert_number)
+                )
+            """)
+            conn.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_grading_current_card
+                ON grading_submission_cards(card_id)
+                WHERE is_current = 1
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_grading_submission_cards_submission
+                ON grading_submission_cards(submission_id)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_grading_submission_cards_card
+                ON grading_submission_cards(card_id)
+            """)
+    finally:
+        conn.close()
+
+
+def addGradedSaleCostColumns(db_path):
+    """Add internal landed-cost snapshots to sales without changing tax profit."""
+    conn = sqlite3.connect(db_path)
+    try:
+        with conn:
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(sale_items)")}
+            if not columns:
+                return
+            added_internal_cost = "internal_cost" not in columns
+            added_internal_profit = "internal_profit" not in columns
+            if "internal_cost" not in columns:
+                conn.execute("ALTER TABLE sale_items ADD COLUMN internal_cost REAL")
+            if "internal_profit" not in columns:
+                conn.execute("ALTER TABLE sale_items ADD COLUMN internal_profit REAL")
+            if added_internal_cost:
+                conn.execute(
+                    "UPDATE sale_items SET internal_cost = "
+                    "(SELECT card_price FROM cards WHERE cards.id = sale_items.card_id)"
+                )
+            if added_internal_profit:
+                conn.execute("UPDATE sale_items SET internal_profit = profit")
+    finally:
+        conn.close()

@@ -1,86 +1,120 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <link rel="stylesheet" href="../static/styles/addSingles.css">
-    <link rel="stylesheet" href="../static/styles/header-align.css">
-    <link rel="stylesheet" href="../static/styles/addSingles-style.css">
-    <title>Add Singles</title>
-    <link rel="icon" type="image/x-icon" href="../static/images/cardanvil.ico">
-</head>
-<body>
-    <h1>Trade<span class="shadow"></span> Tracker - Add Singles</h1>
-    <header class="header">
-        <nav class="nav-bar">
-            <div>
-                <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                <button class="addAuction"><a href="{{ url_for('renderers.renderAuctions') }}">Sales</a></button>
-                <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
-            </div>
-            <div>
-                <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                <button class="addSingles"><a href="{{ url_for('renderers.addSingles') }}">Add Singles</a></button>
-                <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
-            </div>
-            <div>
-                <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                <button class="collection"><a href="{{ url_for('renderers.renderCollection')}}">Collection</a></button>
-                <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
-            </div>
-            <div class="inventory-value">
-                <div><p class="inventory-value-header">Inventory</p></div>
-                <div><p class="inventory-value-value"></p></div>
-            </div>
-        </nav>
-    </header>
-    <main>
-        <dir class="content-container">
-            <dir class="cards-header">
-                <p>Card name</p>
-                <p>Card number</p>
-                <p>Condition</p>
-                <p>Buy price</p>
-                <p>Market price</p>
-                <p>Sell price</p>
-            </dir>
-            <dir class="cards-container">
-                <dir class="card">
-                    <input type="text" name="cardName" autocomplete="off">
-                    <input type="text" name="cardNum" autocomplete="off">
-                    <select name="condition">
-                        <option value="Mint">Mint</option>
-                        <option value="Near Mint" selected="selected">Near Mint</option>
-                        <option value="Excellent">Excellent</option>
-                        <option value="Good">Good</option>
-                        <option value="Light Played">Light Played</option>
-                        <option value="Played">Played</option>
-                        <option value="Poor">Poor</option>
-                    </select>
-                    <input type="text" name="buyPrice" autocomplete="off">
-                    <input type="text" name="marketValue" class="marketValue" autocomplete="off">
-                    <input type="text" name="sellPrice" autocomplete="off">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="csrf-token" content="{{ csrf_token() }}" />
+        <link rel="stylesheet" href="../static/styles/addSingles.css" />
+        <link rel="stylesheet" href="../static/styles/addSingles-style.css" />
+        <link rel="stylesheet" href="../static/styles/header-align.css" />
+        <link rel="stylesheet" href="/static/styles/modal.css" />
+        <title>Add Singles</title>
+        <link rel="icon" type="image/x-icon" href="../static/images/cardanvil.ico" />
+    </head>
+    <body>
+        <h1>Trade<span class="shadow"></span> Tracker - Add Singles</h1>
+        <header class="header">
+            <nav class="nav-bar compact-nav" aria-label="Main navigation">
+                <a class="nav-page-link" href="{{ url_for('renderers.renderAuctions') }}">Home</a>
+                <div class="nav-dropdown">
+                    <button class="nav-dropdown-trigger" type="button" aria-haspopup="true">
+                        Add
+                    </button>
+                    <div class="nav-dropdown-menu">
+                        <a href="{{ url_for('renderers.addAuction') }}">Auction</a>
+                        <a href="{{ url_for('renderers.addSingles') }}">Singles</a>
+                    </div>
+                </div>
+                <div class="nav-dropdown">
+                    <button class="nav-dropdown-trigger" type="button" aria-haspopup="true">
+                        History
+                    </button>
+                    <div class="nav-dropdown-menu">
+                        <a href="{{ url_for('renderers.sold') }}">Sold</a>
+                        <a href="{{ url_for('renderers.purchases') }}">Purchases</a>
+                    </div>
+                </div>
+                <a class="nav-page-link" href="{{ url_for('grading.grading_render') }}">Grading</a>
+                <button class="upload-csv-btn" type="button">Upload</button>
+                <button class="sales-btn" type="button">Reports</button>
+                <div class="inventory-value">
+                    <p class="inventory-value-header">Inventory</p>
+                    <p class="inventory-value-value"></p>
+                </div>
+            </nav>
+        </header>
+        <main>
+            <dir class="content-container">
+                <dir class="cards-header">
+                    <p>Card name</p>
+                    <p>Card number</p>
+                    <p>Condition</p>
+                    <p>Language</p>
+                    <p>Buy price</p>
+                    <p>Market price</p>
+                    <p>Sell price</p>
+                </dir>
+                <dir class="cards-container">
+                    <dir class="card">
+                        <input type="text" name="cardName" autocomplete="off" />
+                        <input type="text" name="cardNum" autocomplete="off" />
+                        <select name="condition">
+                            <option value="Mint">Mint</option>
+                            <option value="Near Mint" selected="selected">Near Mint</option>
+                            <option value="Excellent">Excellent</option>
+                            <option value="Good">Good</option>
+                            <option value="Light Played">Light Played</option>
+                            <option value="Played">Played</option>
+                            <option value="Poor">Poor</option>
+                        </select>
+                        <select name="language">
+                            <option value="en" selected>English</option>
+                            <option value="jp">Japanese</option>
+                            <option value="de">German</option>
+                            <option value="fr">French</option>
+                            <option value="it">Italian</option>
+                            <option value="es">Spanish</option>
+                            <option value="kr">Korean</option>
+                            <option value="cn">Chinese</option>
+                            <option value="pt">Portuguese</option>
+                        </select>
+                        <input type="text" name="buyPrice" autocomplete="off" />
+                        <input
+                            type="text"
+                            name="marketValue"
+                            class="marketValue"
+                            autocomplete="off"
+                        />
+                        <input type="text" name="sellPrice" autocomplete="off" />
+                    </dir>
                 </dir>
             </dir>
-        </dir>
-        <dir class="buttons-container">
-            <dir class="add-card-container action-buttons">
-                <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
+            <dir class="buttons-container">
+                <dir class="add-card-container action-buttons">
+                    <span class="arrow left"
+                        ><img src="../static/images/leftarrow.png" alt="left arrow"
+                    /></span>
                     <button class="add-card">Add card</button>
-                <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>   
+                    <span class="arrow left"
+                        ><img src="../static/images/rightarrow.png" alt="left arrow"
+                    /></span>
+                </dir>
+                <dir class="save-auction-container action-buttons">
+                    <span class="arrow left"
+                        ><img src="../static/images/leftarrow.png" alt="left arrow"
+                    /></span>
+                    <button class="save-btn">Save</button>
+                    <span class="arrow left"
+                        ><img src="../static/images/rightarrow.png" alt="left arrow"
+                    /></span>
+                </dir>
             </dir>
-            <dir class="save-auction-container action-buttons">
-                <span class="arrow left"><img src="../static/images/leftarrow.png" alt="left arrow"></span>
-                    <button class="save-btn">Save</button>            
-                <span class="arrow left"><img src="../static/images/rightarrow.png" alt="left arrow"></span>
-            </dir>
-        </dir>
-    </main>
-    <script type="module" src="../static/scripts/utils/sanitizers.js"></script>
-    <script type="module" src="../static/scripts/utils/renderUtil.js"></script>
-    <script type="module" src="../static/scripts/utils/classes.js"></script>
-    <script type="module" src="../static/scripts/addSingles.js"></script>
-    <script src="../static/vendor/purify.min.js"></script>
-</body>
+        </main>
+        <script type="module" src="../static/scripts/utils/sanitizers.js"></script>
+        <script type="module" src="../static/scripts/utils/renderUtil.js"></script>
+        <script type="module" src="../static/scripts/utils/classes.js"></script>
+        <script type="module" src="../static/scripts/addSingles.js"></script>
+        <script type="module" src="/static/scripts/headerActions.js"></script>
+        <script src="../static/vendor/purify.min.js"></script>
+    </body>
 </html>

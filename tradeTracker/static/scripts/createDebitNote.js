@@ -1,8 +1,13 @@
-import { renderField, renderAlert, scrollOnLoad, downloadFile } from "./utils/renderUtil.js";
-import { sanitizeNumericId, sanitizeClassToken, escapeHtml, csrfFetch } from "./utils/sanitizers.js";
-import { queue } from "./utils/classes.js";
-import { searchCard } from "./utils/searchApi.js";
-import { DebitNoteItem } from "./utils/debitNoteItem.js";
+import { renderField, renderAlert, scrollOnLoad, downloadFile } from './utils/renderUtil.js';
+import {
+    sanitizeNumericId,
+    sanitizeClassToken,
+    escapeHtml,
+    csrfFetch,
+} from './utils/sanitizers.js';
+import { queue } from './utils/classes.js';
+import { searchCard } from './utils/searchApi.js';
+import { DebitNoteItem } from './utils/debitNoteItem.js';
 
 function renderAddressBlock(container, data) {
     container.innerHTML = `
@@ -47,7 +52,7 @@ function searchBar() {
                 document.querySelector('.debit-note-search .search-results').innerHTML = '';
                 return;
             }
-            const results = await searchCard(searchInput.value, [...addedIds]) || [];
+            const results = (await searchCard(searchInput.value, [...addedIds])) || [];
             currentResultsQueue = new queue(results.length + 1);
             currentResultsQueue.enqueue(searchInput);
             displayDebitNoteResults(results, currentResultsQueue, searchInput);
@@ -58,7 +63,7 @@ function searchBar() {
         if (searchInput.value === '') {
             document.querySelector('.debit-note-search .search-results').innerHTML = '';
         }
-        const results = await searchCard(searchInput.value.trim(), [...addedIds]) || [];
+        const results = (await searchCard(searchInput.value.trim(), [...addedIds])) || [];
         currentResultsQueue = new queue(results.length + 1);
         currentResultsQueue.enqueue(searchInput);
         displayDebitNoteResults(results, currentResultsQueue, searchInput);
@@ -78,14 +83,21 @@ function displayDebitNoteResults(results, resultsQueue, searchInput) {
         return;
     }
 
-    results.forEach(result => {
+    results.forEach((result) => {
         const isSealed = Object.prototype.hasOwnProperty.call(result, 'sid');
         const name = isSealed ? result.name : result.card_name;
-        const num = isSealed ? '' : (result.card_num || '');
-        const condition = isSealed ? '' : (result.condition || '');
+        const num = isSealed ? '' : result.card_num || '';
+        const condition = isSealed ? '' : result.condition || '';
+        const language = result.language || 'en';
         const availableCount = result.available_count ? Number(result.available_count) : 1;
         const marketValue = result.market_value != null ? result.market_value : '';
         const safeConditionClass = sanitizeClassToken(condition || '');
+        const gradeDisplay = result.is_graded
+            ? [result.grader, result.grade_numeric, result.grade_label, result.qualifier]
+                  .filter((value) => value !== null && value !== undefined && value !== '')
+                  .join(' ') || 'Graded'
+            : condition;
+        const conditionContent = isSealed ? '' : escapeHtml(gradeDisplay);
 
         let pendingQty = 1;
         const div = document.createElement('div');
@@ -94,7 +106,10 @@ function displayDebitNoteResults(results, resultsQueue, searchInput) {
         div.innerHTML = `
             <p class="result result-name">${escapeHtml(name || 'N/A')}</p>
             <p class="result result-num">${escapeHtml(num)}</p>
-            <p class="result result-condition ${safeConditionClass}">${escapeHtml(condition)}</p>
+            <p class="result result-condition ${safeConditionClass}${result.is_graded ? ' graded' : ''}">
+                ${conditionContent}
+            </p>
+            <p class="result result-language">${escapeHtml(language)}</p>
             <p class="result result-quantity">${pendingQty} / ${availableCount}</p>
             <p class="result result-market-value">${escapeHtml(String(marketValue))}€</p>
         `;
@@ -142,17 +157,20 @@ async function addItemToDebitNote(result, pendingQty) {
     const item = await DebitNoteItem.fromSearchResult(result, pendingQty, addedIds);
     if (!item) return;
     const totalPrice = document.querySelector('.total-amount');
-    item.render().forEach(el => {
-        itemsContainer.appendChild(el)
+    item.render().forEach((el) => {
+        itemsContainer.appendChild(el);
     });
     if (item.type === 'card') {
-        item.cardIds.forEach(_ => {
-            totalPrice.textContent = (Number(totalPrice.textContent) + Number(item.marketValue)).toFixed(2)
-        })
+        item.cardIds.forEach((_) => {
+            totalPrice.textContent = (
+                Number(totalPrice.textContent) + Number(item.marketValue)
+            ).toFixed(2);
+        });
     } else {
-        totalPrice.textContent = (Number(totalPrice.textContent) + Number(item.marketValue * item.quantity)).toFixed(2)
+        totalPrice.textContent = (
+            Number(totalPrice.textContent) + Number(item.marketValue * item.quantity)
+        ).toFixed(2);
     }
-
 }
 
 async function loadContent() {
@@ -165,7 +183,7 @@ async function loadContent() {
     const providerDiv = document.querySelector('.creditnote-box-content');
     const recieverDiv = document.querySelector('.creditnote-reciver-content');
 
-    //TODO: find better name for this endpoint 
+    //TODO: find better name for this endpoint
     const response = await csrfFetch(`/partyInfo/${saleId}`);
     const data = await response.json();
     const saleInfo = data.sale;
@@ -200,16 +218,17 @@ async function createDebitNote(saleId, originalInvoiceNum, recieverInfo, shippin
 
     const cards = [];
     const sealed = [];
-    itemRows.forEach(row => {
+    itemRows.forEach((row) => {
         if (row.getAttribute('data-id').includes('s')) {
             const auctionIdAttr = row.getAttribute('data-auction-id');
             const item = {
                 id: row.getAttribute('data-id').replace('s', ''),
                 quantity: row.querySelector('.item-quantity').textContent,
                 sealedName: row.querySelector('.item-name').textContent,
+                language: row.querySelector('.item-language').textContent,
                 marketValue: row.querySelector('.market-value-input').value,
-                auctionId: auctionIdAttr === null ? null : Number(auctionIdAttr)
-            }
+                auctionId: auctionIdAttr === null ? null : Number(auctionIdAttr),
+            };
             sealed.push(item);
         } else {
             const item = {
@@ -217,8 +236,8 @@ async function createDebitNote(saleId, originalInvoiceNum, recieverInfo, shippin
                 cardName: row.querySelector('.item-name').textContent,
                 cardNum: row.querySelector('.item-number').textContent,
                 condition: row.querySelector('.item-condition').textContent,
-                marketValue: row.querySelector('.market-value-input').value
-            }
+                marketValue: row.querySelector('.market-value-input').value,
+            };
             cards.push(item);
         }
     });
@@ -229,23 +248,22 @@ async function createDebitNote(saleId, originalInvoiceNum, recieverInfo, shippin
         sealed: sealed,
         shipping: shipping,
         originalInvoiceNum: originalInvoiceNum,
-        total: document.querySelector('.total-amount').textContent
-    }
+        total: document.querySelector('.total-amount').textContent,
+    };
 
     const response = await csrfFetch(`/generateDebitNote/${saleId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(saleInput)
+        body: JSON.stringify(saleInput),
     });
 
     const contentType = response.headers.get('content-type') || '';
     if (!response.ok || contentType.includes('application/json')) {
         renderAlert('Error: ' + (await response.json()).message, 'error');
         return;
-    };
-    await downloadFile(response)
+    }
+    await downloadFile(response);
     window.location.href = `/sold`;
-
 }
 
 loadContent();
