@@ -365,7 +365,7 @@ WHERE auction_id = ?
         return auctionData["auctionName"], pdf
 
     def generateBuyReport(self, start_date, end_date, month, year, xls_path):
-        df = self._get_auction_data_month(month, year)
+        df = self._get_buy_data_month(month, year)
         with pd.ExcelWriter(xls_path) as writer:
             df.to_excel(writer, sheet_name="nakupy", index=False)
     

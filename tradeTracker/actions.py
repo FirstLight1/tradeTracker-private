@@ -1299,7 +1299,7 @@ def generateBuyReport():
 @bp.route("/generateSoldReport", methods=("GET",))
 @limiter.limit("2 per minute")
 @verify_token
-def generateSoldReport():
+def generateReports():
     errors = {}
     try:
         month_number = int(request.args.get("month", ""))
@@ -1328,7 +1328,7 @@ def generateSoldReport():
     db = get_db()
 
     try:
-        pdf_path = generatePDF(month, year)
+        pdf_path = generateSoldReport(month, year)
         xls_path = createBuyReport(month, year)
         logger.info("Sold report generated succesfully | month: %s | year: %s", month, year)
 
@@ -1396,9 +1396,7 @@ def parse_date_to_iso(value):
     )
 
 
-#TODO: rename this
-def generatePDF(month, year):
-
+def generateSoldReport(month, year):
     # Determine the save path based on environment
     if os.getenv("FLASK_ENV") == "prod":
         data_dir = os.getenv("DATA_DIR", current_app.instance_path)
