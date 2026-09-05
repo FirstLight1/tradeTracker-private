@@ -1429,58 +1429,10 @@ def generateSoldReport():
     month = f"{month_number:02d}"
     year = str(year_number)
     db = get_db()
-    cards = db.execute(
-        "SELECT c.card_name, c.card_num, c.card_price, c.language, si.sell_price, s.sale_date, "
-        "CASE WHEN EXISTS ("
-        "SELECT 1 FROM grading_submission_cards gsc "
-        "WHERE gsc.card_id = c.id AND gsc.is_current = 1"
-        ") THEN 1 ELSE 0 END AS is_graded "
-        "FROM cards c "
-        "JOIN sale_items si ON c.id = si.card_id "
-        "JOIN sales s ON si.sale_id = s.id "
-        'WHERE strftime("%Y", s.sale_date) = ? AND strftime("%m", s.sale_date) = ?',
-        (year, month),
-    ).fetchall()
-
-    sealed = db.execute(
-        "SELECT se.name, se.quantity, se.price, se.market_value, "
-        "COALESCE(se.sell_price, se.market_value) AS sell_price, se.auction_id, s.sale_date "
-        "FROM sealed se JOIN sales s ON se.sale_id = s.id "
-        'WHERE strftime("%Y", s.sale_date) = ? AND strftime("%m", s.sale_date) = ? ',
-        (year, month),
-    ).fetchall()
-    sealedList = [dict(item) for item in sealed]
-
-    bulkHolo = db.execute(
-        "SELECT item_type, SUM(bs.quantity) as quantity, SUM(bs.total_price) as total_price FROM bulk_sales bs "
-        "JOIN sales s ON bs.sale_id = s.id "
-        'WHERE strftime("%Y", s.sale_date) = ? AND strftime("%m", s.sale_date) = ?'
-        " GROUP BY bs.item_type",
-        (year, month),
-    ).fetchall()
-
-    shipping = db.execute(
-        'SELECT shipping_info FROM sales WHERE strftime("%Y", sale_date) = ? AND strftime("%m", sale_date) = ?',
-        (year, month),
-    ).fetchall()
-
-    shipping_list = []
-    for s in shipping:
-        temp = dict(s)
-        shipping_list.append(temp["shipping_info"]) if temp["shipping_info"] is not None else 0
-    # Convert to list of dicts for easier processing
-    cards_list = [dict(card) for card in cards]
-
-    bulkAndHoloList = []
-    i = 0
-    for item_type in bulkHolo:
-        bulkAndHoloList.append(dict(item_type))
-        bulkAndHoloList[i].update({"buy_price": get_bulk_item_unit_price(item_type["item_type"])})
-        i += 1
 
     try:
-        pdf_path = generatePDF(month, year, cards_list, sealedList, bulkAndHoloList, shipping_list)
-        xls_path = createBuyReport(month, year, db)
+        pdf_path = generatePDF(month, year)
+        xls_path = createBuyReport(month, year)
         logger.info("Sold report generated succesfully | month: %s | year: %s", month, year)
 
         zip_buffer = BytesIO()
@@ -1502,6 +1454,7 @@ def generateSoldReport():
         return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax08"}), 500
 
 
+#TODO: move to utils
 def format_iso_date(iso_str):
     """Convert an ISO formatted date string to DD.MM.YYYY."""
     if not iso_str:
@@ -1547,7 +1500,7 @@ def parse_date_to_iso(value):
 
 
 #TODO: rename this
-def generatePDF(month, year, cards, sealed, bulkAndHoloList, shipping):
+def generatePDF(month, year):
 
     # Determine the save path based on environment
     if os.getenv("FLASK_ENV") == "prod":
@@ -1561,12 +1514,10 @@ def generatePDF(month, year, cards, sealed, bulkAndHoloList, shipping):
         os.makedirs(reports_dir, exist_ok=True)
         pdf_path = os.path.join(reports_dir, f"Report_{month}_{year}.pdf")
 
-    font_dir = os.path.join(os.path.dirname(__file__), "fonts")
-
     report = report_service.ReportService(get_db())
-    return report.generatePurchaseReport(None, None, month, year, pdf_path)
+    return report.generateSoldReport(None, None, month, year, pdf_path)
 
-def createBuyReport(month, year, db):
+def createBuyReport(month, year):
     if os.getenv("FLASK_ENV") == "prod":
         data_dir = os.getenv("DATA_DIR", current_app.instance_path)
         app_data_dir = os.path.join(data_dir, "Reports")
@@ -1578,49 +1529,9 @@ def createBuyReport(month, year, db):
         os.makedirs(reports_dir, exist_ok=True)
         xls_path = os.path.join(reports_dir, f"Nakupy_{month}_{year}.xlsx")
 
-    rows = db.execute(
-        'SELECT auction_name,auction_price, date_created, payment_method FROM auctions WHERE strftime("%Y", substr(date_created, 1, 19)) = ? AND strftime("%m", substr(date_created, 1, 19)) = ? ',
-        (year, month),
-    ).fetchall()
 
-    bought = {"Meno": [], "Cena": [], "Datum": [], "Payment type": [], "Amount": []}
-
-    for row in rows:
-        bought["Meno"].append(row["auction_name"])
-        try:
-            bought["Cena"].append(Decimal(row["auction_price"]))
-        except:
-            bought["Cena"].append("Error")
-        bought["Datum"].append(format_iso_date(row["date_created"]))
-        if row["payment_method"] != None:
-            payments = json.loads(row["payment_method"])
-            bought["Payment type"].append(", ".join(payment["type"] for payment in payments))
-            bought["Amount"].append(", ".join(str(payment["amount"]) for payment in payments))
-        else:
-            bought["Payment type"].append("")
-            bought["Amount"].append("")
-
-    df = pd.DataFrame(bought)
-
-    with pd.ExcelWriter(xls_path) as writer:
-        df.to_excel(writer, sheet_name="nakupy", index=False)
-
-        worksheet = writer.sheets["nakupy"]
-        worksheet.column_dimensions["A"].width = 24
-        worksheet.column_dimensions["B"].width = 12
-        worksheet.column_dimensions["C"].width = 11
-        worksheet.column_dimensions["D"].width = 30
-        worksheet.column_dimensions["E"].width = 20
-
-        for row in range(2, len(df) + 2):
-            cell = worksheet[f"B{row}"]
-            cell.number_format = '#,##.00 "€"'
-
-        for row in range(2, len(df) + 2):
-            cell = worksheet[f"D{row}"]
-            cell.number_format = '#,##.00 "€"'
-
-    return xls_path
+    report = report_service.ReportService(get_db())
+    return report.generateBuyReport(None, None, month, year, xls_path)
 
 
 @bp.route("/addToCollection", methods=("POST",))

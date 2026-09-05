@@ -13,7 +13,9 @@ import pandas as pd
 from io import BytesIO, TextIOWrapper, StringIO
 from typing import Any
 import os
+import json
 import tradeTracker.CONSTANTS as CONSTANTS
+from tradeTracker.utils.formating import format_iso_date
 from decimal import Decimal
 from tradeTracker.services.pdf_utils import wrap_table_text
 
@@ -44,10 +46,12 @@ class ReportService:
                 ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
             ]
         )
 
+    #TODO: move to utils
     def format_value(self,key, value):
         count_keys = ("card_count", "sealed_count") 
         if key in count_keys:
@@ -102,8 +106,32 @@ class ReportService:
                 }
         return header_data
 
-    def _get_auction_data(self, start_date, end_date, id=None):
+    def _get_buy_data_period(self, start_date, end_date, id=None):
         raise NotImplementedError
+
+    def _get_buy_data_month(self, month: int, year: int) -> pd.DataFrame:
+        rows = self.db.execute('SELECT auction_name,auction_price, date_created, payment_method FROM auctions '
+                        'WHERE strftime("%Y", substr(date_created, 1, 19)) = ? AND strftime("%m", substr(date_created, 1, 19)) = ? '
+                        ,(year,month))
+        bought = {"Meno": [], "Cena": [], "Datum": [], "Payment type": [], "Amount": []}
+    
+        for row in rows:
+            bought["Meno"].append(row["auction_name"])
+            try:
+                bought["Cena"].append(Decimal(row["auction_price"]))
+            except:
+                bought["Cena"].append("Error")
+            bought["Datum"].append(format_iso_date(row["date_created"]))
+            if row["payment_method"] != None:
+                payments = json.loads(row["payment_method"])
+                bought["Payment type"].append(", ".join(payment["type"] for payment in payments))
+                bought["Amount"].append(", ".join(str(payment["amount"]) for payment in payments))
+            else:
+                bought["Payment type"].append("")
+                bought["Amount"].append("")
+    
+        df = pd.DataFrame(bought)
+        return df
 
     def _get_purchased_data_month(self, month: int, year: int, id=None) -> list:
         raise NotImplementedError
@@ -247,11 +275,30 @@ class ReportService:
 ]))
         return table
 
-    def generatePurchaseReport(self, start_date, end_date, month, year, pdf_path):
+    def generatePurchaseReport(self, start_date, end_date, month, year):
         pass
 
-    def generateBuyReport(self, start_date, end_date):
-        pass
+    def generateBuyReport(self, start_date, end_date, month, year, xls_path):
+        df = self._get_auction_data_month(month, year)
+        with pd.ExcelWriter(xls_path) as writer:
+            df.to_excel(writer, sheet_name="nakupy", index=False)
+    
+            worksheet = writer.sheets["nakupy"]
+            worksheet.column_dimensions["A"].width = 24
+            worksheet.column_dimensions["B"].width = 12
+            worksheet.column_dimensions["C"].width = 11
+            worksheet.column_dimensions["D"].width = 30
+            worksheet.column_dimensions["E"].width = 20
+    
+            for row in range(2, len(df) + 2):
+                cell = worksheet[f"B{row}"]
+                cell.number_format = '#,##.00 "€"'
+    
+            for row in range(2, len(df) + 2):
+                cell = worksheet[f"D{row}"]
+                cell.number_format = '#,##.00 "€"'
+    
+        return xls_path
 
     def generateSoldReport(self, start_date, end_date, month, year, pdf_path):
         doc = SimpleDocTemplate(pdf_path, pagesize=landscape(letter))
