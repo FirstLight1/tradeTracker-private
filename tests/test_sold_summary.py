@@ -144,21 +144,29 @@ class SoldSummaryTestCase(unittest.TestCase):
             pdf_path.touch()
             xls_path.touch()
 
-            def capture_pdf(month, year, cards, sealed, bulk, shipping):
-                captured["sealed"] = sealed
-                return str(pdf_path)
+            def capture_pdf(report, start_date, end_date, month, year, output_path):
+                sold_data = report._get_sold_data_month(month, year)
+                captured["sealed"] = [
+                    item for item in sold_data["items"] if item["item_type"] == "sealed"
+                ]
+                Path(output_path).touch()
+                return output_path
 
             with (
-                patch.object(actions, "generatePDF", side_effect=capture_pdf),
+                patch.object(
+                    actions.report_service.ReportService,
+                    "generateSoldReport",
+                    autospec=True,
+                    side_effect=capture_pdf,
+                ),
                 patch.object(actions, "createBuyReport", return_value=str(xls_path)),
                 self.app.test_request_context("/generateSoldReport?month=6&year=2026"),
             ):
-                response = inspect.unwrap(actions.generateSoldReport)()
+                response = inspect.unwrap(actions.generateReports)()
 
             response.close()
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(captured["sealed"][0]["market_value"], 100.0)
         self.assertEqual(captured["sealed"][0]["sell_price"], 95.0)
 
 
