@@ -472,7 +472,7 @@ def loadAuctions():
         "LEFT JOIN sales s ON b.sale_id = s.id "
         "LEFT JOIN cards c ON a.id = c.auction_id "
         "LEFT JOIN sale_items si ON c.id = si.card_id "
-        "WHERE a.id = 1 OR si.card_id IS NULL "
+        "WHERE a.id = 1 OR (si.card_id IS NULL AND c.sold_date IS NULL) "
         "ORDER BY (a.id = 1) DESC, "
         "a.id DESC "
     ).fetchall()
@@ -574,7 +574,7 @@ def loadCards(auction_id):
         "LEFT JOIN grading_submission_cards gsc "
         "ON c.id = gsc.card_id AND gsc.is_current = 1 "
         "LEFT JOIN grading_submissions gs ON gsc.submission_id = gs.id "
-        "WHERE c.auction_id = ? AND si.card_id IS NULL",
+        "WHERE c.auction_id = ? AND c.sold_date IS NULL AND si.card_id IS NULL",
         (auction_id,),
     ).fetchall()
     return jsonify([dict(card) for card in cards]), 200
@@ -634,7 +634,8 @@ def invertoryValue():
     db = get_db()
     cur = db.cursor()
     cardMarketValue = cur.execute(
-        "SELECT SUM(market_value) FROM cards c LEFT JOIN sale_items si ON c.id = si.card_id WHERE si.card_id IS NULL"
+        "SELECT SUM(market_value) FROM cards c LEFT JOIN sale_items si ON c.id = si.card_id "
+        "WHERE c.sold_date IS NULL AND si.card_id IS NULL"
     ).fetchone()[0]
     bulkValue = cur.execute("SELECT SUM(total_price) FROM bulk_items").fetchone()[0]
     sealedValue = cur.execute(
@@ -2091,7 +2092,8 @@ def updateOneCard(db, name, num, condition, sellPrice):
     cardId = db.execute(
         "SELECT c.id FROM cards c "
         "LEFT JOIN sale_items si ON c.id = si.card_id "
-        "WHERE c.card_name = ? AND c.card_num LIKE ? AND c.condition = ? AND si.card_id IS NULL "
+        "WHERE c.card_name = ? AND c.card_num LIKE ? AND c.condition = ? "
+        "AND c.sold_date IS NULL AND si.card_id IS NULL "
         "LIMIT 1",
         (name, f"%{num}", condition),
     ).fetchone()
@@ -2356,7 +2358,8 @@ def process_sold_csv(files, db):
         "FROM cards c "
         "LEFT JOIN sale_items si ON si.card_id = c.id "
         "LEFT JOIN grading_submission_cards gsc ON gsc.card_id = c.id AND gsc.is_current = 1 "
-        f"WHERE si.card_id IS NULL AND gsc.id IS NULL AND cardMarketID IN ({placehoders}) "
+        f"WHERE c.sold_date IS NULL AND si.card_id IS NULL AND gsc.id IS NULL "
+        f"AND cardMarketID IN ({placehoders}) "
         "ORDER BY id ASC ",
         ids + ids,
     )
@@ -2829,7 +2832,7 @@ def search():
             "LEFT JOIN grading_submission_cards gsc "
             "ON c.id = gsc.card_id AND gsc.is_current = 1 "
             "LEFT JOIN grading_submissions gs ON gsc.submission_id = gs.id "
-            f"WHERE ({card_where_clause}) AND si.card_id IS NULL "
+            f"WHERE ({card_where_clause}) AND c.sold_date IS NULL AND si.card_id IS NULL "
             f"{card_grouping}",
             card_params,
         ).fetchall()
@@ -2886,6 +2889,7 @@ def getCardIds():
                 "WHERE c.card_name = ? "
                 "AND c.card_num IS NULL "
                 "AND c.condition = ? "
+                "AND c.sold_date IS NULL "
                 "AND si.card_id IS NULL"
             )
             params = [card_name, condition]
@@ -2899,6 +2903,7 @@ def getCardIds():
                 "WHERE c.card_name = ? "
                 "AND c.card_num = ? "
                 "AND c.condition = ? "
+                "AND c.sold_date IS NULL "
                 "AND si.card_id IS NULL"
             )
             params = [card_name, card_num, condition]

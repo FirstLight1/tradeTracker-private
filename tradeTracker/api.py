@@ -150,7 +150,8 @@ def cardMarketOrder():
 
                 rows = db.execute(
                     "SELECT c.id FROM cards c LEFT JOIN sale_items si ON c.id = si.card_id "
-                    "WHERE lower(c.card_name) = ? AND lower(c.card_num) = ? and upper(c.condition) = ? AND c.language = ? AND si.sale_id IS NULL",
+                    "WHERE lower(c.card_name) = ? AND lower(c.card_num) = ? and upper(c.condition) = ? "
+                    "AND c.language = ? AND c.sold_date IS NULL AND si.sale_id IS NULL",
                     (
                         card["name"].lower(),
                         card["num"].lower(),
