@@ -69,7 +69,7 @@ class SaleService:
                 available = self.db.execute(
                     "SELECT COALESCE(SUM(quantity), 0) FROM sealed "
                     "WHERE lower(name) = lower(?) AND language = ? "
-                    "AND sale_id IS NULL AND opened = 0",
+                    "AND sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL",
                     (name, language),
                 ).fetchone()[0]
                 if available < needed:
@@ -92,7 +92,8 @@ class SaleService:
                 "LEFT JOIN grading_submission_cards gsc "
                 "ON gsc.card_id = c.id AND gsc.is_current = 1 "
                 "LEFT JOIN grading_submissions gs ON gs.id = gsc.submission_id "
-                "WHERE c.id = ? AND c.sold_date IS NULL AND si.card_id IS NULL",
+                "WHERE c.id = ? AND c.sold_date IS NULL AND si.card_id IS NULL "
+                "AND c.disposal_reason IS NULL",
                 (card_id,),
             ).fetchone()
             if not inventory_card or (
@@ -169,6 +170,7 @@ class SaleService:
                 sell_price = float(card.get("marketValue", 0))
                 updated = self.db.execute(
                     "UPDATE cards SET sold_date = ? WHERE id = ? AND sold_date IS NULL "
+                    "AND disposal_reason IS NULL "
                     "AND NOT EXISTS (SELECT 1 FROM sale_items WHERE card_id = ?) "
                     "AND NOT EXISTS ("
                     "SELECT 1 FROM grading_submission_cards gsc "
@@ -311,7 +313,7 @@ class SaleService:
             "SELECT id, name, language, quantity, price, market_value, date, auction_id, "
             "cardMarketID FROM sealed "
             "WHERE lower(name) = lower(?) AND language = ? AND sale_id IS NULL "
-            "AND opened = 0 ORDER BY id ASC",
+            "AND opened = 0 AND disposal_reason IS NULL ORDER BY id ASC",
             (name, language),
         ).fetchall()
 

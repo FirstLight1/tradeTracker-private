@@ -50,6 +50,11 @@ def app(tmp_path):
             "(card_id, grader, grade_numeric, cert_number) "
             "VALUES (13, 'BGS', 9.5, 'DIRECT-13')"
         )
+        db.execute(
+            "INSERT INTO cards "
+            "(id, auction_id, card_name, condition, card_price, market_value, disposal_reason) "
+            "VALUES (14, 2, 'Written off', 'NM', 10, 20, 'damaged')"
+        )
         db.commit()
     return app
 
@@ -67,3 +72,11 @@ def test_load_cards_distinguishes_raw_at_grader_and_graded_cards(app):
     assert cards[12]["grade_numeric"] == 9
     assert cards[13]["grading_state"] == "graded"
     assert cards[13]["grading_submission_status"] is None
+    assert 14 not in cards
+
+
+def test_purchase_cards_include_written_off_cards(app):
+    response = app.test_client().get("/loadAllCards/2", base_url="https://localhost")
+
+    assert response.status_code == 200
+    assert 14 in {card["id"] for card in response.get_json()}

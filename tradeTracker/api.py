@@ -1,12 +1,13 @@
-from flask import request, Blueprint, jsonify, current_app, abort
-from tradeTracker.db import get_db
 import datetime
 import logging
-from . import csrf, limiter
-from tradeTracker.services.cfAuth import require_api_token
-from tradeTracker import actions
-from tradeTracker import CONSTANTS
 
+from flask import Blueprint, abort, current_app, jsonify, request
+
+from tradeTracker import CONSTANTS, actions
+from tradeTracker.db import get_db
+from tradeTracker.services.cfAuth import require_api_token
+
+from . import csrf, limiter
 
 bp = Blueprint("api", __name__)
 logger = logging.getLogger(__name__)
@@ -151,7 +152,7 @@ def cardMarketOrder():
                 rows = db.execute(
                     "SELECT c.id FROM cards c LEFT JOIN sale_items si ON c.id = si.card_id "
                     "WHERE lower(c.card_name) = ? AND lower(c.card_num) = ? and upper(c.condition) = ? "
-                    "AND c.language = ? AND c.sold_date IS NULL AND si.sale_id IS NULL",
+                    "AND c.language = ? AND c.sold_date IS NULL AND si.sale_id IS NULL AND c.disposal_reason IS NULL",
                     (
                         card["name"].lower(),
                         card["num"].lower(),
@@ -189,11 +190,11 @@ def cardMarketOrder():
                     ), 400
 
                 available = db.execute(
-                    "SELECT COALESCE(SUM(quantity), 0) FROM sealed WHERE lower(name) = ? AND language = ? AND sale_id IS NULL AND opened = 0",
+                    "SELECT COALESCE(SUM(quantity), 0) FROM sealed WHERE lower(name) = ? AND language = ? AND sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL",
                     (item["name"].lower(), language),
                 ).fetchone()[0]
                 first = db.execute(
-                    "SELECT id FROM sealed WHERE lower(name) = ? AND language = ? AND sale_id IS NULL AND opened = 0 ORDER BY id ASC LIMIT 1",
+                    "SELECT id FROM sealed WHERE lower(name) = ? AND language = ? AND sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL ORDER BY id ASC LIMIT 1",
                     (item["name"].lower(), language),
                 ).fetchone()
                 item["language"] = language

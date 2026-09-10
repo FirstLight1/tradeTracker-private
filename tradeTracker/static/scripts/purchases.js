@@ -82,6 +82,13 @@ async function loadAuctionContent(button) {
                         const safeCardConditionClass = sanitizeClassToken(
                             card.condition || 'Unknown',
                         );
+                        let cardStatus = "";
+                        if (card.disposal_reason != null) {
+                            cardStatus = card.disposal_reason;
+                        };
+                        if (card.sold_date != null) {
+                            cardStatus = "Sold";
+                        }
                         const cardDiv = document.createElement('div');
                         cardDiv.classList.add('card');
                         cardDiv.innerHTML = `
@@ -92,7 +99,7 @@ async function loadAuctionContent(button) {
                         ${renderField(card.card_price != null ? DOMPurify.sanitize(card.card_price) + '€' : '', 'text', ['card-info', 'card-price'], 'Card Price', 'card_price')}
                         ${renderField(card.market_value != null ? DOMPurify.sanitize(card.market_value) + '€' : '', 'text', ['card-info', 'market-value'], 'Market Value', 'market_value')}
                         ${renderField(card.card_price !== null && card.market_value !== null ? (card.market_value - card.card_price).toFixed(2) + '€' : '', 'text', ['card-info', 'profit'], 'profit', true)}
-                        <p>${card.sold_date != null ? 'Sold' : ''}</p>
+                        <p>${cardStatus}</p>
                         <p></p>
                         <p></p>
                     `;
@@ -107,12 +114,15 @@ async function loadAuctionContent(button) {
                     sealedData.forEach((sealedItem) => {
                         const sealedDiv = document.createElement('div');
                         sealedDiv.classList.add('sealed-item');
-                        console.log(sealedItem);
                         let state = '';
-                        if (sealedItem.opened) {
+                        if (sealedItem.disposal_reason) {
+                            state = `Written off: ${sealedItem.disposal_reason}`;
+                        } else if (sealedItem.opened) {
                             state = 'Opened';
                         } else if (sealedItem.sale_id != null) {
                             state = 'Sold';
+                        } else if (sealedItem.disposal_reason != null) {
+                            state = sealedItem.disposal_reason;
                         }
 
                         const margin = (
@@ -128,7 +138,7 @@ async function loadAuctionContent(button) {
                             <p class="sealed-market-value">${DOMPurify.sanitize(sealedItem.market_value)}€</p>
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
                             <p></p>
-                            <p>${state}</p>
+                            <p>${DOMPurify.sanitize(state)}</p>
                             <p></p>
                         `;
 
@@ -272,8 +282,9 @@ async function loadSealed(viewButton) {
                     ).toFixed(2);
                     const formatedDate = formatSealedDate(sealedData.date);
                     let state = '';
-                    console.log(sealedData);
-                    if (sealedData.opened) {
+                    if (sealedData.disposal_reason) {
+                        state = `Written off: ${sealedData.disposal_reason}`;
+                    } else if (sealedData.opened) {
                         state = 'Opened';
                     } else if (sealedData.sale_id != null) {
                         state = 'Sold';
@@ -287,7 +298,7 @@ async function loadSealed(viewButton) {
                         <p class='market-value-sealed'>${DOMPurify.sanitize(sealedData.market_value)}</p>
                         <p class='margin'>${margin}</p>
                         <p class='add-date'>${formatedDate}</p>
-                        <p>${state}</p>
+                        <p>${DOMPurify.sanitize(state)}</p>
                         <p></p>
                     `;
                     contentDiv.append(sealedDiv);

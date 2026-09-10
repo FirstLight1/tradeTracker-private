@@ -655,7 +655,7 @@ function cardConditionDisplay(card) {
     return card.condition || 'Unknown';
 }
 
-window.handleSealedInput = function (input, container) {
+window.handleSealedInput = function(input, container) {
     window.handleCardInput(input, {
         itemSelector: '.sealed-item-row',
         container,
@@ -732,13 +732,13 @@ function renderCartLine(line) {
     const updateDisplay = () => {
         const gradeDisplay = line.grading
             ? [
-                  line.grading.grader,
-                  line.grading.grade_numeric,
-                  line.grading.grade_label,
-                  line.grading.qualifier,
-              ]
-                  .filter((value) => value !== null && value !== undefined && value !== '')
-                  .join(' ') || 'Graded'
+                line.grading.grader,
+                line.grading.grade_numeric,
+                line.grading.grade_label,
+                line.grading.qualifier,
+            ]
+                .filter((value) => value !== null && value !== undefined && value !== '')
+                .join(' ') || 'Graded'
             : line.condition;
         const minusDisabled = line.cardIds.length <= 1 ? 'disabled' : '';
         const plusDisabled = !line.canIncrement ? 'disabled' : '';
@@ -939,8 +939,8 @@ function loadCartContentFromSession() {
                     item.marketValue != null
                         ? item.marketValue
                         : item.price
-                          ? item.price.replace('€', '').replace(',', '.').trim()
-                          : '';
+                            ? item.price.replace('€', '').replace(',', '.').trim()
+                            : '';
                 addSealedToCart(
                     { name: item.name, language: item.language || 'en', market_value: marketValue },
                     item.sid,
@@ -1311,12 +1311,12 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
             : 0;
         const sealedSub = cartContent.sealed
             ? cartContent.sealed.reduce(
-                  (sum, item) =>
-                      sum +
-                      Number(String(item.marketValue).replace('€', '')) *
-                          (Number(item.quantity) || 1),
-                  0,
-              )
+                (sum, item) =>
+                    sum +
+                    Number(String(item.marketValue).replace('€', '')) *
+                    (Number(item.quantity) || 1),
+                0,
+            )
             : 0;
 
         const adjustableSubtotal = cardsSub + sealedSub;
@@ -2327,19 +2327,19 @@ function displaySearchResults(results, resultsQueue, searchInput) {
             card.marketValue = result.market_value;
             card.grading = result.is_graded
                 ? {
-                      grader: result.grader,
-                      grade_numeric:
-                          result.grade_numeric != null ? String(result.grade_numeric) : null,
-                      grade_label: result.grade_label,
-                      qualifier: result.qualifier,
-                      cert_number: result.cert_number,
-                  }
+                    grader: result.grader,
+                    grade_numeric:
+                        result.grade_numeric != null ? String(result.grade_numeric) : null,
+                    grade_label: result.grade_label,
+                    qualifier: result.qualifier,
+                    cert_number: result.cert_number,
+                }
                 : null;
             const safeConditionClass = sanitizeClassToken(result.condition || 'Unknown');
             const gradeDisplay = card.grading
                 ? [result.grader, result.grade_numeric, result.grade_label, result.qualifier]
-                      .filter((value) => value !== null && value !== undefined && value !== '')
-                      .join(' ') || 'Graded'
+                    .filter((value) => value !== null && value !== undefined && value !== '')
+                    .join(' ') || 'Graded'
                 : result.condition || 'Unknown';
 
             const availableCount = result.available_count ? result.available_count : 1;
@@ -2467,6 +2467,7 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
     const canDelete = isSealed || gradingState === 'raw';
     const canGrade = !isSealed && gradingState === 'raw';
     const canViewGrading = !isSealed && gradingState === 'at_grader';
+    const canWriteOff = gradingState !== 'at_grader';
     box = document.createElement('div');
     box.classList.add('context-menu');
     //TODO: move styles to css
@@ -2474,41 +2475,42 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
     box.style.top = e.pageY - 25 + 'px';
     box.innerHTML = `<div class="">
                             <div class="">
-                                ${
-                                    isSealed
-                                        ? `<div class="">
+                                ${isSealed
+            ? `<div class="">
                                     <button class="open-sealed-item">Open</button>
                                 </div>`
-                                        : ''
-                                }
-                                ${
-                                    canAddToCart
-                                        ? `<div class="">
+            : ''
+        }
+                                ${canAddToCart
+            ? `<div class="">
                                     <button class="add-to-cart">Add to cart</button>
                                 </div>`
-                                        : ''
-                                }
-                                ${
-                                    canDelete
-                                        ? `<div class="">
+            : ''
+        }
+                                ${canDelete
+            ? `<div class="">
                                     <button class="delete-card" data-id="${cardId}">Delete</button>
                                 </div>`
-                                        : ''
-                                }
-                                ${
-                                    canGrade
-                                        ? `<div class="">
+            : ''
+        }
+                                ${canGrade
+            ? `<div class="">
                                     <button class="grade-card" data-id="${cardId}">Grade</button>
                                 </div>`
-                                        : ''
-                                }
-                                ${
-                                    canViewGrading
-                                        ? `<div class="">
+            : ''
+        }
+                                ${canViewGrading
+            ? `<div class="">
                                     <button class="view-grading">View grading</button>
                                 </div>`
-                                        : ''
-                                }
+            : ''
+        }
+                                ${canWriteOff
+            ? `<div class="">
+                                        <button class="write-off-inventory" data-id="${cardId}">Write off inventory</button>
+                                    </div>`
+            : ''
+        }
                             </div>
                         </div>
                         <span hidden class="card-id">${cardId}</span>
@@ -2586,16 +2588,27 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
             card.grading =
                 itemLine.dataset.isGraded === 'true'
                     ? {
-                          grader: itemLine.dataset.grader || null,
-                          grade_numeric: itemLine.dataset.gradeNumeric || null,
-                          grade_label: itemLine.dataset.gradeLabel || null,
-                          qualifier: itemLine.dataset.qualifier || null,
-                          cert_number: itemLine.dataset.certNumber || null,
-                      }
+                        grader: itemLine.dataset.grader || null,
+                        grade_numeric: itemLine.dataset.gradeNumeric || null,
+                        grade_label: itemLine.dataset.gradeLabel || null,
+                        qualifier: itemLine.dataset.qualifier || null,
+                        cert_number: itemLine.dataset.certNumber || null,
+                    }
                     : null;
             const marketValueText = itemLine.querySelector('.market-value').textContent;
             card.marketValue = marketValueText ? marketValueText.replace('€', '') : null;
             await addToShoppingCart(card, auctionId, cardId);
+        });
+    }
+
+    const writeOffButton = box.querySelector('.write-off-inventory');
+    if (writeOffButton) {
+        writeOffButton.addEventListener('click', (event) => {
+            const quantity = Number(itemLine.dataset.quantity) || 1;
+            event.stopPropagation();
+            spawnWriteOff(cardId, isSealed, quantity);
+            box?.remove();
+            box = null;
         });
     }
 
@@ -2662,6 +2675,156 @@ document.addEventListener('click', (e) => {
     box = null;
 });
 
+async function spawnWriteOff(cardId, isSealed = String(cardId).startsWith('s'), quantity) {
+    const existingModal = document.querySelector('.write-off-modal-overlay');
+    if (existingModal) {
+        existingModal.querySelector('#write-off-reason')?.focus();
+        return;
+    }
+
+    const itemId = sanitizeNumericId(isSealed ? String(cardId).replace(/^s/, '') : cardId);
+    if (!itemId) {
+        renderAlert('Unable to write off inventory: invalid item ID', 'error');
+        return;
+    }
+
+    const now = new Date();
+    const localDate = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+        String(now.getDate()).padStart(2, '0'),
+    ].join('-');
+    const restoreFocusTo = document.activeElement;
+    const modal = document.createElement('div');
+    modal.classList.add('reciever-div', 'write-off-modal-overlay');
+    modal.innerHTML = `
+        <form class="modal-content grading-status-modal write-off-form" role="dialog" aria-modal="true" aria-labelledby="write-off-modal-title" novalidate>
+            <button class="close-modal" type="button" aria-label="Close write-off modal">&times;</button>
+            <p id="write-off-modal-title">Write off ${isSealed ? 'sealed item' : 'card'}</p>
+            <div>
+                <label for="write-off-reason">Disposal reason</label>
+                <select id="write-off-reason" name="disposal_reason" required>
+                    <option value="">Select disposal reason</option>
+                    <option value="Damaged">Damaged</option>
+                    <option value="Lost">Lost</option>
+                    <option value="Stolen">Stolen</option>
+                    <option value="Obsolete">Obsolete</option>
+                    <option value="Counterfeit">Counterfeit</option>
+                    <option value="Giveaway">Giveaway</option>
+                    <option value="Donation">Donation</option>
+                    <option value="Personal">Personal</option>
+                    <option value="Destroyed">Destroyed</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <div>
+                <label for="write-off-quantity">Quantity</label>
+                <input id="write-off-quantity" name="quantity" ${isSealed ? '' : 'disabled'} type="number" value="${quantity}" max="${quantity}" min="1" required>
+            </div>
+            <div>
+                <label for="write-off-date">Disposal date</label>
+                <input id="write-off-date" name="disposal_date" type="date" value="${localDate}" required>
+            </div>
+            <div>
+                <label for="write-off-note">Note</label>
+                <textarea id="write-off-note" name="disposal_note" rows="4" maxlength="1000"></textarea>
+            </div>
+            <div class="modal-buttons">
+                <button class="write-off-confirm-btn" type="submit">Confirm</button>
+            </div>
+        </form>
+    `;
+    document.body.appendChild(modal);
+
+    const form = modal.querySelector('.write-off-form');
+    const close = () => {
+        document.removeEventListener('keydown', handleKeydown);
+        modal.remove();
+        if (restoreFocusTo?.isConnected) {
+            restoreFocusTo.focus();
+        }
+    };
+    const handleKeydown = (event) => {
+        if (event.key === 'Escape') {
+            close();
+        }
+    };
+
+    modal.querySelector('.close-modal').addEventListener('click', close);
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            close();
+        }
+    });
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        clearFieldErrors(form);
+
+        const reason = form.querySelector('#write-off-reason');
+        const date = form.querySelector('#write-off-date');
+        const quantity = form.querySelector('#write-off-quantity');
+        const errors = {};
+        if (!reason.value) {
+            errors.disposal_reason = 'Disposal reason is required.';
+        }
+        if (!date.value) {
+            errors.disposal_date = 'Disposal date is required.';
+        }
+        if (Object.keys(errors).length) {
+            renderServerErrors({ errors }, form, {
+                disposal_reason: '#write-off-reason',
+                disposal_date: '#write-off-date',
+            });
+            return;
+        }
+
+        const confirmButton = form.querySelector('.write-off-confirm-btn');
+        confirmButton.disabled = true;
+        confirmButton.textContent = 'Saving...';
+
+        try {
+            const note = form.querySelector('#write-off-note').value.trim();
+            const response = await csrfFetch('/writeOffInventory', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    item_id: Number(itemId),
+                    item_type: isSealed ? 'sealed' : 'card',
+                    disposal_reason: reason.value,
+                    disposal_date: date.value,
+                    disposal_note: note || null,
+                    quantity: Number(quantity.value) || 1,
+                }),
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || result.status !== 'success') {
+                renderServerErrors(
+                    result,
+                    form,
+                    {
+                        disposal_reason: '#write-off-reason',
+                        disposal_date: '#write-off-date',
+                        disposal_note: '#write-off-note',
+                    },
+                    'Unable to write off inventory',
+                );
+                confirmButton.disabled = false;
+                confirmButton.textContent = 'Confirm';
+                return;
+            }
+
+            close();
+            window.location.reload();
+        } catch (error) {
+            renderAlert(`Error writing off inventory: ${error}`, 'error');
+            confirmButton.disabled = false;
+            confirmButton.textContent = 'Confirm';
+        }
+    });
+    document.addEventListener('keydown', handleKeydown);
+    modal.querySelector('#write-off-reason').focus();
+}
+
 async function loadAuctionContent(button) {
     const auctionId = Number(button.getAttribute('data-id'));
     //TODO - make this into a single endpoint
@@ -2706,8 +2869,8 @@ async function loadAuctionContent(button) {
                             card.grading_state === 'graded'
                                 ? ' graded'
                                 : card.grading_state === 'at_grader'
-                                  ? ' at-grader'
-                                  : '';
+                                    ? ' at-grader'
+                                    : '';
                         const cardDiv = document.createElement('div');
                         cardDiv.classList.add('card');
                         cardDiv.setAttribute('data-id', safeCardId);
@@ -3008,7 +3171,7 @@ async function loadAuctionContent(button) {
                                 ),
                                 language: DOMPurify.sanitize(
                                     sealedDiv.querySelector('.sealed-language')?.textContent ||
-                                        'en',
+                                    'en',
                                 ),
                                 market_value: DOMPurify.sanitize(
                                     sealedDiv
@@ -3462,7 +3625,7 @@ async function loadSealed(viewButton) {
         // Only fetch if we don't have items already
         if (contentDiv.childElementCount === 0) {
             try {
-                const response = await csrfFetch('/loadSealed');
+                const response = await csrfFetch('/loadAvailableSealed');
                 const data = await response.json();
                 if (data.status != 'success') {
                     renderAlert('Failed to load sealed products', 'error');
@@ -3735,11 +3898,10 @@ async function loadAuctions() {
                             <button class="merge-button">Merge</button>
                         </div>
                         <div class="auction-option auction-link-cell">
-                            ${
-                                auction.sale_id == null
-                                    ? `<select class='barter-id-select'><option value="null">Select Invoice Number to link</option></select>`
-                                    : `<a class="sale-link" href="/sold#${safeSaleId}">Invoice Number: ${DOMPurify.sanitize(invoiceNumber)}</a>`
-                            }
+                            ${auction.sale_id == null
+                    ? `<select class='barter-id-select'><option value="null">Select Invoice Number to link</option></select>`
+                    : `<a class="sale-link" href="/sold#${safeSaleId}">Invoice Number: ${DOMPurify.sanitize(invoiceNumber)}</a>`
+                }
                         </div>
                     </div>
                 </div>

@@ -30,6 +30,9 @@ def db(tmp_path):
             card_id INTEGER,
             profit REAL
         );
+        CREATE TABLE sealed (
+            id INTEGER PRIMARY KEY
+        );
         """
     )
     connection.close()
@@ -102,6 +105,18 @@ def test_create_submission_rolls_back_when_card_is_unavailable(db, card_id):
             GradingSubmissionCard(card_id, "PSA", 5, 50),
         ]
     )
+
+    error = service.create_submission(submission)
+
+    assert "not available" in error
+    assert db.execute("SELECT COUNT(*) FROM grading_submissions").fetchone()[0] == 0
+
+
+def test_create_submission_rejects_written_off_card(db):
+    db.execute("UPDATE cards SET disposal_reason = 'damaged' WHERE id = 4")
+    db.commit()
+    service = GradingService(db)
+    submission = make_submission([GradingSubmissionCard(4, "PSA", 5, 50)])
 
     error = service.create_submission(submission)
 

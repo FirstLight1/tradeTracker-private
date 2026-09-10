@@ -168,3 +168,50 @@ class GradingCompleteItems:
                 money(item.get("post_grade_market_value"), "post_grade_market_value", nullable=True)
             ),
         )
+
+class DisposalReason(enum.StrEnum):
+    DAMAGED = "Damaged"
+    LOST = "Lost"
+    STOLEN = "Stolen"
+    OBSOLETE = "Obsolete"
+    COUNTERFEIT = "Counterfeit"
+    GIVEAWAY = "Giveaway"
+    DONATION = "Donation"
+    PERSONAL = "Personal"
+    DESTROYED = "Destroyed"
+    OTHER = "Other"
+
+
+@dataclass
+class InventoryWriteOff:
+    item_id: int
+    item_type: str
+    disposal_reason: DisposalReason
+    disposal_date: str
+    disposal_note: str | None
+    quantity: int = 1
+
+    @classmethod
+    def from_dict(cls, item: dict[str, Any]) -> "InventoryWriteOff":
+        item_type = item["item_type"]
+        if item_type not in {"card", "sealed"}:
+            raise ValueError("item_type must be card or sealed")
+
+        quantity = int(item.get("quantity", 1))
+        if quantity < 1:
+            raise ValueError("quantity must be at least 1")
+        if item_type == "card" and quantity != 1:
+            raise ValueError("card quantity must be 1")
+
+        return cls(
+            item_id=int(item["item_id"]),
+            item_type=item_type,
+            disposal_reason=DisposalReason(item["disposal_reason"]),
+            disposal_date=normalize_date(
+                item.get("disposal_date", datetime.date.today().isoformat()),
+                "disposal_date",
+                required=True,
+            ),
+            disposal_note=normalize_text(item.get("disposal_note"), "disposal_note"),
+            quantity=quantity,
+        )

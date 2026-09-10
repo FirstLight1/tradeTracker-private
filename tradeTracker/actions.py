@@ -35,6 +35,7 @@ from tradeTracker.services.models import (
     SaleResult,
     LabelResult,
     PacketaHomeDeliveryResult,
+    InventoryWriteOff,
 )
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaReceiptService
@@ -42,6 +43,7 @@ from tradeTracker.services.cfAuth import verify_token, require_api_token
 from tradeTracker.services.eph_service import EPHService
 from tradeTracker.services.pdf_utils import wrap_table_text
 from tradeTracker.services import report_service
+from tradeTracker.services.inventory_service import InventoryService
 # Packeta integration disabled — service hits the network (WSDL fetch) at construction
 # and requires the `postal` native dep. Re-enable together with the blocks in importCSV.
 # from tradeTracker.services.packeta_service import PacketaService
@@ -472,7 +474,7 @@ def loadAuctions():
         "LEFT JOIN sales s ON b.sale_id = s.id "
         "LEFT JOIN cards c ON a.id = c.auction_id "
         "LEFT JOIN sale_items si ON c.id = si.card_id "
-        "WHERE a.id = 1 OR (si.card_id IS NULL AND c.sold_date IS NULL) "
+        "WHERE a.id = 1 OR (si.card_id IS NULL AND c.sold_date IS NULL AND c.disposal_reason IS NULL) "
         "ORDER BY (a.id = 1) DESC, "
         "a.id DESC "
     ).fetchall()
@@ -503,7 +505,20 @@ def loadSealed():
     db = get_db()
 
     sealed_products = db.execute(
-        "SELECT 's' || id as sid, name, quantity, language, price, market_value, date FROM sealed WHERE sale_id is NULL AND auction_id is NULL AND opened = 0"
+        "SELECT 's' || id as sid, name, quantity, language, price, market_value, "
+        "date, disposal_reason, disposal_date, disposal_note FROM sealed "
+        "WHERE sale_id is NULL AND auction_id is NULL AND opened = 0"
+    ).fetchall()
+    return jsonify({"status": "success", "data": [dict(product) for product in sealed_products]})
+
+
+@bp.route("/loadAvailableSealed", methods=("GET",))
+@verify_token
+def loadAvailableSealed():
+    db = get_db()
+
+    sealed_products = db.execute(
+        "SELECT 's' || id as sid, name, quantity, language, price, market_value, date FROM sealed WHERE sale_id is NULL AND auction_id is NULL AND opened = 0 AND disposal_reason IS NULL"
     ).fetchall()
     return jsonify({"status": "success", "data": [dict(product) for product in sealed_products]})
 
@@ -574,7 +589,8 @@ def loadCards(auction_id):
         "LEFT JOIN grading_submission_cards gsc "
         "ON c.id = gsc.card_id AND gsc.is_current = 1 "
         "LEFT JOIN grading_submissions gs ON gsc.submission_id = gs.id "
-        "WHERE c.auction_id = ? AND c.sold_date IS NULL AND si.card_id IS NULL",
+        "WHERE c.auction_id = ? AND c.sold_date IS NULL "
+        "AND si.card_id IS NULL AND c.disposal_reason IS NULL",
         (auction_id,),
     ).fetchall()
     return jsonify([dict(card) for card in cards]), 200
@@ -596,8 +612,8 @@ def loadBulk(auction_id):
 def loadSealedByAuction(auction_id):
     db = get_db()
     sealed_items = db.execute(
-        "SELECT 's' || id as sid, name, language, price, market_value, date, quantity FROM sealed "
-        "WHERE auction_id = ? AND sale_id is NULL AND opened = 0",
+        "SELECT 's' || id as sid, name, language, price, market_value, date, quantity, disposal_reason FROM sealed "
+        "WHERE auction_id = ? AND sale_id is NULL AND opened = 0 AND disposal_reason IS NULL",
         (auction_id,),
     ).fetchall()
     return jsonify([dict(item) for item in sealed_items]), 200
@@ -635,11 +651,11 @@ def invertoryValue():
     cur = db.cursor()
     cardMarketValue = cur.execute(
         "SELECT SUM(market_value) FROM cards c LEFT JOIN sale_items si ON c.id = si.card_id "
-        "WHERE c.sold_date IS NULL AND si.card_id IS NULL"
+        "WHERE c.sold_date IS NULL AND si.card_id IS NULL AND c.disposal_reason IS NULL"
     ).fetchone()[0]
     bulkValue = cur.execute("SELECT SUM(total_price) FROM bulk_items").fetchone()[0]
     sealedValue = cur.execute(
-        "SELECT SUM(market_value * quantity) FROM sealed WHERE sale_id IS NULL AND opened = 0"
+        "SELECT SUM(market_value * quantity) FROM sealed WHERE sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL"
     ).fetchone()[0]
     value = (
         (cardMarketValue if cardMarketValue is not None else 0)
@@ -860,6 +876,32 @@ def bulkCounterValue():
         }
     ), 200
 
+@bp.route("/writeOffInventory", methods=("POST",))
+@verify_token
+def writeOffInventory():
+    data = request.get_json()
+    try:
+        writeoff = InventoryWriteOff.from_dict(data)
+        inventory_service = InventoryService(get_db())
+        inventory_service.item_writeoff(writeoff)
+    except (KeyError, ValueError, TypeError) as e:
+        return jsonify({"status": "error", "message": f"Failed to write off inventory: {e}"}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to write off inventory: {e}"}), 400
+    return jsonify({"status": "success"}), 200
+
+@bp.route("/undoWriteOffInventory", methods=("POST",))
+@verify_token
+def undoWriteOffInventory():
+    data = request.get_json()
+    try:
+        inventory_service = InventoryService(get_db())
+        inventory_service.undo_item_writeoff(data["item_id"], data["item_type"])
+    except (KeyError, ValueError, TypeError) as e:
+        return jsonify({"status": "error", "message": f"Failed to undo write off inventory: {e}"}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to undo write off inventory: {e}"}), 400
+    return jsonify({"status": "success"}), 200
 
 @bp.route("/loadSoldHistory", methods=("GET",))
 @verify_token
@@ -1229,18 +1271,31 @@ def orderDebit(db, saleId, cards=None, sealed=None):
     try:
         if cards:
             for card in cards:
-                db.execute(
-                    "INSERT INTO sale_items (sale_id, card_id, sell_price, profit) VALUES (?, ?, ?, (SELECT market_value - card_price FROM cards WHERE id = ?))",
-                    (saleId, card.get("id"), card.get("marketValue"), card.get("id")),
+                card_id = card.get("id")
+                sold_date = datetime.datetime.now(datetime.timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%S.%fZ"
                 )
-                db.execute(
-                    "UPDATE cards SET sold_date = ? WHERE id = ?",
+                updated = db.execute(
+                    "UPDATE cards SET sold_date = ? WHERE id = ? AND sold_date IS NULL "
+                    "AND disposal_reason IS NULL "
+                    "AND NOT EXISTS (SELECT 1 FROM sale_items WHERE card_id = ?) "
+                    "AND NOT EXISTS ("
+                    "SELECT 1 FROM grading_submission_cards gsc "
+                    "JOIN grading_submissions gs ON gs.id = gsc.submission_id "
+                    "WHERE gsc.card_id = cards.id AND gsc.is_current = 1 "
+                    "AND gs.status != 'graded')",
                     (
-                        datetime.datetime.now(datetime.timezone.utc).strftime(
-                            "%Y-%m-%dT%H:%M:%S.%fZ"
-                        ),
-                        card.get("id"),
+                        sold_date,
+                        card_id,
+                        card_id,
                     ),
+                )
+                if updated.rowcount != 1:
+                    raise ValueError(f"Card with id:{card_id} is not available")
+                db.execute(
+                    "INSERT INTO sale_items (sale_id, card_id, sell_price, profit) "
+                    "VALUES (?, ?, ?, (SELECT market_value - card_price FROM cards WHERE id = ?))",
+                    (saleId, card_id, card.get("marketValue"), card_id),
                 )
                 valueChange += float(card.get("marketValue"))
 
@@ -1251,7 +1306,9 @@ def orderDebit(db, saleId, cards=None, sealed=None):
                     continue
                 sealed_id = item.get("id")
                 row = db.execute(
-                    "SELECT quantity FROM sealed WHERE id = ?", (sealed_id,)
+                    "SELECT quantity FROM sealed WHERE id = ? AND sale_id IS NULL "
+                    "AND opened = 0 AND disposal_reason IS NULL",
+                    (sealed_id,),
                 ).fetchone()
                 if row is None:
                     raise Exception(f"Sealed item {sealed_id} not found")
@@ -1275,6 +1332,7 @@ def orderDebit(db, saleId, cards=None, sealed=None):
         )
         return None
     except Exception as e:
+        db.rollback()
         return e
 
 
@@ -1714,7 +1772,8 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
 
     try:
         row = cur.execute(
-            "SELECT * FROM sealed WHERE id = ?", (openedItem.get("id").replace("s", ""),)
+            "SELECT * FROM sealed WHERE id = ? AND sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL",
+            (openedItem.get("id").replace("s", ""),),
         ).fetchone()
         if row["quantity"] == 1:
             cur.execute(
@@ -1828,7 +1887,8 @@ def openSingleSealed(cur, openedItem, sealed, cards, newTotal, priceDiff):
 
     try:
         row = cur.execute(
-            "SELECT * FROM sealed WHERE id = ?", (openedItem.get("id").replace("s", ""),)
+            "SELECT * FROM sealed WHERE id = ? AND sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL",
+            (openedItem.get("id").replace("s", ""),),
         ).fetchone()
         if row["quantity"] == 1:
             cur.execute(
@@ -2093,7 +2153,11 @@ def updateOneCard(db, name, num, condition, sellPrice):
         "SELECT c.id FROM cards c "
         "LEFT JOIN sale_items si ON c.id = si.card_id "
         "WHERE c.card_name = ? AND c.card_num LIKE ? AND c.condition = ? "
-        "AND c.sold_date IS NULL AND si.card_id IS NULL "
+        "AND c.sold_date IS NULL AND si.card_id IS NULL AND c.disposal_reason IS NULL "
+        "AND NOT EXISTS ("
+        "SELECT 1 FROM grading_submission_cards gsc "
+        "JOIN grading_submissions gs ON gs.id = gsc.submission_id "
+        "WHERE gsc.card_id = c.id AND gsc.is_current = 1 AND gs.status != 'graded') "
         "LIMIT 1",
         (name, f"%{num}", condition),
     ).fetchone()
@@ -2105,17 +2169,18 @@ def updateOneCard(db, name, num, condition, sellPrice):
 
         # Create a sale for this card
         invoice_number = f"CSV-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{cardId['id']}"
-        db.execute(
+        sale_cursor = db.execute(
             "INSERT INTO sales (invoice_number, sale_date, total_amount) VALUES (?, ?, ?)",
             (invoice_number, date, sellPrice),
         )
-        sale_id = db.cursor().lastrowid
+        sale_id = sale_cursor.lastrowid
 
         # Add sale item
         db.execute(
             "INSERT INTO sale_items (sale_id, card_id, sell_price, sold_cm) VALUES (?, ?, ?, ?)",
             (sale_id, cardId["id"], sellPrice, 1),
         )
+        db.execute("UPDATE cards SET sold_date = ? WHERE id = ?", (date, cardId["id"]))
         db.commit()
         return
     else:
@@ -2352,14 +2417,14 @@ def process_sold_csv(files, db):
     cur = db.execute(
         "SELECT id, name as itemName, NULL as card_num, quantity, market_value, auction_id, 'sealed' as item_type, 'NM' as condition, language, cardMarketID as cardmarketId "
         "FROM sealed "
-        f"WHERE sale_id IS NULL AND opened = 0 AND cardMarketID IN ({placehoders}) "
+        f"WHERE sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL AND cardMarketID IN ({placehoders}) "
         "UNION ALL "
         "SELECT c.id as id, card_name as itemName, card_num, 1 as quantity, market_value, auction_id, 'card' as item_type, c.condition as condition, language, cardMarketID as cardmarketId "
         "FROM cards c "
         "LEFT JOIN sale_items si ON si.card_id = c.id "
         "LEFT JOIN grading_submission_cards gsc ON gsc.card_id = c.id AND gsc.is_current = 1 "
         f"WHERE c.sold_date IS NULL AND si.card_id IS NULL AND gsc.id IS NULL "
-        f"AND cardMarketID IN ({placehoders}) "
+        f"AND c.disposal_reason IS NULL AND cardMarketID IN ({placehoders}) "
         "ORDER BY id ASC ",
         ids + ids,
     )
@@ -2832,7 +2897,8 @@ def search():
             "LEFT JOIN grading_submission_cards gsc "
             "ON c.id = gsc.card_id AND gsc.is_current = 1 "
             "LEFT JOIN grading_submissions gs ON gsc.submission_id = gs.id "
-            f"WHERE ({card_where_clause}) AND c.sold_date IS NULL AND si.card_id IS NULL "
+            f"WHERE ({card_where_clause}) AND c.sold_date IS NULL "
+            "AND si.card_id IS NULL AND c.disposal_reason IS NULL "
             f"{card_grouping}",
             card_params,
         ).fetchall()
@@ -2841,7 +2907,7 @@ def search():
         sealed_matches = db.execute(
             f"SELECT 's' || s.id as sid, s.name, s.language, s.market_value, s.auction_id,SUM(s.quantity) as available_count, a.auction_name FROM sealed s "
             "LEFT JOIN auctions a ON s.auction_id = a.id "
-            f"WHERE ({sealed_where_clause}) AND s.sale_id IS NULL AND s.opened = 0 "
+            f"WHERE ({sealed_where_clause}) AND s.sale_id IS NULL AND s.opened = 0 AND s.disposal_reason IS NULL "
             f"GROUP BY UPPER(s.name), s.language ORDER BY s.id ASC LIMIT 8",
             sealed_params,
         ).fetchall()
@@ -2890,7 +2956,8 @@ def getCardIds():
                 "AND c.card_num IS NULL "
                 "AND c.condition = ? "
                 "AND c.sold_date IS NULL "
-                "AND si.card_id IS NULL"
+                "AND si.card_id IS NULL "
+                "AND c.disposal_reason IS NULL"
             )
             params = [card_name, condition]
         else:
@@ -2904,7 +2971,8 @@ def getCardIds():
                 "AND c.card_num = ? "
                 "AND c.condition = ? "
                 "AND c.sold_date IS NULL "
-                "AND si.card_id IS NULL"
+                "AND si.card_id IS NULL "
+                "AND c.disposal_reason IS NULL"
             )
             params = [card_name, card_num, condition]
 

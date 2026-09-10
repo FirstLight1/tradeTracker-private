@@ -78,6 +78,20 @@ def test_card_at_grader_cannot_be_sold(app):
         receipt_service.issue.assert_not_called()
 
 
+def test_written_off_card_cannot_be_sold(app):
+    receipt_service = MagicMock()
+    with app.app_context():
+        db = get_db()
+        db.execute("UPDATE cards SET disposal_reason = 'damaged' WHERE id = 10")
+        db.commit()
+
+        with pytest.raises(ValueError, match="not available"):
+            SaleService(db, receipt_service).process_sale(sale_input())
+
+        assert db.execute("SELECT COUNT(*) FROM sales").fetchone()[0] == 0
+        receipt_service.issue.assert_not_called()
+
+
 def test_completed_graded_card_sale_snapshots_costs_and_invoice_identity(app):
     receipt_service = MagicMock()
     receipt_service.issue.return_value = ReceiptResult(kind="invoice", number="1")

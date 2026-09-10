@@ -174,32 +174,39 @@ class ReportService:
         curr.execute(
             """
             SELECT
-    card_name AS name,
-    card_num AS item_num,
-    condition,
-    language,
-    card_price AS 'buy price',
-    market_value AS 'market value',
-    CASE WHEN sold_date IS NOT NULL THEN 'true' ELSE '' END AS sold,
-    NULL AS opened,
-    'card' AS item_type
-FROM cards
-WHERE auction_id = ?
+                card_name AS name,
+                card_num AS item_num,
+                condition,
+                language,
+                card_price AS 'buy price',
+                market_value AS 'market value',
+                CASE 
+                    WHEN sold_date IS NOT NULL THEN 'sold' 
+                    WHEN disposal_reason IS NOT NULL THEN disposal_reason 
+                    ELSE ''
+                END AS status,
+                'card' AS item_type
+                FROM cards
+            WHERE auction_id = ?
 
-UNION ALL
+            UNION ALL
 
-SELECT
-    name,
-    NULL AS item_num,
-    NULL AS condition,
-    NULL AS language,
-    price AS 'buy price',
-    market_value AS 'market value',
-    CASE WHEN sale_id IS NOT NULL THEN 'true' ELSE '' END AS sold,
-    CASE WHEN opened = 1 THEN 'true' ELSE '' END AS opened,
-    'sealed' AS item_type
-FROM sealed
-WHERE auction_id = ?
+            SELECT
+                name,
+                NULL AS item_num,
+                NULL AS condition,
+                NULL AS language,
+                price AS 'buy price',
+                market_value AS 'market value',
+                CASE
+                    WHEN sale_id IS NOT NULL THEN 'sold' 
+                    WHEN disposal_reason IS NOT NULL THEN disposal_reason 
+                    WHEN opened = 1 THEN 'opened'
+                    ELSE '' 
+                END AS status,
+                'sealed' AS item_type
+            FROM sealed
+            WHERE auction_id = ?
         """,
             (id, id),
         )

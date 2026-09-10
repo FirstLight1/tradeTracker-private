@@ -94,6 +94,19 @@ class SealedLanguageTestCase(unittest.TestCase):
             with self.assertRaises(ValueError):
                 service._check_inventory(_sale_input("jp", 0))
 
+    def test_written_off_sealed_is_not_available_for_sale(self):
+        with self.app.app_context():
+            db = get_db()
+            db.execute("UPDATE sealed SET disposal_reason = 'damaged' WHERE id = 11")
+            db.commit()
+
+            with self.assertRaises(ValueError):
+                SaleService(db, None)._check_inventory(_sale_input("jp", 1))
+
+            SaleService(db, None)._deduct_sealed_fifo("Booster Box", "jp", 1, 999, 120.0)
+            row = db.execute("SELECT quantity, sale_id FROM sealed WHERE id = 11").fetchone()
+            self.assertEqual((row["quantity"], row["sale_id"]), (3, None))
+
     def test_fifo_preserves_language_and_does_not_touch_other_stock(self):
         with self.app.app_context():
             db = get_db()
@@ -139,6 +152,35 @@ class SealedLanguageTestCase(unittest.TestCase):
             {item["language"] for item in auction.get_json()},
             {"en", "jp"},
         )
+
+    def test_inventory_list_excludes_writeoffs_but_purchase_list_keeps_them(self):
+        with self.app.app_context():
+            db = get_db()
+            db.execute("UPDATE sealed SET disposal_reason = 'damaged' WHERE id = 12")
+            db.commit()
+
+        inventory = self.client.get("/loadAvailableSealed", base_url="https://localhost")
+        purchases = self.client.get("/loadSealed", base_url="https://localhost")
+
+        self.assertEqual(inventory.status_code, 200, inventory.data)
+        self.assertEqual(inventory.get_json()["data"], [])
+        self.assertEqual(purchases.status_code, 200, purchases.data)
+        self.assertEqual([item["sid"] for item in purchases.get_json()["data"]], ["s12"])
+
+    def test_search_excludes_written_off_sealed_quantity(self):
+        with self.app.app_context():
+            db = get_db()
+            db.execute("UPDATE sealed SET disposal_reason = 'damaged' WHERE id = 12")
+            db.commit()
+
+        response = self.client.post(
+            "/searchCard",
+            json={"query": "Booster Box", "cartIds": []},
+            base_url="https://localhost",
+        )
+
+        sealed = [item for item in response.get_json()["value"] if item.get("language") == "en"]
+        self.assertEqual(sealed[0]["available_count"], 5)
 
     def test_load_sale_returns_sealed_language(self):
         with self.app.app_context():

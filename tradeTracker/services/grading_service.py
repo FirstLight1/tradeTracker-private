@@ -154,7 +154,7 @@ class GradingService:
 
                 available = self.db.execute(
                     "SELECT c.id, c.card_price FROM cards c WHERE c.id = ? "
-                    "AND c.sold_date IS NULL "
+                    "AND c.sold_date IS NULL AND c.disposal_reason IS NULL "
                     "AND NOT EXISTS (SELECT 1 FROM sale_items si WHERE si.card_id = c.id) "
                     "AND NOT EXISTS ("
                     "SELECT 1 FROM grading_submission_cards gsc "
@@ -449,6 +449,7 @@ class GradingService:
 
             available = self.db.execute(
                 "SELECT c.id FROM cards c WHERE c.id = ? AND c.sold_date IS NULL "
+                "AND c.disposal_reason IS NULL "
                 "AND NOT EXISTS (SELECT 1 FROM grading_submission_cards gsc "
                 "WHERE gsc.card_id = c.id AND gsc.is_current = 1) "
                 "AND NOT EXISTS (SELECT 1 FROM sale_items si WHERE si.card_id = c.id)",
