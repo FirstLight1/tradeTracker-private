@@ -1039,6 +1039,8 @@ function saveModalDataToSession() {
         clientCity: document.querySelector('.client-city')?.value || '',
         clientCountry: document.querySelector('.client-country')?.value || '',
         clientZip: document.querySelector('.client-zip')?.value || '',
+        vatId: document.querySelector('.client-vat-id')?.value || '',
+        ico: document.querySelector('.client-ico')?.value || '',
         paybackDate: document.querySelector('.date-input')?.value || '',
         price: document.querySelector('.price-input')?.value || '',
         shippingPrice: document.querySelector('.shipping-price')?.value || '',
@@ -1072,6 +1074,8 @@ function loadModalDataFromSession(recieverDiv) {
         const clientCity = recieverDiv.querySelector('.client-city');
         const clientCountry = recieverDiv.querySelector('.client-country');
         const clientZip = recieverDiv.querySelector('.client-zip');
+        const vatId = recieverDiv.querySelector('.client-vat-id');
+        const ico = recieverDiv.querySelector('.client-ico');
         const paybackDate = recieverDiv.querySelector('.date-input');
         const priceInput = recieverDiv.querySelector('.price-input');
         const shippingPrice = recieverDiv.querySelector('.shipping-price');
@@ -1081,6 +1085,8 @@ function loadModalDataFromSession(recieverDiv) {
         if (clientCity) clientCity.value = DOMPurify.sanitize(modalData.clientCity);
         if (clientCountry) clientCountry.value = DOMPurify.sanitize(modalData.clientCountry);
         if (clientZip) clientZip.value = DOMPurify.sanitize(modalData.clientZip);
+        if (vatId) vatId.value = DOMPurify.sanitize(modalData.vatId);
+        if (ico) ico.value = DOMPurify.sanitize(modalData.ico);
         if (paybackDate && modalData.paybackDate)
             paybackDate.value = DOMPurify.sanitize(modalData.paybackDate);
         if (priceInput) priceInput.value = DOMPurify.sanitize(modalData.price);
@@ -1223,6 +1229,8 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
     const clientCountry =
         DOMPurify.sanitize(recieverDiv.querySelector('.client-country')?.value) || '';
     const clientZip = DOMPurify.sanitize(recieverDiv.querySelector('.client-zip')?.value) || '';
+    const vatId = DOMPurify.sanitize(recieverDiv.querySelector('.client-vat-id')?.value) || '';
+    const ico = DOMPurify.sanitize(recieverDiv.querySelector('.client-ico')?.value) || '';
     const paybackDate = DOMPurify.sanitize(recieverDiv.querySelector('.date-input')?.value) || '';
     const shippingWay = 'Doprava / Poštovné – samostatná služba';
     const shippingPrice =
@@ -1275,6 +1283,8 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
         address: clientAddress,
         city: clientCity,
         state: clientCountry,
+        taxId: vatId,
+        ico: ico,
         paybackDate: paybackDate,
         total: null,
     };
@@ -1558,7 +1568,7 @@ function shoppingCart() {
             recieverDiv = document.createElement('div');
             recieverDiv.classList.add('reciever-div');
             recieverDiv.innerHTML = `
-                <div class="modal-content">
+                <div class="modal-content complete-invoice-modal">
                     <span class="close-modal">&times;</span>
                     <div class='complete-invoice-info'>
                         <p>Forma uhrady</p>
@@ -1570,44 +1580,53 @@ function shoppingCart() {
                         </div>
                         <button class='add-another-payment-method'>Add another payment method</button>
                     </div>
-                    <div>
-                        <p>Client name and surname</p>
-                        <input type='text' class='client-name'>
+                    <div class='invoice-details'>
+                        <div>
+                            <p>Client name and surname</p>
+                            <input type='text' class='client-name'>
+                        </div>
+                        <div>
+                            <p>Address</p>
+                            <input type='text' class='client-address'>
+                        </div>
+                        <div>
+                            <p>City</p>
+                            <input type='text' class='client-city'>
+                        </div>
+                        <div>
+                            <p>Country</p>
+                            <input type='text' class='client-country'>
+                        </div>
+                        <div class='zip-div'>
+                            <p>ZIP <span class='zip-optional-label'>(Slovakia only)</span></p>
+                            <input type='text' class='client-zip'>
+                        </div>
+                        <div>
+                            <p>Payback date</p>
+                            <input type='date' class='date-input'>
+                        </div>
+                        <div>
+                            <p>ICO</p>
+                            <input type='text' class='client-ico'>
+                        </div>
+                        <div>
+                            <p>VAT ID</p>
+                            <input type='text' class='client-vat-id'>
+                        </div>
+                        <div class='price-div'>
+                            <p>Price</p>
+                            <input type=text placeholder="${cartVal}" class="price-input">
+                        </div>
                     </div>
-                    <div>
-                        <p>Address</p>
-                        <input type='text' class='client-address'>
-                    </div>
-                    <div>
-                        <p>City</p>
-                        <input type='text' class='client-city'>
-                    <div>
-                    <div>
-                        <p>Country</p>
-                        <input type='text' class='client-country'>
-                    </div>
-                    <div class='zip-div'>
-                        <p>ZIP <span class='zip-optional-label'>(Slovakia only)</span></p>
-                        <input type='text' class='client-zip'>
-                    </div>
-                    <div>
-                        <p>Payback date</p>
-                        <input type='date' class='date-input'>
-                    </div>
-                    <div>
-                        <p>Price</p>
-                        <input type=text placeholder="${cartVal}" class="price-input">
-                    </div>
-                    <div>
-                    <p class='shipping-way'>Doprava / Poštovné – samostatná služba</p>
-                    <input type=text placeholder="Price of shipping" class="shipping-price">
-                    </div>
-                    <div>
+                    <div class='shipping-details'>
+                        <p class='shipping-way'>Doprava / Poštovné – samostatná služba</p>
+                        <input type=text placeholder="Price of shipping" class="shipping-price">
                         <select class="delivery-method-select">
                             <option value="">Delivery method</option>
                             <option value="SK-post">Slovak post</option>
                         </select>
                         <div class="delivery-method-info">
+                        </div>
                     </div>
                     <div class='invoice-buttons'>
                         <button class=sales-invoice>Add sale</button>

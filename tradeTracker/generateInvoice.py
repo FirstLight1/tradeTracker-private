@@ -83,8 +83,9 @@ def generate_invoice(
         country=reciever.get("state", "").capitalize()
         if reciever.get("state") is not None
         else " ",
+        ir=reciever.get("ico") or None,
+        tax_id=reciever.get("taxId") or None,
     )
-
     # 3. Create the Invoicegene
     invoice = Invoice(client, provider, Creator("Dominik Forró"))
     invoice.number = invoice_num  # Invoice No.
