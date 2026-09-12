@@ -108,7 +108,7 @@ EUROPE_COUNTRY_CODES = {
     "estonia": "EE",
     "finland": "FI",
     "france": "FR",
-    "fermany": "DE",
+    "germany": "DE",
     "greece": "GR",
     "hungary": "HU",
     "iceland": "IS",

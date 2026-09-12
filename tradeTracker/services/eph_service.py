@@ -40,9 +40,12 @@ class EPHService:
             }
         }
 
-        r = requests.put(f"{self.baseurl}/sheets", json=payload, headers=self._headers())
-        r.raise_for_status()
-        return r.json()["sheet"]["id"]
+        try:
+            r = requests.put(f"{self.baseurl}/sheets", json=payload, headers=self._headers(), timeout=(3.05,15))
+            r.raise_for_status()
+            return r.json()["sheet"]["id"]
+        except requests.exceptions.Timeout:
+            raise Exception("EPH API timed out")
 
     # TODO: add service categories
     def addParcel(self, order, sheet_id, insurance_value=None, weight=0.5):
@@ -69,21 +72,29 @@ class EPHService:
                 "currency": "eur",
             }
 
-        r = requests.put(
-            f"{self.baseurl}/sheets/{sheet_id}/parcels",
-            json={"parcel": parcel},
-            headers=self._headers(),
-        )
-        r.raise_for_status()
-        return r.json()["parcel"]["id"]
+        try:
+            r = requests.put(
+                f"{self.baseurl}/sheets/{sheet_id}/parcels",
+                json={"parcel": parcel},
+                headers=self._headers(),
+                timeout=(3.05,15),
+            )
+            r.raise_for_status()
+            return r.json()["parcel"]["id"]
+        except requests.exceptions.Timeout:
+            raise Exception("EPH API timed out")
 
     def download_label(self, parcel_id, sheet_id, filename):
-        r = requests.post(
-            f"{self.baseurl}/sheets/{sheet_id}/parcels/{parcel_id}/labels",
-            json={"format": "pdf"},
-            headers=self._headers(),
-        )
-        r.raise_for_status()
+        try:
+            r = requests.post(
+                f"{self.baseurl}/sheets/{sheet_id}/parcels/{parcel_id}/labels",
+                json={"format": "pdf"},
+                headers=self._headers(),
+                timeout=(3.05,60),
+            )
+            r.raise_for_status()
+        except requests.exceptions.Timeout:
+            raise Exception("EPH API timed out")
         label_url = r.json()["labels"]["url"]
 
         pdf = requests.get(label_url)
@@ -92,10 +103,14 @@ class EPHService:
         return models.LabelResult(filename=filename, bytes=pdf.content)
 
     def register_sheet(self, sheet_id):
-        r = requests.post(
-            f"{self.baseurl}/sheets/{sheet_id}/register",
-            json={},
-            headers=self._headers(),
-        )
-        r.raise_for_status()
-        return r.json()["sheet"]["state"]
+        try:
+            r = requests.post(
+                f"{self.baseurl}/sheets/{sheet_id}/register",
+                json={},
+                headers=self._headers(),
+                timeout=(3.05,15),
+            )
+            r.raise_for_status()
+            return r.json()["sheet"]["state"]
+        except requests.exceptions.Timeout:
+            raise Exception("EPH API timed out")

@@ -2683,7 +2683,18 @@ def importCSV():
             try:
                 saleResult = SaleService(db, InvoiceReceiptService()).process_sale(item)
                 db.commit()
-
+            except Exception as e:
+                db.rollback()
+                logger.exception("Sold order %s failed | %s", item.idOrder, e)
+                failed.append(
+                    {
+                        "idOrder": item.idOrder,
+                        "name": item.reciever.get("nameAndSurname"),
+                        "reason": str(e),
+                    }
+                )
+                continue
+            try:
                 reciept = saleResult.receipt.raw
 
                 shipping_method = item.shipping["shippingMethod"].lower()
@@ -2731,8 +2742,7 @@ def importCSV():
                         packetsData["pickupPointPackets"].append(packetId)
 
             except Exception as e:
-                db.rollback()
-                logger.exception("Sold order %s failed | %s", item.idOrder, e)
+                logger.exception("Failed to create EPH label for order id: %s | %s", item.idOrder, e)
                 failed.append(
                     {
                         "idOrder": item.idOrder,
@@ -3054,14 +3064,20 @@ def invoice(kind):
         db = get_db()
 
         if kind == "invoice":
+        
+            zip_buffer = BytesIO()
             try:
                 saleResult = SaleService(db, InvoiceReceiptService()).process_sale(saleInput)
                 receipt = saleResult.receipt.raw
 
-                zip_buffer = BytesIO()
 
                 db.commit()
+            except Exception as e:
+                db.rollback
+                logger.exception("Failed to create invoice | %s ", e)
+                return jsonify({'status': 'error', 'message': f"Failed to create invoice: {e}"}), 400
 
+            try:
                 # EPHSERVICE create sheet
                 delivery = cartContent.get("delivery")
                 label = None
@@ -3121,7 +3137,6 @@ def invoice(kind):
                 return response
 
             except Exception as e:
-                db.rollback()
                 logger.exception("Failed to create invoice | %s", e)
                 return jsonify(
                     {"status": "error", "message": f"There was an error {e}, Error code: Ax24"}
