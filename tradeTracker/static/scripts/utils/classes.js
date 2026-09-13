@@ -52,7 +52,16 @@ export class queue {
 }
 
 export class CartLine {
-    constructor(cardName, cardNum, condition, auctionName, marketValue, allIds, grading = null) {
+    constructor(
+        cardName,
+        cardNum,
+        condition,
+        auctionName,
+        marketValue,
+        allIds,
+        grading = null,
+        itemType = 'card',
+    ) {
         this.cardName = cardName;
         this.cardNum = cardNum;
         this.condition = condition;
@@ -61,6 +70,7 @@ export class CartLine {
         this.cardIds = [allIds[0]];
         this.reservableIds = allIds.slice(1);
         this.grading = grading;
+        this.itemType = itemType;
         this.element = null;
     }
 
@@ -122,6 +132,7 @@ export class CartLine {
             cardIds: this.cardIds,
             reservableIds: this.reservableIds,
             grading: this.grading,
+            itemType: this.itemType,
         };
     }
 
@@ -135,6 +146,7 @@ export class CartLine {
             data.marketValue,
             [...data.cardIds, ...(data.reservableIds || [])],
             data.grading || null,
+            data.itemType || 'card',
         );
         // Override the constructor's default split
         line.cardIds = data.cardIds;

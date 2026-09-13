@@ -845,33 +845,13 @@ function attachCartLineListeners(cardDiv, line, updateDisplay) {
 }
 
 function saveCartContentToSession() {
-    const sealedEl = document.querySelector('.sealed-content').children;
     const bulkEl = document.querySelector('.bulk-cart-content');
     const holoEl = document.querySelector('.holo-cart-content');
     const exEl = document.querySelector('.ex-cart-content');
 
     // Persist cartLines via toJSON
-    let cartLinesData = cartLines.map((line) => line.toJSON());
+    const cartLinesData = cartLines.map((line) => line.toJSON());
 
-    let sealedData = [];
-    if (sealedEl.length > 0) {
-        for (const item of sealedEl) {
-            const sealed = {
-                sid: item.getAttribute('sid'),
-                auctionId: item.getAttribute('auction_id'),
-                name: item.querySelector('.sealed-name').textContent,
-                language: item.getAttribute('data-language') || 'en',
-                marketValue: item
-                    .querySelector('.sealed-price')
-                    .textContent.replace('€', '')
-                    .replace(',', '.')
-                    .trim(),
-                quantity: item.querySelector('.sealed-qty-display')?.textContent || '1',
-                available: item.getAttribute('data-available') || '',
-            };
-            sealedData.push(sealed);
-        }
-    }
     let bulkData = {};
     if (bulkEl.children.length > 0) {
         bulkData = {
@@ -901,7 +881,6 @@ function saveCartContentToSession() {
 
     const cartData = {
         cartLines: cartLinesData,
-        sealed: sealedData,
         bulk: bulkData,
         holo: holoData,
         ex: exData,
@@ -926,7 +905,11 @@ function loadCartContentFromSession() {
             cartData.cartLines.forEach((data) => {
                 const line = CartLine.fromJSON(data);
                 cartLines.push(line);
-                renderCartLine(line);
+                if (line.itemType === 'sealed') {
+                    renderSealedCartLine(line);
+                } else {
+                    renderCartLine(line);
+                }
             });
             rebuildExistingIDs();
         }
@@ -1460,7 +1443,9 @@ function shoppingCart() {
         // Expand cartLines into flat cards array for invoice
         let cards = [];
         cartLines.forEach((line) => {
-            cards.push(...line.toInvoiceItems());
+            if (line.itemType === 'card') {
+                cards.push(...line.toInvoiceItems());
+            }
         });
         cartContent.cards = cards;
 
@@ -1767,8 +1752,10 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
         }
 
         // Check if a matching CartLine already exists
-        const existing = cartLines.find((l) =>
-            l.matches(card.cardName, card.cardNum, card.condition, card.grading),
+        const existing = cartLines.find(
+            (l) =>
+                l.itemType === 'card' &&
+                l.matches(card.cardName, card.cardNum, card.condition, card.grading),
         );
         if (existing) {
             existing.cardIds.push(cardId);
@@ -1801,8 +1788,10 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
     }
 
     // Entry A: From search results (no cardId)
-    const existing = cartLines.find((l) =>
-        l.matches(card.cardName, card.cardNum, card.condition, card.grading),
+    const existing = cartLines.find(
+        (l) =>
+            l.itemType === 'card' &&
+            l.matches(card.cardName, card.cardNum, card.condition, card.grading),
     );
     if (existing) {
         // Try to increment existing line
@@ -1880,63 +1869,108 @@ function currentCartValue(type) {
 }
 
 function addSealedToCart(sealed, sid, auctionId = null, quantity = 1, available = null) {
-    if (!existingIDs.has(sid)) {
-        existingIDs.add(sid);
-        const sealedDiv = document.querySelector('.sealed-content');
-        const itemDiv = document.createElement('div');
-        itemDiv.setAttribute('sid', sid);
-        itemDiv.classList.add('sealed-item-cart');
-        const language = sealed.language || 'en';
-        itemDiv.setAttribute('data-language', language);
-        if (auctionId != null) {
-            itemDiv.setAttribute('auction_id', auctionId);
-        }
+    if (existingIDs.has(sid)) {
+        return;
+    }
 
-        const max = Number(available) > 0 ? Number(available) : Number(quantity) || 1;
-        let qty = Math.min(Math.max(Number(quantity) || 1, 1), max);
-        itemDiv.setAttribute('data-available', max);
+    const max = Number(available) > 0 ? Number(available) : Number(quantity) || 1;
+    const qty = Math.min(Math.max(Number(quantity) || 1, 1), max);
+    const line = new CartLine(
+        sealed.name,
+        sealed.language || 'en',
+        '',
+        auctionId === null || auctionId === undefined ? '' : String(auctionId),
+        sealed.market_value,
+        Array(max).fill(sid),
+        null,
+        'sealed',
+    );
+    line.cardIds = Array(qty).fill(sid);
+    line.reservableIds = Array(max - qty).fill(sid);
+    cartLines.push(line);
+    existingIDs.add(sid);
+    renderSealedCartLine(line);
+}
 
-        const renderSealed = () => {
-            const minusDisabled = qty <= 1 ? 'disabled' : '';
-            const plusDisabled = qty >= max ? 'disabled' : '';
-            itemDiv.innerHTML = `
-            <p class='sealed-name'>${DOMPurify.sanitize(sealed.name)}</p>
-            <p class='sealed-language'>${DOMPurify.sanitize(language)}</p>
-            <p class='sealed-price'>${DOMPurify.sanitize(sealed.market_value)}€</p>
+function renderSealedCartLine(line) {
+    const sealedDiv = document.querySelector('.sealed-content');
+    const itemDiv = document.createElement('div');
+    const sid = line.cardIds[0];
+    line.element = itemDiv;
+    itemDiv.setAttribute('sid', sid);
+    itemDiv.classList.add('sealed-item-cart');
+    itemDiv.setAttribute('data-language', line.cardNum);
+    itemDiv.setAttribute('data-available', line.quantity + line.reservableIds.length);
+    if (line.auctionName) {
+        itemDiv.setAttribute('auction_id', line.auctionName);
+    }
+
+    const updateDisplay = () => {
+        const minusDisabled = line.quantity <= 1 ? 'disabled' : '';
+        const plusDisabled = !line.canIncrement ? 'disabled' : '';
+        itemDiv.innerHTML = `
+            <p class='sealed-name'>${DOMPurify.sanitize(line.cardName)}</p>
+            <p class='sealed-language'>${DOMPurify.sanitize(line.cardNum)}</p>
+            <p class='sealed-price'>${DOMPurify.sanitize(line.marketValue)}€</p>
             <div class="qty-controls">
                 <button class="sealed-qty-minus" ${minusDisabled}>-</button>
-                <span class="sealed-qty-display">${qty}</span>
+                <span class="sealed-qty-display">${line.quantity}</span>
                 <button class="sealed-qty-plus" ${plusDisabled}>+</button>
             </div>
             <button class='remove-from-cart'>Remove</button>
-            `;
+        `;
 
-            itemDiv.querySelector('.sealed-qty-minus').addEventListener('click', () => {
-                if (qty > 1) {
-                    qty--;
-                    renderSealed();
-                    saveCartContentToSession();
+
+        const marketValueEl = itemDiv.querySelector('.sealed-price');
+        marketValueEl.addEventListener('dblclick', () => {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = String(line.marketValue).replace('€', '');
+            marketValueEl.replaceWith(input);
+            input.focus();
+            input.addEventListener('blur', () => {
+                let newValue = input.value.replace(',', '.');
+                if (isNaN(newValue) || newValue.trim() === '') {
+                    newValue = line.marketValue;
                 }
-            });
-            itemDiv.querySelector('.sealed-qty-plus').addEventListener('click', () => {
-                if (qty < max) {
-                    qty++;
-                    renderSealed();
-                    saveCartContentToSession();
-                }
-            });
-            itemDiv.querySelector('.remove-from-cart').addEventListener('click', () => {
-                existingIDs.delete(sid);
-                itemDiv.remove();
+                line.marketValue = newValue;
+                updateDisplay();
                 saveCartContentToSession();
             });
-        };
+            input.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') input.blur();
+            });
+        });
 
-        renderSealed();
-        sealedDiv.appendChild(itemDiv);
-        saveCartContentToSession();
-    }
-    return;
+
+        itemDiv.querySelector('.sealed-qty-minus').addEventListener('click', () => {
+            if (line.quantity <= 1) {
+                return;
+            }
+            line.decrement();
+            updateDisplay();
+            saveCartContentToSession();
+        });
+        itemDiv.querySelector('.sealed-qty-plus').addEventListener('click', () => {
+            if (!line.canIncrement) {
+                return;
+            }
+            line.increment();
+            updateDisplay();
+            saveCartContentToSession();
+        });
+        itemDiv.querySelector('.remove-from-cart').addEventListener('click', () => {
+            line.removeAll();
+            existingIDs.delete(sid);
+            cartLines.splice(cartLines.indexOf(line), 1);
+            itemDiv.remove();
+            saveCartContentToSession();
+        });
+    };
+
+    updateDisplay();
+    sealedDiv.appendChild(itemDiv);
+    saveCartContentToSession();
 }
 
 function addBulkToCart() {
