@@ -35,6 +35,11 @@ class AuctionInput:
             date=item.get("date", datetime.date.today().isoformat()),
         )
 
+@dataclass
+class EditModel:
+    field: str
+    value: Any
+
 class ItemType(enum.StrEnum):
     CARD = "card"
     SEALED = "sealed"

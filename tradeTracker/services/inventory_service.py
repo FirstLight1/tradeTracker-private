@@ -1,6 +1,7 @@
 import logging
 
-from tradeTracker.services.models import InventoryWriteOff, AuctionInput, ItemInput
+from tradeTracker.services.models import InventoryWriteOff, AuctionInput, ItemInput, EditModel
+import tradeTracker.CONSTANTS as CONSTANTS
 
 
 class InventoryService:
@@ -12,11 +13,53 @@ class InventoryService:
         try:
             self.db.execute("INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?,?,?,?)",
                 (auction.name, auction.buy_price, auction.date, auction.payments))
+            self.db.commit()
             return self.db.lastrowid
         except Exception as e:
             self.db.rollback()
             logging.exception("Failed to create auction | %s", e)
             raise Exception("Failed to create auction")
+
+    def delete_auction(self, auction_id: int) -> None:
+        try:
+            self.db.execute("DELETE FROM auctions WHERE id = ?", (auction_id,))
+            self.db.execute("DELETE FROM cards WHERE auction_id = ?", (auction_id,))
+            self.db.execute("DELETE FROM sealed WHERE auction_id = ?", (auction_id,))
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            logging.exception("Failed to delete auction | %s", e)
+            raise Exception("Failed to delete auction")
+
+    def update_auction(self, auction_id: int, auction: EditModel) -> None:
+        if auction.field not in CONSTANTS.AUCTION_ALLOWED_FIELDS:
+            raise ValueError(f"Invalid field: {auction.field}")
+
+        try:
+            self.db.execute(f"UPDATE auctions SET {auction.field} = ? WHERE id = ?", (auction.value, auction_id))
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            logging.exception("Failed to update auction | %s", e)
+            raise Exception("Failed to update auction")
+
+    def merge_auctions(self, auction_id: int, target_id: int) -> None:
+        try:
+            self.db.execute(
+                "UPDATE auctions SET auction_price = auction_price + (SELECT auction_price FROM auctions WHERE id = ?) WHERE id = ?",
+                (auction_id, target_id),
+            )
+            self.db.execute("UPDATE cards SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id))
+            self.db.execute("UPDATE sealed SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id))
+            self.db.execute(
+                "UPDATE bulk_items SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id)
+            )
+            self.db.execute("DELETE FROM auctions WHERE id = ?", (auction_id,))
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            logging.exception(f"Error merging auctions | {e}")
+            raise Exception("Failed to merge auctions")
 
     def item_writeoff(self, writeoff: InventoryWriteOff) -> None:
         try:

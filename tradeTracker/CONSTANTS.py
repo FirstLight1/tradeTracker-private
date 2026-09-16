@@ -14,6 +14,13 @@ ALLOWED_PAYMENT_TYPES = {
     "Online platobný systém",
 }
 
+AUCTION_ALLOWED_FIELDS = {
+    "auction_name",
+    "auction_price",
+    "date_created",
+    "payment_method",
+}
+
 BULK_ITEM_UNIT_PRICES = {"bulk": 0.01, "holo": 0.03, "ex": 0.15}
 
 COlLUMN_MAP = {
