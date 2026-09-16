@@ -1,11 +1,22 @@
 import logging
 
-from tradeTracker.services.models import InventoryWriteOff
+from tradeTracker.services.models import InventoryWriteOff, AuctionInput, ItemInput
 
 
 class InventoryService:
     def __init__(self, db):
         self.db = db
+
+
+    def create_auction(self, auction: AuctionInput) -> int:
+        try:
+            self.db.execute("INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?,?,?,?)",
+                (auction.name, auction.buy_price, auction.date, auction.payments))
+            return self.db.lastrowid
+        except Exception as e:
+            self.db.rollback()
+            logging.exception("Failed to create auction | %s", e)
+            raise Exception("Failed to create auction")
 
     def item_writeoff(self, writeoff: InventoryWriteOff) -> None:
         try:
