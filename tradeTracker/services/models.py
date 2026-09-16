@@ -8,12 +8,79 @@ from tradeTracker.services.grading_validation import (
 )
 from typing import Any
 import datetime
+import json
 
 
 @dataclass
 class Payment:
     type: str
     amount: float
+
+
+@dataclass
+class AuctionInput:
+    id: int | None
+    name: str 
+    buy_price: float 
+    date: str
+    payments: str | None
+
+    @classmethod
+    def from_dict(cls, item: dict[str, Any]) -> "AuctionInput":
+        return cls(
+            id=int(item.get("id")),
+            name=item["name"],
+            buy_price=float(money(item.get("buy_price"), "buy_price")),
+            payments=json.dumps(item["payments"]) if item.get("payments") else None,
+            date=item.get("date", datetime.date.today().isoformat()),
+        )
+
+class ItemType(enum.StrEnum):
+    CARD = "card"
+    SEALED = "sealed"
+
+@dataclass
+class ItemInput:
+    id: int | None
+    item_type: ItemType
+    name: str 
+    number: str | None
+    condition: str | None
+    lang: str | None
+    buy_price: float | None
+    market_value: float | None
+    sell_price: float | None
+    quantity: int = 1
+    date: str = datetime.date.today().isoformat()
+
+    @classmethod
+    def from_dict(cls, item: dict[str, Any]) -> "ItemInput":
+        return cls(
+            id=int(item.get("id")),
+            item_type=ItemType(item["item_type"]),
+            name=item["name"],
+            number=normalize_text(item.get("number"), "number"),
+            condition=normalize_text(item.get("condition"), "condition"),
+            lang=normalize_text(item.get("lang"), "language"),
+            buy_price=float(money(item.get("buy_price"), "buy_price")),
+            market_value=float(money(item.get("market_value"), "market_value")),
+            sell_price=float(money(item.get("sell_price"), "sell_price")),
+            quantity=int(item.get("quantity", 1)),
+            date= item.get("date", datetime.date.today().isoformat()),
+        )
+
+class BulkType(enum.StrEnum):
+    BULK = "bulk"
+    HOLO = "holo"
+    EX = "ex"
+
+@dataclass
+class BulkInput:
+    type: BulkType
+    quantity: int
+    sell_price: float
+    assigned_id: int
+
 
 
 @dataclass
@@ -215,3 +282,4 @@ class InventoryWriteOff:
             disposal_note=normalize_text(item.get("disposal_note"), "disposal_note"),
             quantity=quantity,
         )
+
