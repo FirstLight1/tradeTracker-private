@@ -1,6 +1,7 @@
 import logging
 
 from tradeTracker.services.models import InventoryWriteOff, AuctionInput, ItemInput, EditModel
+from tradeTracker.utils.cardmarket import resolve_cardmarket_id
 import tradeTracker.CONSTANTS as CONSTANTS
 
 
@@ -60,6 +61,58 @@ class InventoryService:
             self.db.rollback()
             logging.exception(f"Error merging auctions | {e}")
             raise Exception("Failed to merge auctions")
+
+
+    def add_items(self, items: list[ItemInput], auction_id: int) -> None:
+        cards_to_add = []
+        sealed_to_add = []
+        for item in items:
+            if item.item_type == "card":
+                for _ in range(item.quantity):
+                    to_add = (
+                        item.name,
+                        item.normalized_name,
+                        item.number,
+                        item.condition,
+                        item.lang,
+                        item.buy_price,
+                        item.market_value,
+                        resolve_cardmarket_id(self.db, item, "name", "card_num"),
+                        auction_id,
+                    )
+                    cards_to_add.append(to_add)
+            elif item.item_type == "sealed":
+                to_add = (
+                    item.name,
+                    item.normalized_name,
+                    item.quantity,
+                    item.lang,
+                    item.buy_price,
+                    item.market_value,
+                    item.date,
+                    resolve_cardmarket_id(self.db, item, "name", "card_num"),
+                    auction_id,
+                )
+                sealed_to_add.append(to_add)
+            else:
+                raise ValueError(f"Invalid item type: {item.item_type}")
+
+        try:
+            self.db.executemany(
+                "INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, cardmarketId, auction_id) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                cards_to_add,
+            )
+            self.db.executemany(
+                "INSERT INTO sealed (name, normalized_name, quantity, language, price, market_value, date, cardmarketId, auction_id) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                sealed_to_add,
+            )
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            logging.exception("Failed to add items | %s", e)
+            raise Exception("Failed to add items")
 
     def item_writeoff(self, writeoff: InventoryWriteOff) -> None:
         try:

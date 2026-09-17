@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import enum
+from tradeTracker.utils.formating import normalize
 from tradeTracker.services.grading_validation import (
     grade_number,
     money,
@@ -49,6 +50,7 @@ class ItemInput:
     id: int | None
     item_type: ItemType
     name: str 
+    normalized_name: str 
     number: str | None
     condition: str | None
     lang: str | None
@@ -64,6 +66,7 @@ class ItemInput:
             id=int(item.get("id")),
             item_type=ItemType(item["item_type"]),
             name=item["name"],
+            normalized_name=normalize(item.get("name")),
             number=normalize_text(item.get("number"), "number"),
             condition=normalize_text(item.get("condition"), "condition"),
             lang=normalize_text(item.get("lang"), "language"),
