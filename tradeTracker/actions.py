@@ -37,6 +37,8 @@ from tradeTracker.services.models import (
     PacketaHomeDeliveryResult,
     InventoryWriteOff,
 )
+from tradeTracker.utils.formating import normalize
+from tradeTracker.utils.cardmarket import resolve_cardmarket_id
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaReceiptService
 from tradeTracker.services.cfAuth import verify_token, require_api_token
@@ -64,42 +66,7 @@ dataList = []
 latest = None
 
 
-def normalize(s: str | None) -> str | None:
-    if s is None:
-        return None
-    # NFD decomposes é → e + combining accent, then encode/decode drops the accent
-    return unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode("ascii").upper()
 
-
-def resolve_cardmarket_id(db, item, name_key, card_num_key):
-    """Use an imported ID when present, otherwise resolve one external match."""
-    supplied_id = item.get("cardmarketId")
-    if supplied_id is not None and str(supplied_id).strip():
-        return str(supplied_id).strip()
-
-    name = item.get(name_key)
-    card_num = item.get(card_num_key) or ""
-    if not name:
-        logger.warning("Unable to resolve CardMarket ID: item has no name")
-        return None
-
-    matches = db.execute(
-        "SELECT cardmarketId FROM external "
-        "WHERE lower(trim(card_name)) = lower(trim(?)) "
-        "AND lower(trim(COALESCE(card_num, ''))) = lower(trim(?))",
-        (name, card_num),
-    ).fetchall()
-    if len(matches) == 1:
-        return matches[0]["cardmarketId"]
-
-    reason = "no match" if not matches else "multiple matches"
-    logger.warning(
-        "Unable to resolve CardMarket ID: %s | name: %s | card_num: %s",
-        reason,
-        name,
-        card_num,
-    )
-    return None
 
 def get_bulk_item_unit_price(item_type):
     return CONSTANTS.BULK_ITEM_UNIT_PRICES.get(item_type, 0)

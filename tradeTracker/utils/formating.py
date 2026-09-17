@@ -1,4 +1,5 @@
 import datetime
+import unicodedata
 
 
 def format_iso_date(iso_str):
@@ -16,3 +17,10 @@ def format_iso_date(iso_str):
 
     except (ValueError, TypeError):
         return str(iso_str)
+
+def normalize(s: str | None) -> str | None:
+    if s is None:
+        return None
+    # NFD decomposes é → e + combining accent, then encode/decode drops the accent
+    return unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode("ascii").upper()
+
