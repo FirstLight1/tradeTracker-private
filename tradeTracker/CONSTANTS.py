@@ -21,6 +21,15 @@ AUCTION_ALLOWED_FIELDS = {
     "payment_method",
 }
 
+ITEM_ALLOWED_FIELDS = {
+    "card_name",
+    "card_num",
+    "condition",
+    "language",
+    "card_price",
+    "market_value",
+    "quantity",
+}
 BULK_ITEM_UNIT_PRICES = {"bulk": 0.01, "holo": 0.03, "ex": 0.15}
 
 COlLUMN_MAP = {

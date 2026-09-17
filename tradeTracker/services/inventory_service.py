@@ -114,6 +114,49 @@ class InventoryService:
             logging.exception("Failed to add items | %s", e)
             raise Exception("Failed to add items")
 
+    def delete_item(self, item_id: int, item_type: str) -> None:
+        if item_type == "card":
+            try:
+                self.db.execute("DELETE FROM cards WHERE id = ?", (item_id,))
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                logging.error(f"Error deleting card {item_id}: {e}")
+                raise Exception("Failed to delete card")
+        elif item_type == "sealed":
+            try:
+                self.db.execute("DELETE FROM sealed WHERE id = ?", (item_id,))
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                logging.error(f"Error deleting sealed {item_id}: {e}")
+                raise Exception("Failed to delete sealed")
+        else:
+            raise ValueError(f"Invalid item type: {item_type}")
+
+    def update_item(self, item_id: int, item: EditModel, item_type: str) -> None:
+        if item.field not in CONSTANTS.ITEM_ALLOWED_FIELDS:
+            raise ValueError(f"Invalid field: {item.field}")
+
+        if item_type == "card":
+            try:
+                self.db.execute(f"UPDATE cards SET {item.field} = ? WHERE id = ?", (item.value, item_id))
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                logging.exception(f"Failed to update card {item_id} | {e}")
+                raise Exception("Failed to update card")
+        elif item_type == "sealed":
+            try:
+                self.db.execute(f"UPDATE sealed SET {item.field} = ? WHERE id = ?", (item.value, item_id))
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                logging.exception(f"Failed to update sealed {item_id} | {e}")
+                raise Exception("Failed to update sealed")
+        else:
+            raise ValueError(f"Invalid item type: {item_type}")
+
     def item_writeoff(self, writeoff: InventoryWriteOff) -> None:
         try:
             if writeoff.item_type == "card":
