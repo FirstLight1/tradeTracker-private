@@ -1,5 +1,5 @@
 import logging
-
+from typing import Any
 from tradeTracker.services.models import InventoryWriteOff, AuctionInput, ItemInput, EditModel
 from tradeTracker.utils.cardmarket import resolve_cardmarket_id
 import tradeTracker.CONSTANTS as CONSTANTS
@@ -9,6 +9,46 @@ class InventoryService:
     def __init__(self, db):
         self.db = db
 
+    def load_auctions(self) -> list[dict[str, Any]]:
+        rows = self.db.execute("""
+            SELECT
+                a.*,
+                b.sale_id,
+                s.invoice_number
+            FROM auctions AS a
+            LEFT JOIN barter AS b
+                ON b.auction_id = a.id
+            LEFT JOIN sales AS s
+                ON s.id = b.sale_id
+            WHERE
+                a.id = 1
+                OR EXISTS (
+                    SELECT 1
+                    FROM cards AS c
+                    WHERE c.auction_id = a.id
+                    AND c.sold_date IS NULL
+                    AND c.disposal_reason IS NULL
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM sale_items AS si
+                        WHERE si.card_id = c.id
+                    )
+                )
+            ORDER BY
+                CASE WHEN a.id = 1 THEN 0 ELSE 1 END,
+                a.id DESC;
+                """).fetchall()
+        return [dict(row) for row in rows]
+
+    def load_purchases(self) -> list[dict[str, Any]]:
+        rows = self.db.execute("""
+            SELECT
+                *
+            FROM auctions
+            ORDER BY
+                id DESC;
+            """).fetchall()
+        return [dict(row) for row in rows]
 
     def create_auction(self, auction: AuctionInput) -> int:
         try:
