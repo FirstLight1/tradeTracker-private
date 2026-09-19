@@ -308,8 +308,81 @@ class InventoryService:
         except Exception as e:
             raise Exception(f"Error marking card as sold | {e}")
 
-    
+    def allocate_sealed_to_sale(
+        self,
+        name: str,
+        language: str,
+        quantity: int,
+        sale_id: int,
+        sell_price: float,
+    ) -> None:
+        if quantity <= 0:
+            raise ValueError("Sealed quantity must be greater than zero")
 
+        rows = self.db.execute(
+            "SELECT id, quantity FROM sealed "
+            "WHERE lower(name) = lower(?) AND language = ? AND sale_id IS NULL "
+            "AND opened = 0 AND disposal_reason IS NULL ORDER BY id ASC",
+            (name, language),
+        ).fetchall()
+        if sum(row["quantity"] for row in rows) < quantity:
+            raise ValueError("Sealed item is not available in the requested quantity")
+
+        remaining = quantity
+        for row in rows:
+            if remaining == 0:
+                break
+            allocated = min(row["quantity"], remaining)
+            self.allocate_sealed_row_to_sale(
+                row["id"], allocated, sale_id, sell_price
+            )
+            remaining -= allocated
+
+    def allocate_sealed_row_to_sale(
+        self,
+        sealed_id: int,
+        quantity: int,
+        sale_id: int,
+        sell_price: float,
+    ) -> None:
+        if quantity <= 0:
+            raise ValueError("Sealed quantity must be greater than zero")
+
+        row = self.db.execute(
+            "SELECT quantity FROM sealed WHERE id = ? AND sale_id IS NULL "
+            "AND opened = 0 AND disposal_reason IS NULL",
+            (sealed_id,),
+        ).fetchone()
+        if row is None or quantity > row["quantity"]:
+            raise ValueError("Sealed item is not available in the requested quantity")
+
+        if quantity == row["quantity"]:
+            updated = self.db.execute(
+                "UPDATE sealed SET sale_id = ?, sell_price = ? "
+                "WHERE id = ? AND quantity = ? AND sale_id IS NULL "
+                "AND opened = 0 AND disposal_reason IS NULL",
+                (sale_id, sell_price, sealed_id, quantity),
+            )
+            if updated.rowcount != 1:
+                raise ValueError("Sealed item is no longer available")
+            return
+
+        updated = self.db.execute(
+            "UPDATE sealed SET quantity = quantity - ? "
+            "WHERE id = ? AND quantity > ? AND sale_id IS NULL "
+            "AND opened = 0 AND disposal_reason IS NULL",
+            (quantity, sealed_id, quantity),
+        )
+        if updated.rowcount != 1:
+            raise ValueError("Sealed item is no longer available")
+
+        self.db.execute(
+            "INSERT INTO sealed (name, normalized_name, quantity, language, price, "
+            "market_value, sell_price, date, sale_id, auction_id, opened, cardMarketID) "
+            "SELECT name, normalized_name, ?, language, price, market_value, ?, date, "
+            "?, auction_id, 0, cardMarketID FROM sealed WHERE id = ?",
+            (quantity, sell_price, sale_id, sealed_id),
+        )
 
     def item_writeoff(self, writeoff: InventoryWriteOff) -> None:
         try:
