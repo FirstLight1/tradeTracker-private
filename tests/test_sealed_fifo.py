@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from tradeTracker import create_app
 from tradeTracker.db import get_db
+from tradeTracker.services.inventory_service import InventoryService
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.models import SaleInput
 from tradeTracker.actions import normalize
@@ -81,7 +82,9 @@ class SealedFIFOTestCase(unittest.TestCase):
         """Sell 2 of a 5-unit row -> inventory row drops to 3, sold row of 2 created."""
         with self.app.app_context():
             db = get_db()
-            self._svc(db)._deduct_sealed_fifo("Booster Box", "en", 2, 999)
+            InventoryService(db).allocate_sealed_to_sale(
+                "Booster Box", "en", 2, 999, 0
+            )
             db.commit()
 
             # Original inventory row reduced and still unsold
@@ -107,7 +110,9 @@ class SealedFIFOTestCase(unittest.TestCase):
         """Sell exactly 5 of a 5-unit row -> row stamped sold, no new row."""
         with self.app.app_context():
             db = get_db()
-            self._svc(db)._deduct_sealed_fifo("Booster Box", "en", 5, 999)
+            InventoryService(db).allocate_sealed_to_sale(
+                "Booster Box", "en", 5, 999, 0
+            )
             db.commit()
 
             row = db.execute("SELECT quantity, sale_id FROM sealed WHERE id = 10").fetchone()
@@ -122,7 +127,9 @@ class SealedFIFOTestCase(unittest.TestCase):
         """Sell 7 -> consume all 5 from oldest row, split 2 from the next."""
         with self.app.app_context():
             db = get_db()
-            self._svc(db)._deduct_sealed_fifo("Booster Box", "en", 7, 999)
+            InventoryService(db).allocate_sealed_to_sale(
+                "Booster Box", "en", 7, 999, 0
+            )
             db.commit()
 
             # Oldest row fully sold (whole row, quantity kept)

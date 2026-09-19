@@ -5,6 +5,7 @@ import unittest
 from tradeTracker import actions, create_app
 from tradeTracker.actions import normalize
 from tradeTracker.db import get_db
+from tradeTracker.services.inventory_service import InventoryService
 from tradeTracker.services.models import SaleInput
 from tradeTracker.services.sale_service import SaleService
 
@@ -103,14 +104,19 @@ class SealedLanguageTestCase(unittest.TestCase):
             with self.assertRaises(ValueError):
                 SaleService(db, None)._check_inventory(_sale_input("jp", 1))
 
-            SaleService(db, None)._deduct_sealed_fifo("Booster Box", "jp", 1, 999, 120.0)
+            with self.assertRaises(ValueError):
+                InventoryService(db).allocate_sealed_to_sale(
+                    "Booster Box", "jp", 1, 999, 120.0
+                )
             row = db.execute("SELECT quantity, sale_id FROM sealed WHERE id = 11").fetchone()
             self.assertEqual((row["quantity"], row["sale_id"]), (3, None))
 
     def test_fifo_preserves_language_and_does_not_touch_other_stock(self):
         with self.app.app_context():
             db = get_db()
-            SaleService(db, None)._deduct_sealed_fifo("Booster Box", "jp", 2, 999, 120.0)
+            InventoryService(db).allocate_sealed_to_sale(
+                "Booster Box", "jp", 2, 999, 120.0
+            )
             db.commit()
 
             english = db.execute("SELECT quantity, sale_id FROM sealed WHERE id = 10").fetchone()

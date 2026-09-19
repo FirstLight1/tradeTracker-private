@@ -1,7 +1,10 @@
 import pytest
 
+from tradeTracker.actions import orderDebit
 from tradeTracker.db import get_db
 from tradeTracker.services.inventory_service import InventoryService
+from tradeTracker.services.models import SaleInput
+from tradeTracker.services.sale_service import SaleService
 
 
 @pytest.fixture
@@ -67,6 +70,83 @@ def test_allocate_sealed_to_sale_uses_fifo_and_splits_last_row(app):
             "cardMarketID": "CM-11",
         }
         db.rollback()
+
+
+def test_sale_service_allocates_sealed_inventory_through_inventory_service(app):
+    with app.app_context():
+        db = get_db()
+        sale_input = SaleInput(
+            reciever={},
+            cards=[],
+            sealed=[
+                {
+                    "sealedName": "Booster Box",
+                    "language": "en",
+                    "quantity": 2,
+                    "marketValue": 120,
+                }
+            ],
+            bulk=None,
+            holo=None,
+            ex=None,
+            shipping=None,
+            payments=[],
+        )
+
+        SaleService(db, None)._insert_sale_items(999, sale_input)
+
+        available = db.execute(
+            "SELECT quantity FROM sealed WHERE id = 10"
+        ).fetchone()[0]
+        sold = db.execute(
+            "SELECT quantity, sell_price FROM sealed WHERE sale_id = 999"
+        ).fetchone()
+        assert available == 3
+        assert tuple(sold) == (2, 120.0)
+        db.rollback()
+
+
+def test_order_debit_allocates_from_the_selected_sealed_row(app):
+    with app.app_context():
+        db = get_db()
+
+        error = orderDebit(
+            db,
+            999,
+            sealed=[{"id": 11, "quantity": 3, "marketValue": 120}],
+        )
+
+        assert error is None
+        available = db.execute(
+            "SELECT quantity FROM sealed WHERE id = 11"
+        ).fetchone()[0]
+        sold = db.execute(
+            "SELECT quantity, sell_price FROM sealed WHERE sale_id = 999"
+        ).fetchone()
+        sale_total = db.execute(
+            "SELECT total_amount FROM sales WHERE id = 999"
+        ).fetchone()[0]
+        assert available == 1
+        assert tuple(sold) == (3, 120.0)
+        assert sale_total == 360.0
+        db.rollback()
+
+
+def test_order_debit_rejects_zero_sealed_quantity(app):
+    with app.app_context():
+        db = get_db()
+
+        error = orderDebit(
+            db,
+            999,
+            sealed=[{"id": 11, "quantity": 0, "marketValue": 120}],
+        )
+
+        assert isinstance(error, ValueError)
+        row = db.execute(
+            "SELECT quantity, sale_id FROM sealed WHERE id = 11"
+        ).fetchone()
+        assert tuple(row) == (4, None)
 
 
 def test_allocate_exact_sealed_row_does_not_consume_another_lot(app):
