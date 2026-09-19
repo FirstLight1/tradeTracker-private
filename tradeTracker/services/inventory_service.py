@@ -102,6 +102,42 @@ class InventoryService:
             logging.exception(f"Error merging auctions | {e}")
             raise Exception("Failed to merge auctions")
 
+    def load_items(self, auction_id: int | None, filter: str | None = None) -> list[dict[str, Any]]:
+        if filter is None or filter == "":
+            cardFilter = "1=1"
+            sealedFilter = "1=1"
+        else:
+            cardFilter = "s.sold_date IS NULL AND si.card_id IS NULL AND c.disposal_reason IS NULL"
+            sealedFilter = "sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL"
+        if auction_id is not None:
+            cardRows = self.db.execute(f"""
+                SELECT c.*,"card" as item_type, gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, gsc.cert_number
+                FROM cards AS c
+                LEFT JOIN sale_items AS si
+                    ON c.id = si.card_id
+                LEFT JOIN grading_submission_cards AS gsc
+                    ON c.id = gsc.card_id
+                    AND gsc.is_current = 1
+                WHERE c.auction_id = ?
+                AND {cardFilter}
+                """,(auction_id,)).fetchall()
+            sealedRows = self.db.execute(f"""
+                SELECT *, "sealed" as item_type
+                FROM sealed
+                WHERE auction_id = ?
+                AND {sealedFilter}
+                """,(auction_id,)).fetchall()
+            items =  cardRows + sealedRows
+            return [dict(row) for row in items]
+        else:
+            rows = self.db.execute(f"""
+            SELECT *, "sealed" as item_type
+            FROM sealed
+            WHERE {sealedFilter}
+            AND auction_id IS NULL
+            """).fetchall()
+            return [dict(row) for row in rows]
+                                    
 
     def add_items(self, items: list[ItemInput], auction_id: int) -> None:
         cards_to_add = []
