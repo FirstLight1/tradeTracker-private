@@ -3,6 +3,7 @@ from typing import Any
 from tradeTracker.services.models import InventoryWriteOff, AuctionInput, ItemInput, EditModel, GradeStatus
 from tradeTracker.utils.cardmarket import resolve_cardmarket_id
 import tradeTracker.CONSTANTS as CONSTANTS
+import tradeTracker.utils.formating as formating
 
 
 class InventoryService:
@@ -232,6 +233,42 @@ class InventoryService:
                 raise Exception("Failed to update sealed")
         else:
             raise ValueError(f"Invalid item type: {item_type}")
+
+    def mark_sealed_opened(self, sealed_id: int, auction_id: int | None = None) -> int:
+        try:
+            cur = self.db.cursor()
+            row = cur.execute(
+                "SELECT * FROM sealed WHERE id = ? AND sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL",
+                (sealed_id,),
+            ).fetchone()
+            if row["quantity"] == 1:
+                cur.execute(
+                    "UPDATE sealed SET opened = 1 WHERE id = ?",
+                    (sealed_id,),
+                )
+                return sealed_id
+            else:
+                cur.execute(
+                    "UPDATE sealed SET quantity = quantity - 1 WHERE id = ?",
+                    (sealed_id,),
+                )
+                cur.execute(
+                    "INSERT INTO sealed (name, normalized_name, language, price, market_value, date, cardmarketId, auction_id, opened) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        row["name"],
+                        formating.normalize(row["name"]),
+                        row["language"],
+                        row["price"],
+                        row["market_value"],
+                        row["date"],
+                        row["cardmarketId"],
+                        auction_id if auction_id is not None else None,
+                        1,
+                    ),
+                )
+                return cur.lastrowid
+        except Exception as e:
+            raise Exception(f"Error opening sealed item | {e}")
 
     def get_sellable_card(self, card_id: int) -> dict[str, Any]:
         card = self.db.execute("""
