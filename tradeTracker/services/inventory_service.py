@@ -1,14 +1,14 @@
 import logging
 from typing import Any
-from tradeTracker.services.models import InventoryWriteOff, AuctionInput, ItemInput, EditModel
+from tradeTracker.services.models import InventoryWriteOff, AuctionInput, ItemInput, EditModel, GradeStatus
 from tradeTracker.utils.cardmarket import resolve_cardmarket_id
 import tradeTracker.CONSTANTS as CONSTANTS
 
 
 class InventoryService:
     def __init__(self, db):
-        self.db = db
-
+        self.db = db 
+        
     def load_auctions(self) -> list[dict[str, Any]]:
         rows = self.db.execute("""
             SELECT
@@ -232,6 +232,36 @@ class InventoryService:
                 raise Exception("Failed to update sealed")
         else:
             raise ValueError(f"Invalid item type: {item_type}")
+
+    def get_sellable_card(self, card_id: int) -> dict[str, Any]:
+        card = self.db.execute("""
+                SELECT c.card_name, c.card_num, c.condition, c.card_price, 
+                gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, 
+                gsc.cert_number, gsc.landed_cost, gsc.submission_id, gs.status 
+                FROM cards c 
+                LEFT JOIN sale_items si ON si.card_id = c.id 
+                LEFT JOIN grading_submission_cards gsc 
+                ON gsc.card_id = c.id AND gsc.is_current = 1 
+                LEFT JOIN grading_submissions gs ON gs.id = gsc.submission_id 
+                WHERE c.id = ? AND c.sold_date IS NULL AND si.card_id IS NULL 
+                AND c.disposal_reason IS NULL 
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM grading_submission_cards gsc2
+                    JOIN grading_submissions gs2 ON gs2.id = gsc2.submission_id
+                    WHERE gsc2.card_id = c.id
+                    AND gsc2.is_current = 1
+                    AND gs2.status IN ('submitted', 'grading')
+                )
+                """,
+                (card_id,),
+            ).fetchone()
+        if not card or (
+            card["submission_id"] is not None
+            and card["status"] != GradeStatus.GRADED
+        ):
+            raise ValueError(f"Card with id:{card_id} is not available")
+        return dict(card)
 
     def item_writeoff(self, writeoff: InventoryWriteOff) -> None:
         try:
