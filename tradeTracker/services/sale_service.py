@@ -5,6 +5,7 @@ import tradeTracker.services.models as models
 import tradeTracker.CONSTANTS as CONSTANTS
 import json
 from Crypto.Cipher import AES
+from tradeTracker.services.inventory_service import InventoryService
 
 if os.environ.get("FLASK_ENV") != "production":
     from dotenv import load_dotenv
@@ -16,6 +17,7 @@ class SaleService:
     def __init__(self, db, receipt_service):
         self.db = db
         self.receipt_service = receipt_service
+        self.inventory_service = InventoryService(db)
 
     def process_sale(self, sale_input) -> models.SaleResult:
         try:
@@ -200,7 +202,7 @@ class SaleService:
         sealed = sale_input.sealed
         if sealed:
             for item in sealed:
-                self._deduct_sealed_fifo(
+                self.inventory_service.allocate_sealed_to_sale(
                     item.get("sealedName"),
                     item.get("language", "en"),
                     int(item.get("quantity", 1)),
@@ -294,62 +296,5 @@ class SaleService:
                     "UPDATE bulk_items SET quantity = ?, total_price = quantity * unit_price "
                     "WHERE id = ?",
                     (new_quantity, item_id),
-                )
-                remaining = 0
-
-    def _deduct_sealed_fifo(self, name, language, sell_qty, sale_id, sell_price=None):
-        """Deduct sealed units for a product using FIFO (oldest rows first).
-
-        When a row is only partially sold it is split: the inventory row's
-        quantity is reduced and a new row carrying the sold units (with the
-        same per-unit price/market_value, purchase date and auction) is
-        inserted against this sale, so reports stay accurate per source row.
-        """
-        from tradeTracker.actions import normalize
-
-        remaining = sell_qty
-
-        rows = self.db.execute(
-            "SELECT id, name, language, quantity, price, market_value, date, auction_id, "
-            "cardMarketID FROM sealed "
-            "WHERE lower(name) = lower(?) AND language = ? AND sale_id IS NULL "
-            "AND opened = 0 AND disposal_reason IS NULL ORDER BY id ASC",
-            (name, language),
-        ).fetchall()
-
-        for row in rows:
-            if remaining <= 0:
-                break
-
-            if row["quantity"] <= remaining:
-                # Whole row consumed - attach it to this sale (keeps its quantity)
-                self.db.execute(
-                    "UPDATE sealed SET sale_id = ?, sell_price = ? WHERE id = ?",
-                    (sale_id, sell_price, row["id"]),
-                )
-                remaining -= row["quantity"]
-            else:
-                # Partial - shrink the inventory row and record the sold units
-                self.db.execute(
-                    "UPDATE sealed SET quantity = quantity - ? WHERE id = ?",
-                    (remaining, row["id"]),
-                )
-                self.db.execute(
-                    "INSERT INTO sealed(name, normalized_name, language, quantity, price, "
-                    "market_value, sell_price, date, auction_id, sale_id, cardMarketID) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        row["name"],
-                        normalize(row["name"]),
-                        language,
-                        remaining,
-                        row["price"],
-                        row["market_value"],
-                        sell_price,
-                        row["date"],
-                        row["auction_id"],
-                        sale_id,
-                        row["cardMarketID"],
-                    ),
                 )
                 remaining = 0

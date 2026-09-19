@@ -1267,33 +1267,16 @@ def orderDebit(db, saleId, cards=None, sealed=None):
                 valueChange += float(card.get("marketValue"))
 
         if sealed:
+            inventory_service = InventoryService(db)
             for item in sealed:
-                qty = int(item.get("quantity") or 1)
-                if qty <= 0:
-                    continue
+                requested_quantity = item.get("quantity")
+                qty = int(1 if requested_quantity is None else requested_quantity)
                 sealed_id = item.get("id")
-                row = db.execute(
-                    "SELECT quantity FROM sealed WHERE id = ? AND sale_id IS NULL "
-                    "AND opened = 0 AND disposal_reason IS NULL",
-                    (sealed_id,),
-                ).fetchone()
-                if row is None:
-                    raise Exception(f"Sealed item {sealed_id} not found")
-                if qty >= row["quantity"]:
-                    db.execute("UPDATE sealed SET sale_id = ? WHERE id = ?", (saleId, sealed_id))
-                else:
-                    db.execute(
-                        "UPDATE sealed SET quantity = quantity - ? WHERE id = ?", (qty, sealed_id)
-                    )
-                    db.execute(
-                        """INSERT INTO sealed (name, normalized_name, quantity, language, price, market_value,
-                                               date, sale_id, auction_id, opened, cardMarketID)
-                           SELECT name, normalized_name, ?, language, price, market_value,
-                                  date, ?, auction_id, opened, cardMarketID
-                           FROM sealed WHERE id = ?""",
-                        (qty, saleId, sealed_id),
-                    )
-                valueChange += float(item.get("marketValue")) * qty
+                sell_price = float(item.get("marketValue") or 0)
+                inventory_service.allocate_sealed_row_to_sale(
+                    sealed_id, qty, saleId, sell_price
+                )
+                valueChange += sell_price * qty
         db.execute(
             "UPDATE sales SET total_amount = total_amount + ? WHERE id = ?", (valueChange, saleId)
         )
