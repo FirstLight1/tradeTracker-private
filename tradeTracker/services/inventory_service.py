@@ -263,6 +263,17 @@ class InventoryService:
             raise ValueError(f"Card with id:{card_id} is not available")
         return dict(card)
 
+    def mark_sold_card(self, card_id: int, sale_date: str) -> None:
+        try:
+            self.db.execute("UPDATE cards SET sold_date = ? WHERE id = ?", (sale_date, card_id))
+        except ValueError as e:
+            raise ValueError(f"Card with id:{card_id} is not available")
+        except Exception as e:
+            raise Exception(f"Error marking card as sold | {e}")
+
+    
+
+
     def item_writeoff(self, writeoff: InventoryWriteOff) -> None:
         try:
             if writeoff.item_type == "card":
