@@ -21,18 +21,18 @@ class Payment:
 @dataclass
 class AuctionInput:
     id: int | None
-    name: str 
-    buy_price: float 
+    name: str
+    buy_price: float | None
     date: str
-    payments: str | None
+    payments: str | None | list[dict[str, Any]]
 
     @classmethod
     def from_dict(cls, item: dict[str, Any]) -> "AuctionInput":
         return cls(
-            id=int(item.get("id")),
+            id=(item.get("id", None)),
             name=item["name"],
-            buy_price=float(money(item.get("buy_price"), "buy_price")),
-            payments=json.dumps(item["payments"]) if item.get("payments") else None,
+            buy_price=float(item["buy_price"]) if item.get("buy_price") else None,
+            payments=item["payments"] if item.get("payments") else None,
             date=item.get("date", datetime.date.today().isoformat()),
         )
 
@@ -59,6 +59,7 @@ class ItemInput:
     sell_price: float | None
     quantity: int = 1
     date: str = datetime.date.today().isoformat()
+    cardmarketId: str | None = None
 
     @classmethod
     def from_dict(cls, item: dict[str, Any]) -> "ItemInput":
@@ -75,6 +76,7 @@ class ItemInput:
             sell_price=float(money(item.get("sell_price"), "sell_price")),
             quantity=int(item.get("quantity", 1)),
             date= item.get("date", datetime.date.today().isoformat()),
+            cardmarketId=item.get("cardmarketId", None),
         )
 
 class BulkType(enum.StrEnum):

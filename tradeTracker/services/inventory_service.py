@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 from tradeTracker.services.models import InventoryWriteOff, AuctionInput, ItemInput, EditModel, GradeStatus
-from tradeTracker.utils.cardmarket import resolve_cardmarket_id
+from tradeTracker.utils.cardmarket import resolve_cardmarket_id_model
 import tradeTracker.CONSTANTS as CONSTANTS
 import tradeTracker.utils.formating as formating
 
@@ -51,15 +51,24 @@ class InventoryService:
             """).fetchall()
         return [dict(row) for row in rows]
 
-    def create_auction(self, auction: AuctionInput) -> int:
+    def create_auction_with_items(self, auction: AuctionInput, items: list[ItemInput]) -> int:
         try:
-            self.db.execute("INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?,?,?,?)",
-                (auction.name, auction.buy_price, auction.date, auction.payments))
+            auction_id = self._create_auction(auction)
+            self._insert_items(items, auction_id)
             self.db.commit()
-            return self.db.lastrowid
+            return auction_id
         except Exception as e:
             self.db.rollback()
             logging.exception("Failed to create auction | %s", e)
+            raise Exception("Failed to create auction")
+
+    def _create_auction(self, auction: AuctionInput) -> int:
+        try:
+            cur = self.db.cursor()
+            cur.execute("INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?,?,?,?)",
+                (auction.name, auction.buy_price, auction.date, auction.payments))
+            return cur.lastrowid
+        except Exception as e:
             raise Exception("Failed to create auction")
 
     def delete_auction(self, auction_id: int) -> None:
@@ -140,7 +149,7 @@ class InventoryService:
             return [dict(row) for row in rows]
                                     
 
-    def add_items(self, items: list[ItemInput], auction_id: int) -> None:
+    def _insert_items(self, items: list[ItemInput], auction_id: int) -> None:
         cards_to_add = []
         sealed_to_add = []
         for item in items:
@@ -154,7 +163,7 @@ class InventoryService:
                         item.lang,
                         item.buy_price,
                         item.market_value,
-                        resolve_cardmarket_id(self.db, item, "name", "card_num"),
+                        resolve_cardmarket_id_model(self.db, item, "name", "card_num"),
                         auction_id,
                     )
                     cards_to_add.append(to_add)
@@ -167,7 +176,7 @@ class InventoryService:
                     item.buy_price,
                     item.market_value,
                     item.date,
-                    resolve_cardmarket_id(self.db, item, "name", "card_num"),
+                    resolve_cardmarket_id_model(self.db, item, "name", "card_num"),
                     auction_id,
                 )
                 sealed_to_add.append(to_add)
@@ -185,6 +194,12 @@ class InventoryService:
                 "VALUES (?,?,?,?,?,?,?,?,?)",
                 sealed_to_add,
             )
+        except Exception as e:
+            raise Exception("Failed to add items")
+
+    def add_items_to_auction(self, auction_id: int, items: list[ItemInput]) -> None:
+        try:
+            self._insert_items(items, auction_id)
             self.db.commit()
         except Exception as e:
             self.db.rollback()
