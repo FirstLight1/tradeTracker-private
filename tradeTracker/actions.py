@@ -427,42 +427,15 @@ def addBulkItems(auction_id):
     db.commit()
     return jsonify({"status": "success"}), 201
 
-
 @bp.route("/loadAuctions", methods=("GET",))
 @verify_token
 def loadAuctions():
-    db = get_db()
-    auctions = db.execute(
-        "SELECT DISTINCT a.*, b.sale_id, s.invoice_number FROM auctions a "
-        "LEFT JOIN barter b ON b.auction_id = a.id "
-        "LEFT JOIN sales s ON b.sale_id = s.id "
-        "LEFT JOIN cards c ON a.id = c.auction_id "
-        "LEFT JOIN sale_items si ON c.id = si.card_id "
-        "WHERE a.id = 1 OR (si.card_id IS NULL AND c.sold_date IS NULL AND c.disposal_reason IS NULL) "
-        "ORDER BY (a.id = 1) DESC, "
-        "a.id DESC "
-    ).fetchall()
-
-    # Auto-migrate payment_method data on load
-    auctions_list = []
-    for auction in auctions:
-        auction_dict = dict(auction)
-        if auction_dict.get("payment_method"):
-            # Check if migration needed
-            migrated = migrate_payment_method(auction_dict["payment_method"])
-            if migrated != auction_dict["payment_method"]:
-                # Update database with migrated value
-                db.execute(
-                    "UPDATE auctions SET payment_method = ? WHERE id = ?",
-                    (migrated, auction_dict["id"]),
-                )
-                auction_dict["payment_method"] = migrated
-        auctions_list.append(auction_dict)
-
-    db.commit()
-    return jsonify(auctions_list)
+    inventory_service = InventoryService(get_db())
+    auctions = inventory_service.load_auctions()
+    return jsonify(auctions)
 
 
+#TODO: delete this 
 @bp.route("/loadSealed", methods=("GET",))
 @verify_token
 def loadSealed():
@@ -479,14 +452,10 @@ def loadSealed():
 @bp.route("/loadAvailableSealed", methods=("GET",))
 @verify_token
 def loadAvailableSealed():
-    db = get_db()
+    inventory_service = InventoryService(get_db())
+    return jsonify({"status": "success", "data": inventory_service.load_items(None,'sold')}), 200
 
-    sealed_products = db.execute(
-        "SELECT 's' || id as sid, name, quantity, language, price, market_value, date FROM sealed WHERE sale_id is NULL AND auction_id is NULL AND opened = 0 AND disposal_reason IS NULL"
-    ).fetchall()
-    return jsonify({"status": "success", "data": [dict(product) for product in sealed_products]})
-
-
+#TODO: delete this
 @bp.route("/addSealed", methods=("POST",))
 @verify_token
 def addSealed():
@@ -538,26 +507,13 @@ def addSealed():
         logger.exception("DB error, sealed creation failed | %s", e)
         return jsonify({"status": "error", "message": "Error code: Ax02"}), 400
 
+#TODO: change route to /loadItems
 @bp.route("/loadCards/<int:auction_id>", methods=("GET",))
 @verify_token
 def loadCards(auction_id):
-    db = get_db()
-    cards = db.execute(
-        "SELECT c.*, gsc.grader, gsc.grade_numeric, gsc.grade_label, "
-        "gsc.qualifier, gsc.cert_number, gsc.is_current AS grading_is_current, "
-        "gsc.submission_id AS grading_submission_id, gs.status AS grading_submission_status, "
-        "CASE WHEN gsc.id IS NULL THEN 'raw' "
-        "WHEN gsc.submission_id IS NULL OR gs.status = 'graded' THEN 'graded' "
-        "ELSE 'at_grader' END AS grading_state FROM cards c "
-        "LEFT JOIN sale_items si ON c.id = si.card_id "
-        "LEFT JOIN grading_submission_cards gsc "
-        "ON c.id = gsc.card_id AND gsc.is_current = 1 "
-        "LEFT JOIN grading_submissions gs ON gsc.submission_id = gs.id "
-        "WHERE c.auction_id = ? AND c.sold_date IS NULL "
-        "AND si.card_id IS NULL AND c.disposal_reason IS NULL",
-        (auction_id,),
-    ).fetchall()
-    return jsonify([dict(card) for card in cards]), 200
+    inventory_service = InventoryService(get_db())
+    items = inventory_service.load_items(auction_id, 'sold')
+    return jsonify(items), 200
 
 
 @bp.route("/loadBulk/<int:auction_id>", methods=("GET",))
@@ -570,7 +526,7 @@ def loadBulk(auction_id):
     ).fetchall()
     return jsonify([dict(item) for item in bulk_items]), 200
 
-
+#TODO: delete this
 @bp.route("/loadSealed/<int:auction_id>", methods=("GET",))
 @verify_token
 def loadSealedByAuction(auction_id):
@@ -586,20 +542,20 @@ def loadSealedByAuction(auction_id):
 @bp.route("/loadPurchases", methods=("GET",))
 @verify_token
 def loadPurchases():
-    db = get_db()
-    purchases = db.execute("SELECT * FROM auctions ORDER BY id DESC").fetchall()
-    return jsonify([dict(auction) for auction in purchases]), 200
+    inventory_service = InventoryService(get_db())
+    purchases = inventory_service.load_purchases()
+    return jsonify(purchases), 200
 
 
 @bp.route("/loadAllCards/<int:auction_id>", methods=("GET",))
 @verify_token
 def loadAllCards(auction_id):
-    db = get_db()
-    cards = db.execute("SELECT * FROM cards WHERE auction_id = ?", (auction_id,)).fetchall()
-    return jsonify([dict(card) for card in cards]), 200
+    inventory_service = InventoryService(get_db())
+    items = inventory_service.load_items(auction_id, "all")
+    return jsonify(items), 200
 
 
-# TODO: merge into one, add to existiog SELECT endpoints but with filter query
+# TODO: merge into one, add to existiog SELECT endpoints but with filter query, DONE just delete
 @bp.route("/loadAllSealed/<int:auction_id>", methods=("GET",))
 @verify_token
 def loadAllSealed(auction_id):
