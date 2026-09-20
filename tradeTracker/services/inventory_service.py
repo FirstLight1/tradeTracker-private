@@ -112,13 +112,16 @@ class InventoryService:
             logging.exception(f"Error merging auctions | {e}")
             raise Exception("Failed to merge auctions")
 
-    def load_items(self, auction_id: int | None, filter: str | None = None) -> list[dict[str, Any]]:
-        if filter is None or filter == "":
+    def load_items(self, auction_id: int | None, filter: str = 'sold') -> list[dict[str, Any]]:
+        if filter == "sold":
+            cardFilter = "c.sold_date IS NULL AND si.card_id IS NULL AND c.disposal_reason IS NULL"
+            sealedFilter = "sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL"
+        elif filter == "all":
             cardFilter = "1=1"
             sealedFilter = "1=1"
         else:
-            cardFilter = "s.sold_date IS NULL AND si.card_id IS NULL AND c.disposal_reason IS NULL"
-            sealedFilter = "sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL"
+            raise ValueError(f"Invalid filter: {filter}")
+
         if auction_id is not None:
             cardRows = self.db.execute(f"""
                 SELECT c.*,"card" as item_type, gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, gsc.cert_number
