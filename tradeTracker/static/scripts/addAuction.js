@@ -46,12 +46,12 @@ const saveButton = document.querySelector('.save-btn');
 const initialMarketValueInput = document.querySelector('.card .marketValue');
 
 if (initialMarketValueInput) {
-    initialMarketValueInput.addEventListener('input', function () {
+    initialMarketValueInput.addEventListener('input', function() {
         window.handleCardInput(this);
     });
 }
 //add typechecks
-saveButton.addEventListener('click', () => {
+saveButton.addEventListener('click', async () => {
     const auctionName = DOMPurify.sanitize(document.querySelector('.auction-name').value);
     const auctionBuy = DOMPurify.sanitize(document.querySelector('.auction-buy-price').value);
     const date = new Date().toISOString();
@@ -70,7 +70,7 @@ saveButton.addEventListener('click', () => {
 
     let auction = {
         name: auctionName.trim() || null,
-        buy: auctionBuy ? parseFloat(auctionBuy.replace(',', '.')) : null,
+        buy_price: auctionBuy ? parseFloat(auctionBuy.replace(',', '.')) : null,
         date: date.trim() || null,
         payments: payments.length > 0 ? payments : null,
     };
@@ -82,10 +82,6 @@ saveButton.addEventListener('click', () => {
             renderAlert('Payment validation error: ' + validation.error, 'error');
             return;
         }
-    }
-
-    if (cardsArr.length === 0) {
-        cardsArr.push(auction);
     }
 
     const cards = document.querySelectorAll('.card');
@@ -123,33 +119,21 @@ saveButton.addEventListener('click', () => {
         cardsArr[0].buy = parseFloat(DOMPurify.sanitize(auctionValueCalculated.toFixed(2)));
     }
 
-    if (cardsArr.length !== 1) {
-        const jsonbody = JSON.stringify(cardsArr);
-        csrfFetch('/add', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: jsonbody,
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    return response.json().then((err) => {
-                        throw new Error(err.message || 'Server error');
-                    });
-                }
-                return response.json();
-            })
-            .then((data) => {
-                if (data.status === 'success') {
-                    window.location.href = '/';
-                } else {
-                    renderAlert('Error: ' + (data.message || 'Unknown error'), 'error');
-                }
-            })
-            .catch((error) => {
-                renderAlert('Failed to save auction: ' + error.message, 'error');
-            });
+    const payload = { 'auction': auction, 'cards': cardsArr };
+
+    const jsonbody = JSON.stringify(payload);
+    const response = await csrfFetch('/add', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: jsonbody,
+    })
+    const data = await response.json();
+    if (data.status === 'success') {
+        window.location.href = '/';
+    } else {
+        renderAlert('Error: ' + (data.message || 'Unknown error'), 'error');
     }
 });
 
