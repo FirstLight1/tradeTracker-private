@@ -36,9 +36,14 @@ from tradeTracker.services.models import (
     LabelResult,
     PacketaHomeDeliveryResult,
     InventoryWriteOff,
+    AuctionInput,
+    ItemInput,
+    ItemType,
 )
 from tradeTracker.utils.formating import normalize
+from tradeTracker.services.grading_validation import grade_number, money, normalize_date, normalize_text
 from tradeTracker.utils.cardmarket import resolve_cardmarket_id
+from tradeTracker.services.inventory_service import InventoryService
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaReceiptService
 from tradeTracker.services.cfAuth import verify_token, require_api_token
@@ -77,7 +82,7 @@ def validate_and_sanitize_payments(payments):
     Validate and sanitize payment data.
     Returns: (is_valid, sanitized_payments, error_message)
     """
-    if payments is None or not isinstance(payments, list):
+    if payments is None: 
         return False, None, "Invalid payments format"
 
     if len(payments) == 0:
@@ -242,57 +247,49 @@ def updateExternal():
 @verify_token
 def add():
     if request.method == "POST":
-        cardsArr = request.get_json()
-        db = get_db()
-        auction = {
-            "name": cardsArr[0]["name"] if "name" in cardsArr[0] else None,
-            "buy": cardsArr[0]["buy"] if "buy" in cardsArr[0] else None,
-            "date": cardsArr[0]["date"] if "date" in cardsArr[0] else None,
-            "payments": cardsArr[0]["payments"] if "payments" in cardsArr[0] else None,
-        }
+        data = request.get_json()
+        auction = data.get("auction", None)
+        cards = data.get("cards", [])
+        inventory_service = InventoryService(get_db())
+        auction = AuctionInput.from_dict(auction)
+        is_valid, sanitized_payments, error_msg = validate_and_sanitize_payments(
+            auction.payments
+        )
+        if not is_valid:
+            return jsonify(
+                {"status": "error", "message": f"{error_msg}, Error code: Ax01"}
+            ), 400
+        payment_method_json = json.dumps(sanitized_payments)
+        auction.payments = payment_method_json
+        
+        items_to_add = []
+        #TODO: make it also work with sealed
+        for item in cards:
+            items_to_add.append(ItemInput(
+                id=None,
+                item_type=ItemType('card'),
+                name=item["cardName"],
+                normalized_name=normalize(item["cardName"]),
+                number=normalize_text(item.get("cardNum"), "number"),
+                condition=normalize_text(item.get("condition"), "condition"),
+                lang=normalize_text(item.get("language"), "language"),
+                buy_price=float(item.get("buyPrice", "0.0")),
+                market_value=float(item.get("marketValue", "0.0")),
+                sell_price=float(item.get("sellPrice", "0.0")),
+                quantity=1,
+                date=auction.date,
 
-        # Validate and sanitize payments if provided
-        payment_method_json = None
-        if auction["payments"]:
-            is_valid, sanitized_payments, error_msg = validate_and_sanitize_payments(
-                auction["payments"]
-            )
-            if not is_valid:
-                return jsonify(
-                    {"status": "error", "message": f"{error_msg}, Error code: Ax01"}
-                ), 400
-            payment_method_json = json.dumps(sanitized_payments)
+            ))
+        
 
         try:
-            cursor = db.execute(
-                "INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?, ?, ?, ?)",
-                (auction["name"], auction["buy"], auction["date"], payment_method_json),
-            )
-            auction_id = cursor.lastrowid
-
-            for card in cardsArr[1:]:
-                if card.get("language") not in CONSTANTS.ALLOWED_LANGUAGES:
-                    raise ValueError("Invalid language code")
-                db.execute(
-                    "INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id, cardMarketID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        card.get("cardName"),
-                        normalize(card.get("cardName")),
-                        card.get("cardNum"),
-                        card.get("condition"),
-                        card.get("language"),
-                        card.get("buyPrice"),
-                        card.get("marketValue"),
-                        auction_id,
-                        resolve_cardmarket_id(db, card, "cardName", "cardNum"),
-                    ),
-                )
-
-        except (Exception, ValueError) as e:
+            auction_id = inventory_service.create_auction_with_items(auction, items_to_add)
+            db.commit()
+            return jsonify({"status": "success", "auction_id": auction_id}), 201
+        except Exception as e:
             db.rollback()
-            return jsonify({"status": "error", "message": f"SQL Error: {e}"}), 400
-        db.commit()
-        return jsonify({"status": "success", "auction_id": auction_id}), 201
+            logger.error("Failed to create auction | %s", e)
+            return jsonify({"status": "error", "message": f"Failed to create auction: {e}"}), 400
 
 
 def _check_bulk_inventory(db, item_type, quantity_needed):
