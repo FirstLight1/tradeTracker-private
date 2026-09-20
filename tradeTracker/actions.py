@@ -589,10 +589,12 @@ def invertoryValue():
 @bp.route("/deleteCard/<int:card_id>", methods=("DELETE",))
 @verify_token
 def deleteCard(card_id):
-    db = get_db()
-    db.execute("DELETE FROM cards WHERE id = ?", (card_id,))
-    db.commit()
-    return jsonify({"status": "success"})
+    try:
+        inventory_service = InventoryService(get_db())
+        inventory_service.delete_item(card_id, "card")
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to delete card: {e}"}), 400
 
 
 @bp.route("/deleteBulkItem/<int:item_id>", methods=("DELETE",))
@@ -608,49 +610,39 @@ def deleteBulkItem(item_id):
 @verify_token
 def deleteSealed(sid):
     id = sid.replace("s", "")
-    db = get_db()
-    db.execute("DELETE FROM sealed WHERE id = ?", (id,))
-    db.commit()
-    return jsonify({"status": "success"})
+    try:
+        inventory_service = InventoryService(get_db())
+        inventory_service.delete_item(id, "sealed")
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to delete sealed: {e}"}), 400
 
 
 @bp.route("/deleteAuction/<int:auction_id>", methods=("DELETE",))
 @verify_token
 def deleteAuction(auction_id):
-    db = get_db()
-    db.execute("DELETE FROM bulk_items WHERE auction_id = ?", (auction_id,))
-    db.execute("DELETE FROM cards WHERE auction_id = ?", (auction_id,))
-    db.execute("DELETE FROM auctions WHERE id = ?", (auction_id,))
-    db.execute("DELETE from sealed WHERE auction_id = ?", (auction_id,))
-    db.commit()
-    return jsonify({"status": "success"}), 200
+    try:
+        inventory_service = InventoryService(get_db())
+        inventory_service.delete_auction(auction_id)
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to delte auction: {e}"}),400
 
 
 @bp.route("/update/<int:card_id>", methods=("PATCH",))
 @verify_token
 def update(card_id):
-    db = get_db()
-    data = request.get_json()
-    field = data.get("field")
-    value = data.get("value")
-    allowed_fields = {
-        "card_name",
-        "card_num",
-        "condition",
-        "language",
-        "card_price",
-        "market_value",
-    }
-
-    if field == "language" and value not in CONSTANTS.ALLOWED_LANGUAGES:
-        return jsonify(
-            {"status": "error", "message": "Invalid language code, Error code: Ax27"}
-        ), 400
-
-    if field in allowed_fields:
-        db.execute(f"UPDATE cards SET {field} = ? WHERE id = ?", (value, card_id))
-        db.commit()
-    return jsonify({"status": "success"}), 200
+    try:
+        data = request.get_json()
+        edit = EditModel(
+            field=data.get("field"),
+            value=data.get("value"),
+        )
+        inventory_service = InventoryService(get_db())
+        inventory_service.update_item(card_id, edit,"card")
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        return jsonifty({"status": "error", "message": str(e)}), 400
 
 
 @bp.route("/updateSealed/<string:sid>", methods=("PATCH",))
@@ -669,17 +661,13 @@ def update_sealed(sid):
     sealed_id = sid.removeprefix("s")
     if not sealed_id or any(character not in "0123456789" for character in sealed_id):
         return jsonify({"status": "error", "message": "Invalid sealed ID"}), 400
-
-    db = get_db()
-    updated = db.execute(
-        "UPDATE sealed SET language = ? WHERE id = ?",
-        (language, int(sealed_id)),
-    )
-    if updated.rowcount != 1:
-        db.rollback()
-        return jsonify({"status": "error", "message": "Sealed item not found"}), 404
-    db.commit()
-    return jsonify({"status": "success"}), 200
+    try:
+        edit = EditModel(field=data.get("field"), value=data.get("value"))
+        inventory_service = InventoryService(get_db())
+        inventory_service.update_item(sealed_id, edit, "sealed")
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
 
 
 @bp.route("/addToExistingAuction/<int:auction_id>", methods=("POST",))

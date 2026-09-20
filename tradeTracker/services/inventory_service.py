@@ -113,6 +113,7 @@ class InventoryService:
             raise Exception("Failed to merge auctions")
 
     def load_items(self, auction_id: int | None, filter: str = 'sold') -> list[dict[str, Any]]:
+        #TODO: rename the filter cause this is not sold items
         if filter == "sold":
             cardFilter = "c.sold_date IS NULL AND si.card_id IS NULL AND c.disposal_reason IS NULL"
             sealedFilter = "sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL"
