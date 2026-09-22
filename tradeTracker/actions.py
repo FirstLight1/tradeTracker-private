@@ -1594,43 +1594,9 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
         return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax29"}), 400
 
     try:
-        row = cur.execute(
-            "SELECT * FROM sealed WHERE id = ? AND sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL",
-            (openedItem.get("id").replace("s", ""),),
-        ).fetchone()
-        if row["quantity"] == 1:
-            cur.execute(
-                "UPDATE sealed SET opened = 1 WHERE auction_id = ? AND id = ?",
-                (auction_id, openedItem.get("id").replace("s", "")),
-            )
-        else:
-            cur.execute(
-                "UPDATE sealed SET quantity = quantity - 1 WHERE id = ?",
-                (openedItem.get("id").replace("s", ""),),
-            )
-            cur.execute(
-                "INSERT INTO sealed (name, normalized_name, language, price, market_value, date, auction_id, cardmarketId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    row["name"],
-                    normalize(row["name"]),
-                    row["language"],
-                    row["price"],
-                    row["market_value"],
-                    row["date"],
-                    auction_id,
-                    row["cardmarketId"],
-                ),
-            )
-            cur.execute(
-                "UPDATE sealed SET opened = 1 WHERE auction_id = ? AND id = ?",
-                (auction_id, cur.lastrowid),
-            )
+        invetory_service = InventoryService(get_db())
+        invetory_service.mark_sealed_opened(openedItem.get("id").replace("s", ""),auction_id)
     except Exception as e:
-        logger.exception(
-            "Database error while adjusting cards | auction_id: %s | error: %s",
-            auction_id,
-            e,
-        )
         return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax29"}), 400
     return None
 
@@ -1709,38 +1675,9 @@ def openSingleSealed(cur, openedItem, sealed, cards, newTotal, priceDiff):
         return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax29"}), 400
 
     try:
-        row = cur.execute(
-            "SELECT * FROM sealed WHERE id = ? AND sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL",
-            (openedItem.get("id").replace("s", ""),),
-        ).fetchone()
-        if row["quantity"] == 1:
-            cur.execute(
-                "UPDATE sealed SET opened = 1 WHERE id = ?",
-                (openedItem.get("id").replace("s", ""),),
-            )
-        else:
-            cur.execute(
-                "UPDATE sealed SET quantity = quantity - 1 WHERE id = ?",
-                (openedItem.get("id").replace("s", ""),),
-            )
-            cur.execute(
-                "INSERT INTO sealed (name, normalized_name, language, price, market_value, date, cardmarketId) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    row["name"],
-                    normalize(row["name"]),
-                    row["language"],
-                    row["price"],
-                    row["market_value"],
-                    row["date"],
-                    row["cardmarketId"],
-                ),
-            )
-            cur.execute("UPDATE sealed SET opened = 1 WHERE id = ?", (cur.lastrowid,))
+        invetory_service = InventoryService(get_db())
+        invetory_service.mark_sealed_opened(openedItem.get("id").replace("s", ""), None)
     except Exception as e:
-        logger.exception(
-            "Database error while changing sealed quantity | error: %s",
-            e,
-        )
         return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax29"}), 400
     return None
 
