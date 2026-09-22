@@ -39,6 +39,7 @@ from tradeTracker.services.models import (
     AuctionInput,
     ItemInput,
     ItemType,
+    EditModel
 )
 from tradeTracker.utils.formating import normalize
 from tradeTracker.services.grading_validation import grade_number, money, normalize_date, normalize_text
@@ -642,7 +643,7 @@ def update(card_id):
         inventory_service.update_item(card_id, edit,"card")
         return jsonify({"status": "success"}), 200
     except Exception as e:
-        return jsonifty({"status": "error", "message": str(e)}), 400
+        return jsonify({"status": "error", "message": str(e)}), 400
 
 
 @bp.route("/updateSealed/<string:sid>", methods=("PATCH",))
@@ -1369,38 +1370,6 @@ def format_iso_date(iso_str):
         return str(iso_str)
 
 
-def parse_date_to_iso(value):
-    """Parse any date string and return canonical ISO 8601 (YYYY-MM-DDTHH:MM:SSZ).
-
-    Tries datetime.fromisoformat(), then strptime('%Y-%m-%d'), then
-    dateutil.parser.parse(dayfirst=True). Raises ValueError if all fail.
-    """
-    if not value:
-        raise ValueError("Empty date value")
-
-    try:
-        dt = datetime.datetime.fromisoformat(value)
-        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-    except (ValueError, TypeError):
-        pass
-
-    try:
-        dt = datetime.datetime.strptime(value, "%Y-%m-%d")
-        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-    except (ValueError, TypeError):
-        pass
-
-    try:
-        dt = dateutil_parser.parse(value, dayfirst=True)
-        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-    except (ValueError, TypeError, OverflowError):
-        pass
-
-    raise ValueError(
-        f"Invalid date format: {value!r}. Expected ISO 8601, YYYY-MM-DD, or dd-mm-yyyy."
-    )
-
-
 def generateSoldReport(month, year):
     # Determine the save path based on environment
     if os.getenv("FLASK_ENV") == "prod":
@@ -1501,74 +1470,53 @@ def collectionValue():
 @verify_token
 def addToSingles():
     if request.method == "POST":
-        db = get_db()
         auction_id = 1
         data = request.get_json()
+        cards = []
+        for card in data:
+            cards.append(ItemInput(
+                        id=None,
+                        name=card.get("cardName"),
+                        number=card.get("cardNum"),
+                        normalized_name=normalize(card.get("name")),
+                        quantity=1,
+                        item_type=ItemType('card'),
+                        condition=card.get("condition"), 
+                        lang=card.get("language"), 
+                        buy_price=card.get("buyPrice"), 
+                        market_value=card.get("marketValue"),
+                        sell_price = None,
+                        cardmarketId= resolve_cardmarket_id(get_db(), card, "name", "cardNum"),
+            ))
+        try:
+            inventory_service = InventoryService(get_db())
+            inventory_service.add_items_to_auction(auction_id, data)
+        except Exception as e:
+            return jsonify({"status": "error", "message": f"Failed to add to singles: {e}"}), 400
 
-        for card in data[1:]:
-            if card.get("language") not in CONSTANTS.ALLOWED_LANGUAGES:
-                return jsonify(
-                    {"status": "error", "message": f"Invalid language code, Error code: Ax27"}
-                ), 400
-            try:
-                db.execute(
-                    "INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id, cardMarketID)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        card.get("cardName"),
-                        normalize(card.get("cardName")),
-                        card.get("cardNum"),
-                        card.get("condition"),
-                        card.get("language"),
-                        card.get("buyPrice"),
-                        card.get("marketValue"),
-                        auction_id,
-                        resolve_cardmarket_id(db, card, "cardName", "cardNum"),
-                    ),
-                )
-            except Exception as e:
-                db.rollback()
-                return jsonify(
-                    {"status": "error", "message": f"Failed to save cards to database: {e}"}
-                ), 400
-        db.commit()
     return jsonify({"status": "success"}), 201
 
 
 @bp.route("/updateAuction/<int:auction_id>", methods=("PATCH",))
 @verify_token
 def updateAuction(auction_id):
-    db = get_db()
     data = request.get_json()
     value = data.get("value")
     field = data.get("field")
+    edit = EditModel(field=field, value=value)
+    
+    try:
+        inventory_service = InventoryService(get_db())
+        inventory_service.update_auction(auction_id,edit)
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to update auction: {e}"}), 400
 
-    ALLOWED_FIELDS = {
-        "auction_name": "auction_name",
-        "auction_price": "auction_price",
-        "date_created": "date_created",
-    }
-
-    if field not in ALLOWED_FIELDS:
-        logger.warning("Invalid field | auction_id : %s", auction_id)
-        return jsonify({"status": "error", "message": "Invalid field"})
-    column = ALLOWED_FIELDS[field]
-
-    if column == "date_created":
-        try:
-            value = parse_date_to_iso(value)
-        except ValueError as e:
-            return jsonify({"status": "error", "message": str(e)}), 400
-
-    db.execute(f"UPDATE auctions SET {column} = ? WHERE id = ?", (value, auction_id))
-    db.commit()
     return jsonify({"status": "success"}), 200
 
 
 @bp.route("/updatePaymentMethod/<int:auction_id>", methods=("PATCH",))
 @verify_token
 def updatePaymentMethod(auction_id):
-    db = get_db()
     data = request.get_json()
     payments = data.get("payments")  # Expecting array of {type, amount} objects
 
@@ -1579,11 +1527,12 @@ def updatePaymentMethod(auction_id):
 
     # Store as JSON string
     payment_method_json = json.dumps(sanitized_payments)
-    db.execute(
-        "UPDATE auctions SET payment_method = ? WHERE id = ?", (payment_method_json, auction_id)
-    )
-    db.commit()
-
+    edit = EditModel(field="payment_method", value=payment_method_json)
+    try:
+        inventory_service = InventoryService(get_db())
+        inventory_service.update_auction(auction_id,edit)
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to update payment method: {e}"}), 400
     return jsonify({"status": "success"}), 200
 
 
