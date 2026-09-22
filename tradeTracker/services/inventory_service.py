@@ -85,9 +85,20 @@ class InventoryService:
     def update_auction(self, auction_id: int, auction: EditModel) -> None:
         if auction.field not in CONSTANTS.AUCTION_ALLOWED_FIELDS:
             raise ValueError(f"Invalid field: {auction.field}")
+            
+        #TODO: add date_created
+        
+        if auction.field == "date_created":
+            try:
+                value = formating.parse_date_to_iso(auction.value)
+            except ValueError as e:
+                raise ValueError(f"Invalid date format: {value!r}. Expected ISO 8601, YYYY-MM-DD, or dd-mm-yyyy.")
+        else:
+            value = auction.value
+                
 
         try:
-            self.db.execute(f"UPDATE auctions SET {auction.field} = ? WHERE id = ?", (auction.value, auction_id))
+            self.db.execute(f"UPDATE auctions SET {auction.field} = ? WHERE id = ?", (value, auction_id))
             self.db.commit()
         except Exception as e:
             self.db.rollback()
