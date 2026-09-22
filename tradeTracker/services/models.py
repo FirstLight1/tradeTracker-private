@@ -21,7 +21,7 @@ class Payment:
 @dataclass
 class AuctionInput:
     id: int | None
-    name: str
+    name: str | None
     buy_price: float | None
     date: str
     payments: str | None | list[dict[str, Any]]
@@ -30,7 +30,7 @@ class AuctionInput:
     def from_dict(cls, item: dict[str, Any]) -> "AuctionInput":
         return cls(
             id=(item.get("id", None)),
-            name=item["name"],
+            name=item.get("name", None),
             buy_price=float(item["buy_price"]) if item.get("buy_price") else None,
             payments=item["payments"] if item.get("payments") else None,
             date=item.get("date", datetime.date.today().isoformat()),
@@ -61,6 +61,7 @@ class ItemInput:
     date: str = datetime.date.today().isoformat()
     cardmarketId: str | None = None
 
+    #TODO: improve this or remake card class in js
     @classmethod
     def from_dict(cls, item: dict[str, Any]) -> "ItemInput":
         return cls(

@@ -2056,70 +2056,62 @@ def _create_inventory(db, dataList=None):
 
     dateCreted = dataList[0]["date"]
     buyPrice = sum(float(item["buy_price"]) for item in dataList)
-    try:
-        cursor = db.execute(
-            "INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?, ?, ?, ?)",
-            (None, buyPrice, dateCreted, "[]"),
-        )
-        auctionId = cursor.lastrowid
-    except Exception as e:
-        logger.exception(f"Error creating auction: {e}")
-        raise Exception("Error creating auction")
-    auctionId = cursor.lastrowid
 
+    auction = AuctionInput(
+        id=None,
+        name=None,
+        buy_price=buyPrice,
+        date=dateCreted,
+        payments=[],
+    )
+    items = []
     for item in dataList:
-        isSealed = item.get("card_num") == ""
-
         if item.get("language") not in CONSTANTS.ALLOWED_LANGUAGES:
             raise ValueError(f"Invalid language code: {item.get('language')}")
-
+        isSealed = item.get("card_num") == ""
         if isSealed:
-            try:
-                db.execute(
-                    "INSERT INTO sealed (name, normalized_name, quantity, language, price, market_value, date, auction_id, cardmarketId)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        item.get("card_name"),
-                        normalize(item.get("card_name")),
-                        item.get("quantity"),
-                        item.get("language"),
-                        item.get("buy_price"),
-                        item.get("market_value"),
-                        item.get("date"),
-                        auctionId,
-                        resolve_cardmarket_id(db, item, "card_name", "card_num"),
-                    ),
+            items.append(
+                ItemInput(
+                    id=None,
+                    item_type=ItemType('sealed'),
+                    name=item["card_name"],
+                    normalized_name=normalize(item["card_name"]),
+                    number=None,
+                    condition=item.get("condition", None),
+                    lang=item.get("language", None),
+                    buy_price=float(item.get("buy_price", "0.0")),
+                    market_value=float(item.get("market_value", "0.0")),
+                    sell_price=float(item.get("sell_price", "0.0")),
+                    quantity=1,
+                    date=item.get("date", None),
+                    cardmarketId=resolve_cardmarket_id(db, item, "name", "card_num"),
                 )
-            except Exception as e:
-                logger.exception(f"Error adding sealed item {item.get('card_name')}: {e}")
-                raise Exception("Error adding sealed item")
+            )
         else:
-            quantity = int(item.get("quantity"))
-            if quantity is None:
-                quantity = 1
-            cardmarket_id = resolve_cardmarket_id(db, item, "card_name", "card_num")
-            for i in range(quantity):
-                try:
-                    buyPrice = round(float(item.get("market_value")) * 0.8, 2)
-                    db.execute(
-                        "INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id, cardmarketId)"
-                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        (
-                            item.get("card_name"),
-                            normalize(item.get("card_name")),
-                            item.get("card_num"),
-                            item.get("condition"),
-                            item.get("language"),
-                            buyPrice,
-                            item.get("market_value"),
-                            auctionId,
-                            cardmarket_id,
-                        ),
-                    )
-                except Exception as e:
-                    logger.exception(f"Error adding card item {item.get('card_name')}: {e}")
-                    raise Exception("Error adding card item")
-    db.commit()
+            items.append(
+                ItemInput(
+                    id=None,
+                    item_type=ItemType('card'),
+                    name=item["card_name"],
+                    normalized_name=normalize(item["card_name"]),
+                    number=normalize_text(item.get("card_num"), "number"),
+                    condition=item.get("condition", None),
+                    lang=item.get("language", None),
+                    buy_price=float(item.get("buy_price", "0.0")),
+                    market_value=float(item.get("market_value", "0.0")),
+                    sell_price=float(item.get("sell_price", "0.0")),
+                    quantity=1,
+                    date=item.get("date", None),
+                    cardmarketId=resolve_cardmarket_id(db, item, "name", "card_num"),
+                )
+            )
+            
+    try:
+        inventory_service = InventoryService(db)
+        auctionId = inventory_service.create_auction_with_items(auction, items)
+        return jsonify({"status": "success", "auction_id": auctionId}), 201
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to create auction: {e}"}), 400
 
 
 def _fixArticlesUpload(file):
