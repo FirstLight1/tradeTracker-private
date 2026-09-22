@@ -892,25 +892,8 @@ def loadSoldCards(sale_id):
 @bp.route("/mergeAuctions/<int:auction_id>/<int:target_id>", methods=("POST",))
 @verify_token
 def mergeAuctions(auction_id, target_id):
-    db = get_db()
-    try:
-        db.execute(
-            "UPDATE auctions SET auction_price = auction_price + (SELECT auction_price FROM auctions WHERE id = ?) WHERE id = ?",
-            (auction_id, target_id),
-        )
-        db.execute("UPDATE cards SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id))
-        db.execute("UPDATE sealed SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id))
-        db.execute(
-            "UPDATE bulk_items SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id)
-        )
-        db.execute("DELETE FROM auctions WHERE id = ?", (auction_id,))
-    except Exception as e:
-        db.rollback()
-        logger.exception(f"Error merging auctions | {e}")
-        return jsonify(
-            {"status": "error", "message": f"There was an error {e}, Error code: Ax30"}
-        ), 400
-    db.commit()
+    inventory_service = InventoryService(get_db())
+    inventory_service.merge_auctions(auction_id, target_id)
     return jsonify({"status": "success"}), 200
 
 
