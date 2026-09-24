@@ -2880,10 +2880,8 @@ async function spawnWriteOff(cardId, isSealed = String(cardId).startsWith('s'), 
 
 async function loadAuctionContent(button) {
     const auctionId = Number(button.getAttribute('data-id'));
-    //TODO - make this into a single endpoint
     const cardsUrl = '/loadCards/' + auctionId;
     const bulkUrl = '/loadBulk/' + auctionId;
-    const sealedUrl = '/loadSealed/' + auctionId;
     const auctionDiv = button.closest('.auction-tab');
     const cardsContainer = auctionDiv.querySelector('.cards-container');
     try {
@@ -2894,8 +2892,10 @@ async function loadAuctionContent(button) {
             // Only fetch if we don't have content already
             if (cardsContainer.childElementCount === 0) {
                 const response = await csrfFetch(cardsUrl);
-                const cards = await response.json();
-                if (isEmpty(cards)) {
+                const items = await response.json();
+                const cards = items.filter((item) => item.item_type === 'card');
+                const sealedItems = items.filter((item) => item.item_type === 'sealed');
+                if (isEmpty(items)) {
                     cardsContainer.innerHTML = '';
                 } else {
                     cardsContainer.innerHTML = `
@@ -3165,24 +3165,21 @@ async function loadAuctionContent(button) {
                     });
                 }
 
-                // Load sealed items BEFORE bulk items
-                try {
-                    const responseSealed = await csrfFetch(sealedUrl);
-                    const sealedData = await responseSealed.json();
+                // Render sealed items returned alongside cards, before bulk items.
+                sealedItems.forEach((sealedItem) => {
+                    const sid = `s${sanitizeNumericId(sealedItem.id)}`;
+                    const sealedDiv = document.createElement('div');
+                    sealedDiv.classList.add('sealed-item');
+                    sealedDiv.setAttribute('sid', sid);
+                    if (sealedItem.quantity != null) {
+                        sealedDiv.setAttribute('data-quantity', sealedItem.quantity);
+                    }
 
-                    sealedData.forEach((sealedItem) => {
-                        const sealedDiv = document.createElement('div');
-                        sealedDiv.classList.add('sealed-item');
-                        sealedDiv.setAttribute('sid', sealedItem.sid);
-                        if (sealedItem.quantity != null) {
-                            sealedDiv.setAttribute('data-quantity', sealedItem.quantity);
-                        }
+                    const margin = (
+                        Number(sealedItem.market_value) - Number(sealedItem.price)
+                    ).toFixed(2);
 
-                        const margin = (
-                            Number(sealedItem.market_value) - Number(sealedItem.price)
-                        ).toFixed(2);
-
-                        sealedDiv.innerHTML = `
+                    sealedDiv.innerHTML = `
                             <p class='sealed-quantity'>${DOMPurify.sanitize(sealedItem.quantity)}</p>
                             <p class="sealed-name">${DOMPurify.sanitize(sealedItem.name)}</p>
                             <p class="sealed-language">${DOMPurify.sanitize(sealedItem.language || 'en')}</p>
@@ -3192,90 +3189,84 @@ async function loadAuctionContent(button) {
                             <p class="sealed-margin">${DOMPurify.sanitize(margin)}€</p>
                             <p></p>
                             `;
-                        enableSealedLanguageEditing(sealedDiv);
+                    enableSealedLanguageEditing(sealedDiv);
 
-                        cardsContainer.insertBefore(
-                            sealedDiv,
-                            cardsContainer.querySelector('.button-container'),
-                        );
-                        sealedDiv.addEventListener('click', (event) => {
-                            if (event.target.closest('.sealed-language, .sealed-language-select')) {
-                                event.stopPropagation();
-                                return;
-                            }
+                    cardsContainer.insertBefore(
+                        sealedDiv,
+                        cardsContainer.querySelector('.button-container'),
+                    );
+                    sealedDiv.addEventListener('click', (event) => {
+                        if (event.target.closest('.sealed-language, .sealed-language-select')) {
                             event.stopPropagation();
-                            spawnItemsContextMenu(sealedItem.sid, event, sealedDiv);
-                        });
+                            return;
+                        }
+                        event.stopPropagation();
+                        spawnItemsContextMenu(sid, event, sealedDiv);
                     });
+                });
 
-                    // Sealed "Open" lives in the items context menu (spawnItemsContextMenu)
+                // Sealed "Open" lives in the items context menu (spawnItemsContextMenu)
 
-                    // Add event listeners for "Add to cart" buttons
-                    const addToCartButtons = cardsContainer.querySelectorAll('.add-to-cart-sealed');
-                    addToCartButtons.forEach((button) => {
-                        button.addEventListener('click', () => {
-                            const sealedDiv = button.closest('.sealed-item');
-                            const sid = sealedDiv.getAttribute('sid');
-                            const auctionId = auctionDiv.getAttribute('data-id');
+                // Add event listeners for "Add to cart" buttons
+                const addToCartButtons = cardsContainer.querySelectorAll('.add-to-cart-sealed');
+                addToCartButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const sealedDiv = button.closest('.sealed-item');
+                        const sid = sealedDiv.getAttribute('sid');
+                        const auctionId = auctionDiv.getAttribute('data-id');
 
-                            const sealedData = {
-                                name: DOMPurify.sanitize(
-                                    sealedDiv.querySelector('.sealed-name').textContent,
-                                ),
-                                language: DOMPurify.sanitize(
-                                    sealedDiv.querySelector('.sealed-language')?.textContent ||
+                        const sealedData = {
+                            name: DOMPurify.sanitize(
+                                sealedDiv.querySelector('.sealed-name').textContent,
+                            ),
+                            language: DOMPurify.sanitize(
+                                sealedDiv.querySelector('.sealed-language')?.textContent ||
                                     'en',
-                                ),
-                                market_value: DOMPurify.sanitize(
-                                    sealedDiv
-                                        .querySelector('.sealed-market-value')
-                                        .textContent.replace('€', ''),
-                                ),
-                            };
+                            ),
+                            market_value: DOMPurify.sanitize(
+                                sealedDiv
+                                    .querySelector('.sealed-market-value')
+                                    .textContent.replace('€', ''),
+                            ),
+                        };
 
-                            const available =
-                                Number(sealedDiv.getAttribute('data-quantity')) || null;
-                            addSealedToCart(sealedData, sid, auctionId, 1, available);
-                        });
+                        const available = Number(sealedDiv.getAttribute('data-quantity')) || null;
+                        addSealedToCart(sealedData, sid, auctionId, 1, available);
                     });
+                });
 
-                    // Add event listeners for "Delete" buttons
-                    const deleteSealedButtons =
-                        cardsContainer.querySelectorAll('.delete-sealed-item');
-                    deleteSealedButtons.forEach((button) => {
-                        button.addEventListener('click', async () => {
-                            const sid = button.getAttribute('data-sid');
-                            const sealedDiv = button.closest('.sealed-item');
+                // Add event listeners for "Delete" buttons
+                const deleteSealedButtons = cardsContainer.querySelectorAll('.delete-sealed-item');
+                deleteSealedButtons.forEach((button) => {
+                    button.addEventListener('click', async () => {
+                        const sid = button.getAttribute('data-sid');
+                        const sealedDiv = button.closest('.sealed-item');
 
-                            if (button.textContent === 'Confirm') {
-                                const response = await csrfFetch(`/deleteSealed/${sid}`, {
-                                    method: 'DELETE',
-                                });
-                                const data = await response.json();
+                        if (button.textContent === 'Confirm') {
+                            const response = await csrfFetch(`/deleteSealed/${sid}`, {
+                                method: 'DELETE',
+                            });
+                            const data = await response.json();
 
-                                if (data.status === 'success') {
-                                    sealedDiv.remove();
-                                }
-                            } else {
-                                button.textContent = 'Confirm';
-                                const timerID = setTimeout(() => {
-                                    button.textContent = 'Delete';
-                                }, 3000);
-
-                                document.addEventListener('click', function handler(e) {
-                                    if (e.target !== button) {
-                                        button.textContent = 'Delete';
-                                        document.removeEventListener('click', handler);
-                                        clearTimeout(timerID);
-                                    }
-                                });
+                            if (data.status === 'success') {
+                                sealedDiv.remove();
                             }
-                        });
-                    });
-                } catch (error) {
-                    renderAlert('Error loading sealed items: ' + error, 'error');
-                }
+                        } else {
+                            button.textContent = 'Confirm';
+                            const timerID = setTimeout(() => {
+                                button.textContent = 'Delete';
+                            }, 3000);
 
+                            document.addEventListener('click', function handler(e) {
+                                if (e.target !== button) {
+                                    button.textContent = 'Delete';
+                                    document.removeEventListener('click', handler);
+                                    clearTimeout(timerID);
+                                }
+                            });
+                        }
+                    });
+                });
                 // Load bulk items
                 try {
                     const responseBulk = await csrfFetch(bulkUrl);
