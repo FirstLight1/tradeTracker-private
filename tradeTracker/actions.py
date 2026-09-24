@@ -2086,7 +2086,7 @@ def _create_inventory(db, dataList=None):
                 )
             )
         else:
-            for _ in range(item.get("quantity", 1)):
+            for _ in range(int(item.get("quantity", 1))):
                 items.append(
                     ItemInput(
                         id=None,
