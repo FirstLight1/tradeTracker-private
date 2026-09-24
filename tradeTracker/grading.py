@@ -1,16 +1,17 @@
-from tradeTracker.services.grading_service import GradingService
-from tradeTracker.services.models import (
-    GradingSubmission,
-    GradingSubmissionCard,
-    GradeStatus,
-    GradingCompleteItems,
-)
-from tradeTracker.services.grading_validation import ValidationError
-from tradeTracker.services.cfAuth import verify_token, require_api_token
-from tradeTracker.db import get_db
-from flask import request, Blueprint, jsonify, abort, render_template
 import logging
 
+from flask import Blueprint, abort, jsonify, render_template, request
+
+from tradeTracker.db import get_db
+from tradeTracker.services.cfAuth import verify_token
+from tradeTracker.services.grading_service import GradingService
+from tradeTracker.services.grading_validation import ValidationError
+from tradeTracker.services.models import (
+    GradeStatus,
+    GradingCompleteItems,
+    GradingSubmission,
+    GradingSubmissionCard,
+)
 
 bp = Blueprint("grading", __name__)
 logger = logging.getLogger(__name__)

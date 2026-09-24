@@ -1,14 +1,16 @@
+import logging
 import os
-from flask import Flask, request, abort
+from pathlib import Path
+
+from flask import Flask, abort, request
 from flask_cors import CORS
+from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_talisman import Talisman
-from flask_limiter import Limiter
 from flask_wtf import CSRFProtect
-import logging
-from pathlib import Path
-from yoyo import get_backend, read_migrations
 from werkzeug.exceptions import HTTPException
+from yoyo import get_backend, read_migrations
+
 from .logging_config import configure_logging
 
 limiter = Limiter(key_func=get_remote_address)
@@ -102,7 +104,7 @@ def create_app(test_config=None):
     except OSError:
         pass
 
-    from . import db, tracker, actions, renderers, api, grading
+    from . import actions, api, db, grading, renderers, tracker
 
     db.init_app(app)
 

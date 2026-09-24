@@ -1,8 +1,8 @@
-import tradeTracker.services.models as models
 from datetime import date
 from decimal import Decimal
 from typing import Any
 
+import tradeTracker.services.models as models
 from tradeTracker.services.grading_validation import (
     ValidationError,
     allocate_largest_remainder,
@@ -13,7 +13,6 @@ from tradeTracker.services.grading_validation import (
     rounded_money,
     validate_chronology,
 )
-
 
 ACTIVE_STATUSES = {
     models.GradeStatus.PREPARING,

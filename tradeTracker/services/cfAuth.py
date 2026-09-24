@@ -1,18 +1,18 @@
-from flask import request, abort
+import functools
 import hmac
-import requests
-import jwt
 import json
 import os
-import functools
 
+import jwt
+import requests
+from flask import abort, request
 
 # The Application Audience (AUD) tag for your application
 POLICY_AUD = os.getenv("POLICY_AUD")
 
 # Your CF Access team domain
 TEAM_DOMAIN = os.getenv("TEAM_DOMAIN")
-CERTS_URL = "{}/cdn-cgi/access/certs".format(TEAM_DOMAIN)
+CERTS_URL = f"{TEAM_DOMAIN}/cdn-cgi/access/certs"
 
 
 def _get_public_keys():

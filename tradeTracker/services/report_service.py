@@ -1,23 +1,22 @@
-from ast import Tuple
+import datetime
+import json
+import os
+from decimal import Decimal
+from io import BytesIO
+from typing import Any
 
+import pandas as pd
 from reportlab.lib import colors
-from reportlab.lib import styles
 from reportlab.lib.pagesizes import landscape, letter
-from reportlab.lib.units import mm, cm
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.units import cm, mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-import datetime
-import pandas as pd
-from io import BytesIO, TextIOWrapper, StringIO
-from typing import Any
-import os
-import json
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
 import tradeTracker.CONSTANTS as CONSTANTS
-from tradeTracker.utils.formating import format_iso_date
-from decimal import Decimal
 from tradeTracker.services.pdf_utils import wrap_table_text
+from tradeTracker.utils.formating import format_iso_date
 
 
 class ReportService:
@@ -431,11 +430,7 @@ class ReportService:
         styles = self._styles()
 
         # TODO: allow periodic report
-        elements.append(
-            Paragraph(
-                "Sales Report - {month}/{year}".format(month=month, year=year), styles["Heading1"]
-            )
-        )
+        elements.append(Paragraph(f"Sales Report - {month}/{year}", styles["Heading1"]))
         elements.append(Spacer(1, 12))
 
         soldData = self._get_sold_data_month(month, year)

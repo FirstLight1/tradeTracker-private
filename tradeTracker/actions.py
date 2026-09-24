@@ -1,57 +1,49 @@
 import base64
-from decimal import Decimal
-from flask import request, Blueprint, jsonify, current_app, send_file, abort, render_template
-from tradeTracker.db import get_db
-from io import BytesIO, TextIOWrapper, StringIO
-import re
-import sqlite3
-import uuid
-import time
 import csv
 import datetime
-import unicodedata
-from dateutil import parser as dateutil_parser
-from Crypto.Cipher import AES
-import os
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 import json
+import logging
+import os
+import re
+import sqlite3
+import time
+import uuid
 import zipfile
 from collections import defaultdict
+from io import BytesIO, StringIO, TextIOWrapper
+
 import pandas as pd
-import logging
+from Crypto.Cipher import AES
+from flask import Blueprint, abort, current_app, jsonify, render_template, request, send_file
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf import FlaskForm
-from . import generateInvoice, CONSTANTS, csrf
+
+from tradeTracker.db import get_db
+from tradeTracker.services import report_service
+from tradeTracker.services.cfAuth import verify_token
+from tradeTracker.services.eph_service import EPHService
+from tradeTracker.services.grading_validation import (
+    normalize_text,
+)
+from tradeTracker.services.inventory_service import InventoryService
 from tradeTracker.services.models import (
-    EPHSheetInfo,
-    SaleInput,
-    ReceiptResult,
-    SaleResult,
-    LabelResult,
-    PacketaHomeDeliveryResult,
-    InventoryWriteOff,
     AuctionInput,
+    EditModel,
+    EPHSheetInfo,
+    InventoryWriteOff,
     ItemInput,
     ItemType,
-    EditModel
+    PacketaHomeDeliveryResult,
+    SaleInput,
 )
-from tradeTracker.utils.formating import normalize
-from tradeTracker.services.grading_validation import grade_number, money, normalize_date, normalize_text
-from tradeTracker.utils.cardmarket import resolve_cardmarket_id
-from tradeTracker.services.inventory_service import InventoryService
+from tradeTracker.services.reciept_service import EKasaReceiptService, InvoiceReceiptService
 from tradeTracker.services.sale_service import SaleService
-from tradeTracker.services.reciept_service import InvoiceReceiptService, EKasaReceiptService
-from tradeTracker.services.cfAuth import verify_token, require_api_token
-from tradeTracker.services.eph_service import EPHService
-from tradeTracker.services.pdf_utils import wrap_table_text
-from tradeTracker.services import report_service
-from tradeTracker.services.inventory_service import InventoryService
+from tradeTracker.utils.cardmarket import resolve_cardmarket_id
+from tradeTracker.utils.formating import normalize
+
+from . import CONSTANTS, generateInvoice
+
 # Packeta integration disabled — service hits the network (WSDL fetch) at construction
 # and requires the `postal` native dep. Re-enable together with the blocks in importCSV.
 # from tradeTracker.services.packeta_service import PacketaService
@@ -72,8 +64,6 @@ dataList = []
 latest = None
 
 
-
-
 def get_bulk_item_unit_price(item_type):
     return CONSTANTS.BULK_ITEM_UNIT_PRICES.get(item_type, 0)
 
@@ -83,7 +73,7 @@ def validate_and_sanitize_payments(payments):
     Validate and sanitize payment data.
     Returns: (is_valid, sanitized_payments, error_message)
     """
-    if payments is None: 
+    if payments is None:
         return True, payments, None
 
     if len(payments) == 0:
@@ -146,7 +136,7 @@ def loadExpansions():
         )
 
     try:
-        with open(expansions_path, mode="r", encoding="utf-8") as infile:
+        with open(expansions_path, encoding="utf-8") as infile:
             data = json.load(infile)
             # Convert list of single-key dictionaries into one dictionary
             all_pokemon_sets = {}
@@ -208,41 +198,49 @@ def parse_payment_methods(payment_method_text):
     payment_types = payment_method_text.strip().split()
     return [{"type": payment_type, "amount": 0} for payment_type in payment_types if payment_type]
 
+
 class MyForm(FlaskForm):
     pass
 
-@bp.route('/updateExternal', methods=('POST','GET'))
+
+@bp.route("/updateExternal", methods=("POST", "GET"))
 @verify_token
 def updateExternal():
-    if request.method == 'GET':
-        return render_template('populateExternal.html', form=MyForm())
+    if request.method == "GET":
+        return render_template("populateExternal.html", form=MyForm())
     db = get_db()
     curr = db.cursor()
 
-    files = request.files.getlist('file-input')
-    
+    files = request.files.getlist("file-input")
+
     for file in files:
-        stream = TextIOWrapper(file.stream, encoding='utf-8-sig', newline='')
+        stream = TextIOWrapper(file.stream, encoding="utf-8-sig", newline="")
         reader = csv.DictReader(stream)
 
         dataList = []
         for row in reader:
             item = (
-                row['name'],
-                row['expansionCode'] + ' ' + row['collectorNumber'] if row['collectorNumber'] else '',
-                row['expansion'],
-                row['cardmarketId'],
+                row["name"],
+                row["expansionCode"] + " " + row["collectorNumber"]
+                if row["collectorNumber"]
+                else "",
+                row["expansion"],
+                row["cardmarketId"],
             )
             dataList.append(item)
         try:
-            curr.executemany("INSERT OR IGNORE INTO external (card_name, card_num, expansion, cardmarketId) VALUES (?, ?, ?, ?)", dataList)
+            curr.executemany(
+                "INSERT OR IGNORE INTO external (card_name, card_num, expansion, cardmarketId) VALUES (?, ?, ?, ?)",
+                dataList,
+            )
         except Exception as e:
             db.rollback()
             logger.warning("Failed to insert external | error: %s", e)
-            return jsonify({'status': 'error', 'message': 'Failed to insert external'}), 500
+            return jsonify({"status": "error", "message": "Failed to insert external"}), 500
 
     db.commit()
-    return jsonify({'status': 'success', 'message': 'Successfully added external'}), 200
+    return jsonify({"status": "success", "message": "Successfully added external"}), 200
+
 
 @bp.route("/add", methods=("POST",))
 @verify_token
@@ -253,35 +251,31 @@ def add():
         cards = data.get("cards", [])
         inventory_service = InventoryService(get_db())
         auction = AuctionInput.from_dict(auction)
-        is_valid, sanitized_payments, error_msg = validate_and_sanitize_payments(
-            auction.payments
-        )
+        is_valid, sanitized_payments, error_msg = validate_and_sanitize_payments(auction.payments)
         if not is_valid:
-            return jsonify(
-                {"status": "error", "message": f"{error_msg}, Error code: Ax01"}
-            ), 400
+            return jsonify({"status": "error", "message": f"{error_msg}, Error code: Ax01"}), 400
         payment_method_json = json.dumps(sanitized_payments)
         auction.payments = payment_method_json
-        
-        items_to_add = []
-        #TODO: make it also work with sealed
-        for item in cards:
-            items_to_add.append(ItemInput(
-                id=None,
-                item_type=ItemType('card'),
-                name=item["cardName"],
-                normalized_name=normalize(item["cardName"]),
-                number=normalize_text(item.get("cardNum"), "number"),
-                condition=normalize_text(item.get("condition"), "condition"),
-                lang=normalize_text(item.get("language"), "language"),
-                buy_price=float(item.get("buyPrice", "0.0")),
-                market_value=float(item.get("marketValue", "0.0")),
-                sell_price=float(item.get("sellPrice", "0.0")),
-                quantity=1,
-                date=auction.date,
 
-            ))
-        
+        items_to_add = []
+        # TODO: make it also work with sealed
+        for item in cards:
+            items_to_add.append(
+                ItemInput(
+                    id=None,
+                    item_type=ItemType("card"),
+                    name=item["cardName"],
+                    normalized_name=normalize(item["cardName"]),
+                    number=normalize_text(item.get("cardNum"), "number"),
+                    condition=normalize_text(item.get("condition"), "condition"),
+                    lang=normalize_text(item.get("language"), "language"),
+                    buy_price=float(item.get("buyPrice", "0.0")),
+                    market_value=float(item.get("marketValue", "0.0")),
+                    sell_price=float(item.get("sellPrice", "0.0")),
+                    quantity=1,
+                    date=auction.date,
+                )
+            )
 
         try:
             auction_id = inventory_service.create_auction_with_items(auction, items_to_add)
@@ -426,6 +420,7 @@ def addBulkItems(auction_id):
     db.commit()
     return jsonify({"status": "success"}), 201
 
+
 @bp.route("/loadAuctions", methods=("GET",))
 @verify_token
 def loadAuctions():
@@ -434,7 +429,7 @@ def loadAuctions():
     return jsonify(auctions)
 
 
-#TODO: delete this 
+# TODO: delete this
 @bp.route("/loadSealed", methods=("GET",))
 @verify_token
 def loadSealed():
@@ -452,9 +447,10 @@ def loadSealed():
 @verify_token
 def loadAvailableSealed():
     inventory_service = InventoryService(get_db())
-    return jsonify({"status": "success", "data": inventory_service.load_items(None,'sold')}), 200
+    return jsonify({"status": "success", "data": inventory_service.load_items(None, "sold")}), 200
 
-#TODO: delete this
+
+# TODO: delete this
 @bp.route("/addSealed", methods=("POST",))
 @verify_token
 def addSealed():
@@ -482,7 +478,7 @@ def addSealed():
             date = (
                 sealed.get("dateAdded")
                 if sealed.get("dateAdded")
-                else datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                else datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             )
             if date and len(date) == 10:
                 date = date + "T00:00:00Z"
@@ -506,12 +502,13 @@ def addSealed():
         logger.exception("DB error, sealed creation failed | %s", e)
         return jsonify({"status": "error", "message": "Error code: Ax02"}), 400
 
-#TODO: change route to /loadItems
+
+# TODO: change route to /loadItems
 @bp.route("/loadCards/<int:auction_id>", methods=("GET",))
 @verify_token
 def loadCards(auction_id):
     inventory_service = InventoryService(get_db())
-    items = inventory_service.load_items(auction_id, 'sold')
+    items = inventory_service.load_items(auction_id, "sold")
     return jsonify(items), 200
 
 
@@ -525,7 +522,8 @@ def loadBulk(auction_id):
     ).fetchall()
     return jsonify([dict(item) for item in bulk_items]), 200
 
-#TODO: delete this
+
+# TODO: delete this
 @bp.route("/loadSealed/<int:auction_id>", methods=("GET",))
 @verify_token
 def loadSealedByAuction(auction_id):
@@ -625,7 +623,7 @@ def deleteAuction(auction_id):
         inventory_service.delete_auction(auction_id)
         return jsonify({"status": "success"}), 200
     except Exception as e:
-        return jsonify({"status": "error", "message": f"Failed to delte auction: {e}"}),400
+        return jsonify({"status": "error", "message": f"Failed to delte auction: {e}"}), 400
 
 
 @bp.route("/update/<int:card_id>", methods=("PATCH",))
@@ -638,7 +636,7 @@ def update(card_id):
             value=data.get("value"),
         )
         inventory_service = InventoryService(get_db())
-        inventory_service.update_item(card_id, edit,"card")
+        inventory_service.update_item(card_id, edit, "card")
         return jsonify({"status": "success"}), 200
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
@@ -680,7 +678,7 @@ def addToExistingAuction(auction_id):
             for card in cards:
                 if card.get("language") not in CONSTANTS.ALLOWED_LANGUAGES:
                     return jsonify(
-                        {"status": "error", "message": f"Invalid language code, Error code: Ax27"}
+                        {"status": "error", "message": "Invalid language code, Error code: Ax27"}
                     ), 400
                 db.execute(
                     "INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id, cardMarketID)"
@@ -715,9 +713,7 @@ def addToExistingAuction(auction_id):
                     date = (
                         item.get("date")
                         if item.get("date") is not None
-                        else datetime.datetime.now(datetime.timezone.utc).strftime(
-                            "%Y-%m-%dT%H:%M:%S.%fZ"
-                        )
+                        else datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
                     )
                     if date and len(date) == 10:
                         date = date + "T00:00:00Z"
@@ -725,7 +721,7 @@ def addToExistingAuction(auction_id):
                         return jsonify(
                             {
                                 "status": "error",
-                                "message": f"Invalid language code, Error code: Ax27",
+                                "message": "Invalid language code, Error code: Ax27",
                             }
                         ), 400
                     db.execute(
@@ -783,6 +779,7 @@ def bulkCounterValue():
         }
     ), 200
 
+
 @bp.route("/writeOffInventory", methods=("POST",))
 @verify_token
 def writeOffInventory():
@@ -797,6 +794,7 @@ def writeOffInventory():
         return jsonify({"status": "error", "message": f"Failed to write off inventory: {e}"}), 400
     return jsonify({"status": "success"}), 200
 
+
 @bp.route("/undoWriteOffInventory", methods=("POST",))
 @verify_token
 def undoWriteOffInventory():
@@ -805,10 +803,15 @@ def undoWriteOffInventory():
         inventory_service = InventoryService(get_db())
         inventory_service.undo_item_writeoff(data["item_id"], data["item_type"])
     except (KeyError, ValueError, TypeError) as e:
-        return jsonify({"status": "error", "message": f"Failed to undo write off inventory: {e}"}), 400
+        return jsonify(
+            {"status": "error", "message": f"Failed to undo write off inventory: {e}"}
+        ), 400
     except Exception as e:
-        return jsonify({"status": "error", "message": f"Failed to undo write off inventory: {e}"}), 400
+        return jsonify(
+            {"status": "error", "message": f"Failed to undo write off inventory: {e}"}
+        ), 400
     return jsonify({"status": "success"}), 200
+
 
 @bp.route("/loadSoldHistory", methods=("GET",))
 @verify_token
@@ -841,7 +844,7 @@ def loadSoldHistory():
             data = decrypted_bytes.decode("utf-8")
             sale["notes"] = data
             result.append(sale)
-        except Exception as e:
+        except Exception:
             result.append(sale)
     return jsonify(result)
 
@@ -1162,9 +1165,7 @@ def orderDebit(db, saleId, cards=None, sealed=None):
         if cards:
             for card in cards:
                 card_id = card.get("id")
-                sold_date = datetime.datetime.now(datetime.timezone.utc).strftime(
-                    "%Y-%m-%dT%H:%M:%S.%fZ"
-                )
+                sold_date = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
                 updated = db.execute(
                     "UPDATE cards SET sold_date = ? WHERE id = ? AND sold_date IS NULL "
                     "AND disposal_reason IS NULL "
@@ -1196,9 +1197,7 @@ def orderDebit(db, saleId, cards=None, sealed=None):
                 qty = int(1 if requested_quantity is None else requested_quantity)
                 sealed_id = item.get("id")
                 sell_price = float(item.get("marketValue") or 0)
-                inventory_service.allocate_sealed_row_to_sale(
-                    sealed_id, qty, saleId, sell_price
-                )
+                inventory_service.allocate_sealed_row_to_sale(sealed_id, qty, saleId, sell_price)
                 valueChange += sell_price * qty
         db.execute(
             "UPDATE sales SET total_amount = total_amount + ? WHERE id = ?", (valueChange, saleId)
@@ -1472,20 +1471,22 @@ def addToSingles():
         data = request.get_json()
         cards = []
         for card in data:
-            cards.append(ItemInput(
-                        id=None,
-                        name=card.get("cardName"),
-                        number=card.get("cardNum"),
-                        normalized_name=normalize(card.get("name")),
-                        quantity=1,
-                        item_type=ItemType('card'),
-                        condition=card.get("condition"), 
-                        lang=card.get("language"), 
-                        buy_price=card.get("buyPrice"), 
-                        market_value=card.get("marketValue"),
-                        sell_price = None,
-                        cardmarketId= resolve_cardmarket_id(get_db(), card, "name", "cardNum"),
-            ))
+            cards.append(
+                ItemInput(
+                    id=None,
+                    name=card.get("cardName"),
+                    number=card.get("cardNum"),
+                    normalized_name=normalize(card.get("name")),
+                    quantity=1,
+                    item_type=ItemType("card"),
+                    condition=card.get("condition"),
+                    lang=card.get("language"),
+                    buy_price=card.get("buyPrice"),
+                    market_value=card.get("marketValue"),
+                    sell_price=None,
+                    cardmarketId=resolve_cardmarket_id(get_db(), card, "name", "cardNum"),
+                )
+            )
         try:
             inventory_service = InventoryService(get_db())
             inventory_service.add_items_to_auction(auction_id, data)
@@ -1502,10 +1503,10 @@ def updateAuction(auction_id):
     value = data.get("value")
     field = data.get("field")
     edit = EditModel(field=field, value=value)
-    
+
     try:
         inventory_service = InventoryService(get_db())
-        inventory_service.update_auction(auction_id,edit)
+        inventory_service.update_auction(auction_id, edit)
     except Exception as e:
         return jsonify({"status": "error", "message": f"Failed to update auction: {e}"}), 400
 
@@ -1528,7 +1529,7 @@ def updatePaymentMethod(auction_id):
     edit = EditModel(field="payment_method", value=payment_method_json)
     try:
         inventory_service = InventoryService(get_db())
-        inventory_service.update_auction(auction_id,edit)
+        inventory_service.update_auction(auction_id, edit)
     except Exception as e:
         return jsonify({"status": "error", "message": f"Failed to update payment method: {e}"}), 400
     return jsonify({"status": "success"}), 200
@@ -1575,9 +1576,7 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
                         item.get("language"),
                         new_price,
                         item.get("marketValue"),
-                        datetime.datetime.now(datetime.timezone.utc).strftime(
-                            "%Y-%m-%dT%H:%M:%S.%fZ"
-                        ),
+                        datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                         auction_id,
                         resolve_cardmarket_id(cur, item, "cardName", "cardNum"),
                     ),
@@ -1593,7 +1592,7 @@ def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDif
 
     try:
         invetory_service = InventoryService(get_db())
-        invetory_service.mark_sealed_opened(openedItem.get("id").replace("s", ""),auction_id)
+        invetory_service.mark_sealed_opened(openedItem.get("id").replace("s", ""), auction_id)
     except Exception as e:
         return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax29"}), 400
     return None
@@ -1608,7 +1607,7 @@ def openSingleSealed(cur, openedItem, sealed, cards, newTotal, priceDiff):
                 (
                     "Opened sealed",
                     0,
-                    datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                    datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                     "[]",
                 ),
             )
@@ -1658,9 +1657,7 @@ def openSingleSealed(cur, openedItem, sealed, cards, newTotal, priceDiff):
                         item.get("language"),
                         new_price,
                         item.get("marketValue"),
-                        datetime.datetime.now(datetime.timezone.utc).strftime(
-                            "%Y-%m-%dT%H:%M:%S.%fZ"
-                        ),
+                        datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                         auctionId,
                         resolve_cardmarket_id(cur, item, "cardName", "cardNum"),
                     ),
@@ -1920,7 +1917,7 @@ def updateOneCard(db, name, num, condition, sellPrice):
         (name, f"%{num}", condition),
     ).fetchone()
     if cardId:
-        date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        date = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         card = db.execute(
             "SELECT auction_id, card_price FROM cards WHERE id = ?", (cardId["id"],)
         ).fetchone()
@@ -1957,7 +1954,7 @@ def _process_soldCM_csv(check_file_path, file, db):
     CHECK_PATH = check_file_path
     # Read existing order IDs
     if os.path.exists(CHECK_PATH):
-        with open(CHECK_PATH, "r", encoding="utf-8") as checkFile:
+        with open(CHECK_PATH, encoding="utf-8") as checkFile:
             existingLines = checkFile.read().splitlines()
     else:
         existingLines = []
@@ -1980,7 +1977,7 @@ def _process_soldCM_csv(check_file_path, file, db):
             lines.append(decoded)
             existingOrderID.add(orderId)
         except UnicodeDecodeError:
-            print(f"Warning: Skipping line due to encoding issues")
+            print("Warning: Skipping line due to encoding issues")
             continue
 
     # Remove header if present
@@ -2071,7 +2068,7 @@ def _create_inventory(db, dataList=None):
             items.append(
                 ItemInput(
                     id=None,
-                    item_type=ItemType('sealed'),
+                    item_type=ItemType("sealed"),
                     name=item["card_name"],
                     normalized_name=normalize(item["card_name"]),
                     number=None,
@@ -2090,7 +2087,7 @@ def _create_inventory(db, dataList=None):
                 items.append(
                     ItemInput(
                         id=None,
-                        item_type=ItemType('card'),
+                        item_type=ItemType("card"),
                         name=item["card_name"],
                         normalized_name=normalize(item["card_name"]),
                         number=normalize_text(item.get("card_num"), "number"),
@@ -2104,7 +2101,7 @@ def _create_inventory(db, dataList=None):
                         cardmarketId=resolve_cardmarket_id(db, item, "name", "card_num"),
                     )
                 )
-            
+
     inventory_service = InventoryService(db)
     return inventory_service.create_auction_with_items(auction, items)
 
@@ -2244,8 +2241,8 @@ def process_sold_csv(files, db):
         if pd.notna(extra) and str(extra).strip():
             address = f"{address}, {str(extra).strip()}"
         paybackDate = (
-            datetime.datetime.now() + datetime.timedelta(days=14)
-        ).date().isoformat()  # date-only: generateInvoice parses with "%Y-%m-%d"
+            (datetime.datetime.now() + datetime.timedelta(days=14)).date().isoformat()
+        )  # date-only: generateInvoice parses with "%Y-%m-%d"
 
         reviecerInfo = {
             "nameAndSurname": str(head["shippingAddressName"]),
@@ -2489,7 +2486,9 @@ def importCSV():
                         packetsData["pickupPointPackets"].append(packetId)
 
             except Exception as e:
-                logger.exception("Failed to create EPH label for order id: %s | %s", item.idOrder, e)
+                logger.exception(
+                    "Failed to create EPH label for order id: %s | %s", item.idOrder, e
+                )
                 failed.append(
                     {
                         "idOrder": item.idOrder,
@@ -2811,18 +2810,18 @@ def invoice(kind):
         db = get_db()
 
         if kind == "invoice":
-        
             zip_buffer = BytesIO()
             try:
                 saleResult = SaleService(db, InvoiceReceiptService()).process_sale(saleInput)
                 receipt = saleResult.receipt.raw
 
-
                 db.commit()
             except Exception as e:
                 db.rollback
                 logger.exception("Failed to create invoice | %s ", e)
-                return jsonify({'status': 'error', 'message': f"Failed to create invoice: {e}"}), 400
+                return jsonify(
+                    {"status": "error", "message": f"Failed to create invoice: {e}"}
+                ), 400
 
             try:
                 # EPHSERVICE create sheet

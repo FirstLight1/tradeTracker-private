@@ -1,5 +1,4 @@
-from flask import url_for, Flask, request, g, render_template, Blueprint
-import sqlite3
+from flask import Blueprint, render_template
 
 bp = Blueprint("track", __name__)
 

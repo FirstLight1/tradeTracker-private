@@ -1,14 +1,12 @@
-from decimal import Decimal
-from itertools import count
 import os
 import re
 from datetime import date, datetime
+from decimal import Decimal
 
 os.environ["INVOICE_LANG"] = "sk"
-from InvoiceGenerator.api import Invoice, CreditNote, Item, Client, Provider, Creator
-from InvoiceGenerator.pdf import SimpleInvoice, CreditNoteInvoice
 from flask import current_app
-
+from InvoiceGenerator.api import Client, Creator, CreditNote, Invoice, Item, Provider
+from InvoiceGenerator.pdf import CreditNoteInvoice, SimpleInvoice
 
 BULK_ITEM_DEFAULTS = {
     "bulk": {"unit_price": Decimal("0.01"), "description": "Common bulk cards"},

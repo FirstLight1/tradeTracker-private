@@ -1,5 +1,6 @@
 import datetime
 import unicodedata
+
 import dateutil.parser as dateutil_parser
 
 
@@ -18,6 +19,7 @@ def format_iso_date(iso_str):
 
     except (ValueError, TypeError):
         return str(iso_str)
+
 
 def parse_date_to_iso(value):
     if not value:
@@ -45,9 +47,9 @@ def parse_date_to_iso(value):
         f"Invalid date format: {value!r}. Expected ISO 8601, YYYY-MM-DD, or dd-mm-yyyy."
     )
 
+
 def normalize(s: str | None) -> str | None:
     if s is None:
         return None
     # NFD decomposes é → e + combining accent, then encode/decode drops the accent
     return unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode("ascii").upper()
-

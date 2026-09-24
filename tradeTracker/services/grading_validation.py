@@ -1,6 +1,7 @@
-from datetime import date, datetime, timezone
-from decimal import Decimal, InvalidOperation, ROUND_DOWN, ROUND_HALF_UP
-from typing import Any, Iterable, Literal, overload
+from collections.abc import Iterable
+from datetime import UTC, date, datetime
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Any, Literal, overload
 
 from tradeTracker.CONSTANTS import CENT
 
@@ -140,7 +141,7 @@ def _chronology_value(value: str) -> datetime:
     except ValueError:
         parsed = datetime.combine(date.fromisoformat(value), datetime.min.time())
     if parsed.tzinfo is not None:
-        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        parsed = parsed.astimezone(UTC).replace(tzinfo=None)
     return parsed
 
 

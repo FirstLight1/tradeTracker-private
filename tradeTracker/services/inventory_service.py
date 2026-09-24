@@ -1,17 +1,24 @@
-import logging
-from typing import Any
 import json
+import logging
 from collections import defaultdict
-from tradeTracker.services.models import InventoryWriteOff, AuctionInput, ItemInput, EditModel, GradeStatus
-from tradeTracker.utils.cardmarket import resolve_cardmarket_id_model
+from typing import Any
+
 import tradeTracker.CONSTANTS as CONSTANTS
 import tradeTracker.utils.formating as formating
+from tradeTracker.services.models import (
+    AuctionInput,
+    EditModel,
+    GradeStatus,
+    InventoryWriteOff,
+    ItemInput,
+)
+from tradeTracker.utils.cardmarket import resolve_cardmarket_id_model
 
 
 class InventoryService:
     def __init__(self, db):
-        self.db = db 
-        
+        self.db = db
+
     def load_auctions(self) -> list[dict[str, Any]]:
         rows = self.db.execute("""
             SELECT
@@ -74,10 +81,12 @@ class InventoryService:
     def _create_auction(self, auction: AuctionInput) -> int:
         try:
             cur = self.db.cursor()
-            cur.execute("INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?,?,?,?)",
-                (auction.name, auction.buy_price, auction.date, auction.payments))
+            cur.execute(
+                "INSERT INTO auctions (auction_name, auction_price, date_created, payment_method) VALUES (?,?,?,?)",
+                (auction.name, auction.buy_price, auction.date, auction.payments),
+            )
             return cur.lastrowid
-        except Exception as e:
+        except Exception:
             raise Exception("Failed to create auction")
 
     def delete_auction(self, auction_id: int) -> None:
@@ -95,20 +104,23 @@ class InventoryService:
     def update_auction(self, auction_id: int, auction: EditModel) -> None:
         if auction.field not in CONSTANTS.AUCTION_ALLOWED_FIELDS:
             raise ValueError(f"Invalid field: {auction.field}")
-            
-        #TODO: add date_created
-        
+
+        # TODO: add date_created
+
         if auction.field == "date_created":
             try:
                 value = formating.parse_date_to_iso(auction.value)
-            except ValueError as e:
-                raise ValueError(f"Invalid date format: {auction.value}. Expected ISO 8601, YYYY-MM-DD, or dd-mm-yyyy.")
+            except ValueError:
+                raise ValueError(
+                    f"Invalid date format: {auction.value}. Expected ISO 8601, YYYY-MM-DD, or dd-mm-yyyy."
+                )
         else:
             value = auction.value
-                
 
         try:
-            self.db.execute(f"UPDATE auctions SET {auction.field} = ? WHERE id = ?", (value, auction_id))
+            self.db.execute(
+                f"UPDATE auctions SET {auction.field} = ? WHERE id = ?", (value, auction_id)
+            )
             self.db.commit()
         except Exception as e:
             self.db.rollback()
@@ -134,15 +146,20 @@ class InventoryService:
                     totals[payment["type"]] += payment["amount"]
 
                 merged_payments = [
-                    {"type": payment_type,  "amount": amount}
+                    {"type": payment_type, "amount": amount}
                     for payment_type, amount in totals.items()
                 ]
 
                 self.db.execute(
-                    "UPDATE auctions SET payment_method = ? WHERE id = ?", (json.dumps(merged_payments), target_id)
+                    "UPDATE auctions SET payment_method = ? WHERE id = ?",
+                    (json.dumps(merged_payments), target_id),
                 )
-            self.db.execute("UPDATE cards SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id))
-            self.db.execute("UPDATE sealed SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id))
+            self.db.execute(
+                "UPDATE cards SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id)
+            )
+            self.db.execute(
+                "UPDATE sealed SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id)
+            )
             self.db.execute(
                 "UPDATE bulk_items SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id)
             )
@@ -153,8 +170,8 @@ class InventoryService:
             logging.exception(f"Error merging auctions | {e}")
             raise Exception("Failed to merge auctions")
 
-    def load_items(self, auction_id: int | None, filter: str = 'sold') -> list[dict[str, Any]]:
-        #TODO: rename the filter cause this is not sold items
+    def load_items(self, auction_id: int | None, filter: str = "sold") -> list[dict[str, Any]]:
+        # TODO: rename the filter cause this is not sold items
         if filter == "sold":
             cardFilter = "c.sold_date IS NULL AND si.card_id IS NULL AND c.disposal_reason IS NULL "
             sealedFilter = "sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL"
@@ -165,7 +182,8 @@ class InventoryService:
             raise ValueError(f"Invalid filter: {filter}")
 
         if auction_id is not None:
-            cardRows = self.db.execute(f"""
+            cardRows = self.db.execute(
+                f"""
                 SELECT c.*,"card" as item_type, gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, gsc.cert_number, gs.status,
                 CASE 
                     WHEN gsc.id IS NULL THEN 'raw'
@@ -182,14 +200,19 @@ class InventoryService:
                     ON gsc.submission_id = gs.id
                 WHERE c.auction_id = ?
                 AND {cardFilter}
-                """,(auction_id,)).fetchall()
-            sealedRows = self.db.execute(f"""
+                """,
+                (auction_id,),
+            ).fetchall()
+            sealedRows = self.db.execute(
+                f"""
                 SELECT *, "sealed" as item_type
                 FROM sealed
                 WHERE auction_id = ?
                 AND {sealedFilter}
-                """,(auction_id,)).fetchall()
-            items =  cardRows + sealedRows
+                """,
+                (auction_id,),
+            ).fetchall()
+            items = cardRows + sealedRows
             return [dict(row) for row in items]
         else:
             rows = self.db.execute(f"""
@@ -199,7 +222,6 @@ class InventoryService:
             AND auction_id IS NULL
             """).fetchall()
             return [dict(row) for row in rows]
-                                    
 
     def _insert_items(self, items: list[ItemInput], auction_id: int) -> None:
         cards_to_add = []
@@ -246,7 +268,7 @@ class InventoryService:
                 "VALUES (?,?,?,?,?,?,?,?,?)",
                 sealed_to_add,
             )
-        except Exception as e:
+        except Exception:
             raise Exception("Failed to add items")
 
     def add_items_to_auction(self, auction_id: int, items: list[ItemInput]) -> None:
@@ -284,7 +306,9 @@ class InventoryService:
 
         if item_type == "card":
             try:
-                self.db.execute(f"UPDATE cards SET {item.field} = ? WHERE id = ?", (item.value, item_id))
+                self.db.execute(
+                    f"UPDATE cards SET {item.field} = ? WHERE id = ?", (item.value, item_id)
+                )
                 self.db.commit()
             except Exception as e:
                 self.db.rollback()
@@ -292,7 +316,9 @@ class InventoryService:
                 raise Exception("Failed to update card")
         elif item_type == "sealed":
             try:
-                self.db.execute(f"UPDATE sealed SET {item.field} = ? WHERE id = ?", (item.value, item_id))
+                self.db.execute(
+                    f"UPDATE sealed SET {item.field} = ? WHERE id = ?", (item.value, item_id)
+                )
                 self.db.commit()
             except Exception as e:
                 self.db.rollback()
@@ -338,7 +364,8 @@ class InventoryService:
             raise Exception(f"Error opening sealed item | {e}")
 
     def get_sellable_card(self, card_id: int) -> dict[str, Any]:
-        card = self.db.execute("""
+        card = self.db.execute(
+            """
                 SELECT c.card_name, c.card_num, c.condition, c.card_price, 
                 gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, 
                 gsc.cert_number, gsc.landed_cost, gsc.submission_id, gs.status 
@@ -358,19 +385,16 @@ class InventoryService:
                     AND gs2.status IN ('submitted', 'grading')
                 )
                 """,
-                (card_id,),
-            ).fetchone()
-        if not card or (
-            card["submission_id"] is not None
-            and card["status"] != GradeStatus.GRADED
-        ):
+            (card_id,),
+        ).fetchone()
+        if not card or (card["submission_id"] is not None and card["status"] != GradeStatus.GRADED):
             raise ValueError(f"Card with id:{card_id} is not available")
         return dict(card)
 
     def mark_sold_card(self, card_id: int, sale_date: str) -> None:
         try:
             self.db.execute("UPDATE cards SET sold_date = ? WHERE id = ?", (sale_date, card_id))
-        except ValueError as e:
+        except ValueError:
             raise ValueError(f"Card with id:{card_id} is not available")
         except Exception as e:
             raise Exception(f"Error marking card as sold | {e}")
@@ -400,9 +424,7 @@ class InventoryService:
             if remaining == 0:
                 break
             allocated = min(row["quantity"], remaining)
-            self.allocate_sealed_row_to_sale(
-                row["id"], allocated, sale_id, sell_price
-            )
+            self.allocate_sealed_row_to_sale(row["id"], allocated, sale_id, sell_price)
             remaining -= allocated
 
     def allocate_sealed_row_to_sale(
@@ -478,9 +500,7 @@ class InventoryService:
             self.db.commit()
         except Exception:
             self.db.rollback()
-            logging.exception(
-                "Failed to write off %s %s", writeoff.item_type, writeoff.item_id
-            )
+            logging.exception("Failed to write off %s %s", writeoff.item_type, writeoff.item_id)
             raise
 
     def _writeoff_sealed(self, writeoff: InventoryWriteOff) -> None:

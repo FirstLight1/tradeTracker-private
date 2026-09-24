@@ -1,15 +1,15 @@
-from dataclasses import dataclass
+import datetime
 import enum
-from tradeTracker.utils.formating import normalize
+from dataclasses import dataclass
+from typing import Any
+
 from tradeTracker.services.grading_validation import (
     grade_number,
     money,
     normalize_date,
     normalize_text,
 )
-from typing import Any
-import datetime
-import json
+from tradeTracker.utils.formating import normalize
 
 
 @dataclass
@@ -29,28 +29,31 @@ class AuctionInput:
     @classmethod
     def from_dict(cls, item: dict[str, Any]) -> "AuctionInput":
         return cls(
-            id=(item.get("id", None)),
-            name=item.get("name", None),
+            id=(item.get("id")),
+            name=item.get("name"),
             buy_price=float(item["buy_price"]) if item.get("buy_price") else None,
             payments=item["payments"] if item.get("payments") else None,
             date=item.get("date", datetime.date.today().isoformat()),
         )
+
 
 @dataclass
 class EditModel:
     field: str
     value: Any
 
+
 class ItemType(enum.StrEnum):
     CARD = "card"
     SEALED = "sealed"
+
 
 @dataclass
 class ItemInput:
     id: int | None
     item_type: ItemType
-    name: str 
-    normalized_name: str 
+    name: str
+    normalized_name: str
     number: str | None
     condition: str | None
     lang: str | None
@@ -61,7 +64,7 @@ class ItemInput:
     date: str = datetime.date.today().isoformat()
     cardmarketId: str | None = None
 
-    #TODO: improve this or remake card class in js
+    # TODO: improve this or remake card class in js
     @classmethod
     def from_dict(cls, item: dict[str, Any]) -> "ItemInput":
         return cls(
@@ -76,14 +79,16 @@ class ItemInput:
             market_value=float(money(item.get("market_value"), "market_value")),
             sell_price=float(money(item.get("sell_price"), "sell_price")),
             quantity=int(item.get("quantity", 1)),
-            date= item.get("date", datetime.date.today().isoformat()),
-            cardmarketId=item.get("cardmarketId", None),
+            date=item.get("date", datetime.date.today().isoformat()),
+            cardmarketId=item.get("cardmarketId"),
         )
+
 
 class BulkType(enum.StrEnum):
     BULK = "bulk"
     HOLO = "holo"
     EX = "ex"
+
 
 @dataclass
 class BulkInput:
@@ -91,7 +96,6 @@ class BulkInput:
     quantity: int
     sell_price: float
     assigned_id: int
-
 
 
 @dataclass
@@ -247,6 +251,7 @@ class GradingCompleteItems:
             ),
         )
 
+
 class DisposalReason(enum.StrEnum):
     DAMAGED = "Damaged"
     LOST = "Lost"
@@ -293,4 +298,3 @@ class InventoryWriteOff:
             disposal_note=normalize_text(item.get("disposal_note"), "disposal_note"),
             quantity=quantity,
         )
-

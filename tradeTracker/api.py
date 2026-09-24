@@ -1,7 +1,7 @@
 import datetime
 import logging
 
-from flask import Blueprint, abort, current_app, jsonify, request
+from flask import Blueprint, jsonify, request
 
 from tradeTracker import CONSTANTS, actions
 from tradeTracker.db import get_db
@@ -40,7 +40,7 @@ def cardMarketTable():
             return jsonify(
                 {"status": "error", "message": "Invalid language code, Error code: Ax27"}
             ), 400
-        date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        date = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         auction = {"name": None, "buy": None, "date": date}
 
         auction["buy"] = sum((float(card.get("marketValue", 0)) * 0.8) for card in cards)
@@ -165,7 +165,7 @@ def cardMarketOrder():
                 ids += [None] * (count - len(ids))
                 card["cardId"] = ids
 
-        except Exception as e:
+        except Exception:
             print("There was an error while getting card ids")
             logger.exception("cardMarketOrder failed to get card ids")
             return jsonify(

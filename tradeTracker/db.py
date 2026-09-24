@@ -1,8 +1,9 @@
-import sqlite3
-import click
 import logging
-from flask import current_app, g
+import sqlite3
 import time
+
+import click
+from flask import current_app, g
 
 logger = logging.getLogger(__name__)
 slow_log = logging.getLogger("tradetracker.db.slow")

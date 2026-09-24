@@ -1,10 +1,8 @@
-import requests
 import os
+
+import requests
+
 import tradeTracker.services.models as models
-import json
-import io
-import time
-from datetime import datetime
 
 
 class EPHService:
@@ -41,7 +39,9 @@ class EPHService:
         }
 
         try:
-            r = requests.put(f"{self.baseurl}/sheets", json=payload, headers=self._headers(), timeout=(3.05,15))
+            r = requests.put(
+                f"{self.baseurl}/sheets", json=payload, headers=self._headers(), timeout=(3.05, 15)
+            )
             r.raise_for_status()
             return r.json()["sheet"]["id"]
         except requests.exceptions.Timeout:
@@ -77,7 +77,7 @@ class EPHService:
                 f"{self.baseurl}/sheets/{sheet_id}/parcels",
                 json={"parcel": parcel},
                 headers=self._headers(),
-                timeout=(3.05,15),
+                timeout=(3.05, 15),
             )
             r.raise_for_status()
             return r.json()["parcel"]["id"]
@@ -90,7 +90,7 @@ class EPHService:
                 f"{self.baseurl}/sheets/{sheet_id}/parcels/{parcel_id}/labels",
                 json={"format": "pdf"},
                 headers=self._headers(),
-                timeout=(3.05,60),
+                timeout=(3.05, 60),
             )
             r.raise_for_status()
         except requests.exceptions.Timeout:
@@ -108,7 +108,7 @@ class EPHService:
                 f"{self.baseurl}/sheets/{sheet_id}/register",
                 json={},
                 headers=self._headers(),
-                timeout=(3.05,15),
+                timeout=(3.05, 15),
             )
             r.raise_for_status()
             return r.json()["sheet"]["state"]

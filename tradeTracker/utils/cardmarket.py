@@ -1,5 +1,7 @@
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 def resolve_cardmarket_id(db, item, name_key, card_num_key):
     """Use an imported ID when present, otherwise resolve one external match."""
@@ -31,7 +33,8 @@ def resolve_cardmarket_id(db, item, name_key, card_num_key):
     )
     return None
 
-#TODO: change this to default
+
+# TODO: change this to default
 def resolve_cardmarket_id_model(db, item, name_key, card_num_key):
     """Use an imported ID when present, otherwise resolve one external match."""
     supplied_id = item.cardmarketId

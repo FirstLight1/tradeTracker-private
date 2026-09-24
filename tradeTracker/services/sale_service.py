@@ -1,10 +1,12 @@
-import os
 import base64
 import datetime
-import tradeTracker.services.models as models
-import tradeTracker.CONSTANTS as CONSTANTS
 import json
+import os
+
 from Crypto.Cipher import AES
+
+import tradeTracker.CONSTANTS as CONSTANTS
+import tradeTracker.services.models as models
 from tradeTracker.services.inventory_service import InventoryService
 
 if os.environ.get("FLASK_ENV") != "production":
