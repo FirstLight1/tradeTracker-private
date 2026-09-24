@@ -171,7 +171,7 @@ class InventoryService:
                     WHEN gsc.id IS NULL THEN 'raw'
                     WHEN gs.status = 'graded' THEN 'graded'
                     ELSE 'at_grader'
-                END AS grade_status
+                END AS grading_status
                 FROM cards AS c
                 LEFT JOIN sale_items AS si
                     ON c.id = si.card_id
