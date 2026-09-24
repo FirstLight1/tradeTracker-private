@@ -8,11 +8,11 @@ import { csrfFetch } from './utils/sanitizers.js';
 
 function bindSoldReportButton() {
     const salesBtn = document.querySelector('.sales-btn');
-    if (!salesBtn || salesBtn.dataset.headerReportBound === 'true') return;
+    if (!salesBtn || salesBtn.dataset.headerReportBound === 'true') {return;}
 
     salesBtn.dataset.headerReportBound = 'true';
     salesBtn.addEventListener('click', () => {
-        if (document.querySelector('.sold-report-container')) return;
+        if (document.querySelector('.sold-report-container')) {return;}
         const restoreFocusTo = document.activeElement;
         const div = document.createElement('div');
         div.classList.add('sold-report-container');
@@ -40,10 +40,10 @@ function bindSoldReportButton() {
         const close = () => {
             document.removeEventListener('keydown', handleKeydown);
             div.remove();
-            if (restoreFocusTo?.isConnected) restoreFocusTo.focus();
+            if (restoreFocusTo?.isConnected) {restoreFocusTo.focus();}
         };
         const handleKeydown = (event) => {
-            if (event.key === 'Escape') close();
+            if (event.key === 'Escape') {close();}
         };
         document.addEventListener('keydown', handleKeydown);
         div.querySelector('.close-report').addEventListener('click', close);
@@ -54,13 +54,13 @@ function bindSoldReportButton() {
                 event.preventDefault();
                 const monthInput = form.querySelector('#sold-month');
                 const yearInput = form.querySelector('#sold-year');
-                if (!monthInput || !yearInput) return;
+                if (!monthInput || !yearInput) {return;}
                 await generateSoldReport(monthInput.value, yearInput.value, div, close);
             });
         }
 
         div.addEventListener('click', (event) => {
-            if (event.target === div) close();
+            if (event.target === div) {close();}
         });
         div.querySelector('#sold-month').focus();
     });
@@ -95,7 +95,7 @@ async function generateSoldReport(month, year, div, close) {
 
 function bindUploadCSVButton() {
     const uploadBtn = document.querySelector('.upload-csv-btn');
-    if (!uploadBtn || uploadBtn.dataset.headerUploadBound === 'true') return;
+    if (!uploadBtn || uploadBtn.dataset.headerUploadBound === 'true') {return;}
 
     uploadBtn.dataset.headerUploadBound = 'true';
     uploadBtn.addEventListener('click', () => {
@@ -133,22 +133,22 @@ function bindUploadCSVButton() {
         bindImportCSV('.import-sold-csv', 'sold', div);
 
         const closeButton = div.querySelector('.close-modal');
-        if (closeButton) closeButton.addEventListener('click', () => div.remove());
+        if (closeButton) {closeButton.addEventListener('click', () => div.remove());}
         div.addEventListener('click', (event) => {
-            if (event.target === div) div.remove();
+            if (event.target === div) {div.remove();}
         });
     });
 }
 
 function bindImportCSV(selector, type, root = document) {
-    if (!root || !root.querySelector) return;
+    if (!root || !root.querySelector) {return;}
     const input = root.querySelector(selector);
-    if (!input || input.dataset.csvImportBound === 'true') return;
+    if (!input || input.dataset.csvImportBound === 'true') {return;}
 
     input.dataset.csvImportBound = 'true';
     input.addEventListener('change', async (event) => {
         const files = event.target.files;
-        if (!files || !files.length) return;
+        if (!files || !files.length) {return;}
 
         const formData = new FormData();
         for (const file of files) {
@@ -167,7 +167,7 @@ function bindImportCSV(selector, type, root = document) {
                 case 'success': {
                     if (data.download_url) {
                         const downloadResponse = await fetch(data.download_url);
-                        if (!downloadResponse.ok) throw new Error('download failed');
+                        if (!downloadResponse.ok) {throw new Error('download failed');}
                         const blob = await downloadResponse.blob();
                         const url = URL.createObjectURL(blob);
                         const link = document.createElement('a');
@@ -245,9 +245,9 @@ function showProcessingSpinner(root, delay = 400) {
 }
 
 function hideProcessingSpinner(handle) {
-    if (!handle) return;
+    if (!handle) {return;}
     clearTimeout(handle.timer);
-    if (handle.overlay) handle.overlay.remove();
+    if (handle.overlay) {handle.overlay.remove();}
 }
 
 function renderHeaderAlert(message, type) {

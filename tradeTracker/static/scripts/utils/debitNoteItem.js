@@ -39,7 +39,7 @@ export class DebitNoteItem {
         input.dataset.prev = input.value;
         input.addEventListener('input', () => {
             const totalEl = document.querySelector('.creditnote-total .total-amount');
-            if (!totalEl) return;
+            if (!totalEl) {return;}
             const newValue = Number(input.value) || 0;
             const oldValue = Number(input.dataset.prev) || 0;
             totalEl.textContent = (

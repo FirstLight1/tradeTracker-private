@@ -68,7 +68,7 @@ saveButton.addEventListener('click', async () => {
         }
     });
 
-    let auction = {
+    const auction = {
         name: auctionName.trim() || null,
         buy_price: auctionBuy ? parseFloat(auctionBuy.replace(',', '.')) : null,
         date: date.trim() || null,
@@ -86,7 +86,7 @@ saveButton.addEventListener('click', async () => {
 
     const cards = document.querySelectorAll('.card');
     cards.forEach((ell) => {
-        let card = new CardStruct();
+        const card = new CardStruct();
         const input = (selector) =>
             DOMPurify.sanitize(ell.querySelector(selector)?.value.trim().toUpperCase()) || null;
         const inputNumber = (selector) => {

@@ -31,7 +31,7 @@ let currentResultsQueue = null;
 function searchBar() {
     const searchInput = document.querySelector('.debit-note-search .search-field');
     const searchBtn = document.querySelector('.debit-note-search .search-btn');
-    if (!searchInput || !searchBtn) return;
+    if (!searchInput || !searchBtn) {return;}
 
     searchInput.addEventListener('keydown', (event) => {
         if (event.key === 'ArrowDown' && currentResultsQueue) {
@@ -155,7 +155,7 @@ function displayDebitNoteResults(results, resultsQueue, searchInput) {
 async function addItemToDebitNote(result, pendingQty) {
     const itemsContainer = document.querySelector('.creditnote-item-content');
     const item = await DebitNoteItem.fromSearchResult(result, pendingQty, addedIds);
-    if (!item) return;
+    if (!item) {return;}
     const totalPrice = document.querySelector('.total-amount');
     item.render().forEach((el) => {
         itemsContainer.appendChild(el);

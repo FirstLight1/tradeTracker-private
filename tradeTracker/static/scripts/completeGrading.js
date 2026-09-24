@@ -26,7 +26,7 @@ function createInput(className, label, type = 'text') {
     input.className = className;
     input.type = type;
     input.setAttribute('aria-label', label);
-    if (type === 'number') input.step = '0.01';
+    if (type === 'number') {input.step = '0.01';}
     return input;
 }
 
@@ -106,19 +106,19 @@ async function loadCards() {
     try {
         const submissionsResponse = await csrfFetch('/grading/submissions');
         if (!submissionsResponse.ok)
-            throw new Error(`request failed with status ${submissionsResponse.status}`);
+            {throw new Error(`request failed with status ${submissionsResponse.status}`);}
         const submissions = await submissionsResponse.json();
         const submission = Array.isArray(submissions)
             ? submissions.find((item) => Number(item.id) === Number(submissionId))
             : null;
-        if (!submission) throw new Error('submission was not found');
+        if (!submission) {throw new Error('submission was not found');}
         if (['graded', 'returned', 'cancelled'].includes(submission.status)) {
             throw new Error('this submission is already finalized and cannot be completed');
         }
         const response = await csrfFetch(`/grading/submissions/${submissionId}`);
-        if (!response.ok) throw new Error(`request failed with status ${response.status}`);
+        if (!response.ok) {throw new Error(`request failed with status ${response.status}`);}
         const cards = await response.json();
-        if (!Array.isArray(cards)) throw new Error('invalid cards response');
+        if (!Array.isArray(cards)) {throw new Error('invalid cards response');}
 
         cardList.replaceChildren();
         if (cards.length === 0) {
@@ -152,9 +152,9 @@ function completionPayload() {
 form.addEventListener('submit', async (event) => {
     event.preventDefault();
     clearFieldErrors(form);
-    if (!form.reportValidity()) return;
+    if (!form.reportValidity()) {return;}
     const payload = completionPayload();
-    if (payload.length === 0) return;
+    if (payload.length === 0) {return;}
 
     submitButton.disabled = true;
     submitButton.textContent = 'Completing...';

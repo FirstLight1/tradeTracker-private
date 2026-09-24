@@ -10,7 +10,7 @@ export async function searchCard(query, cartIds = [], individualCards = false) {
         body: JSON.stringify({ query: query.toUpperCase(), cartIds, individualCards }),
     });
     const data = await response.json();
-    if (data.status === 'success') return data.value;
+    if (data.status === 'success') {return data.value;}
     renderAlert('Search failed', 'error');
     return null;
 }

@@ -13,14 +13,14 @@ if (initialMarketValueInput) {
 }
 
 saveButton.addEventListener('click', () => {
-    let auction = {};
+    const auction = {};
     if (cardsArr.length === 0) {
         cardsArr.push(auction);
     }
 
     const cards = document.querySelectorAll('.card');
     cards.forEach((ell) => {
-        let card = new CardStruct();
+        const card = new CardStruct();
         const input = (selector) =>
             DOMPurify.sanitize(ell.querySelector(selector)?.value.trim().toUpperCase()) || null;
         const inputNumber = (selector) => {

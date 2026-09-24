@@ -178,7 +178,7 @@ export class CartLine {
 
     // Lazy backfill: fetch more IDs from server when reservableIds is empty
     async backfillPool(excludeIds) {
-        if (this.reservableIds.length > 0) return;
+        if (this.reservableIds.length > 0) {return;}
         try {
             const response = await fetch('/getCardIds', {
                 method: 'POST',

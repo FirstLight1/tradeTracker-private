@@ -44,7 +44,7 @@ class struct {
 }
 
 const saveButton = document.querySelector('.save-btn');
-let cardsArr = [];
+const cardsArr = [];
 const initialCardNameInput = document.querySelector('.card input[name="cardName"]');
 
 if (initialCardNameInput) {
@@ -56,7 +56,7 @@ if (initialCardNameInput) {
 saveButton.addEventListener('click', () => {
     const cards = document.querySelectorAll('.card');
     cards.forEach((ell) => {
-        let card = new struct();
+        const card = new struct();
         const input = (selector) =>
             DOMPurify.sanitize(ell.querySelector(selector)?.value.trim().toUpperCase()) || null;
         const inputNumber = (selector) => {

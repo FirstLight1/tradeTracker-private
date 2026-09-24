@@ -29,9 +29,9 @@ export function renderField(value, inputType, classList, placeholder, datafield)
 export function renderAlert(text, type) {
     const alertDiv = document.querySelector('#alert-div');
 
-    if (!alertDiv) return;
+    if (!alertDiv) {return;}
 
-    if (alertTimer) clearTimeout(alertTimer);
+    if (alertTimer) {clearTimeout(alertTimer);}
     alertDiv.classList.remove('alert-error', 'alert-message');
     const isError = type === 'error';
     alertDiv.classList.add(isError ? 'alert-error' : 'alert-message');
@@ -54,8 +54,8 @@ export function renderAlert(text, type) {
 }
 
 export function errorMessage(error, fallback = 'Something went wrong') {
-    if (typeof error === 'string' && error.trim()) return error;
-    if (error && typeof error.message === 'string' && error.message.trim()) return error.message;
+    if (typeof error === 'string' && error.trim()) {return error;}
+    if (error && typeof error.message === 'string' && error.message.trim()) {return error.message;}
     return fallback;
 }
 
@@ -68,16 +68,16 @@ export function clearFieldErrors(root = document) {
         const describedBy = (field.getAttribute('aria-describedby') || '')
             .split(/\s+/)
             .filter((id) => id && !id.startsWith('server-error-'));
-        if (describedBy.length) field.setAttribute('aria-describedby', describedBy.join(' '));
-        else field.removeAttribute('aria-describedby');
+        if (describedBy.length) {field.setAttribute('aria-describedby', describedBy.join(' '));}
+        else {field.removeAttribute('aria-describedby');}
     });
 }
 
 function flattenErrors(errors) {
     if (Array.isArray(errors)) {
         return errors.flatMap((error) => {
-            if (typeof error === 'string') return [{ field: '', message: error }];
-            if (!error || typeof error !== 'object') return [];
+            if (typeof error === 'string') {return [{ field: '', message: error }];}
+            if (!error || typeof error !== 'object') {return [];}
             return [
                 {
                     field: error.field || error.path || '',
@@ -86,7 +86,7 @@ function flattenErrors(errors) {
             ];
         });
     }
-    if (!errors || typeof errors !== 'object') return [];
+    if (!errors || typeof errors !== 'object') {return [];}
     return Object.entries(errors).flatMap(([field, value]) => {
         const values = Array.isArray(value) ? value : [value];
         return values.map((item) => ({ field, message: errorMessage(item, 'Invalid value') }));
@@ -104,7 +104,7 @@ export function renderServerErrors(
     const general = [];
     errors.forEach(({ field, message }, index) => {
         const parts = String(field)
-            .split(/[.\[\]]/)
+            .split(/[.[\]]/)
             .filter(Boolean);
         const mapped = fieldMap[field] ?? fieldMap[parts[parts.length - 1]];
         const itemIndex = parts.find((part) => /^\d+$/.test(part));
@@ -133,9 +133,9 @@ export function renderServerErrors(
         input.setAttribute('aria-describedby', [...describedBy].join(' '));
         input.insertAdjacentElement('afterend', error);
     });
-    if (errors.length === 0) general.push(errorMessage(data, fallback));
-    else if (data?.message) general.unshift(data.message);
-    if (general.length) renderAlert([...new Set(general)].join('\n'), 'error');
+    if (errors.length === 0) {general.push(errorMessage(data, fallback));}
+    else if (data?.message) {general.unshift(data.message);}
+    if (general.length) {renderAlert([...new Set(general)].join('\n'), 'error');}
     const firstInvalid = root.querySelector('[aria-invalid="true"]');
     firstInvalid?.focus();
     return errors.length > 0;

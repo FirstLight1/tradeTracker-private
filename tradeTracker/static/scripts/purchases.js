@@ -8,11 +8,11 @@ import {
 import './headerActions.js';
 
 function parsePaymentMethods(paymentMethodData) {
-    if (!paymentMethodData) return [];
+    if (!paymentMethodData) {return [];}
 
     try {
         const parsed = JSON.parse(paymentMethodData);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {return parsed;}
     } catch (e) {
         return paymentMethodData
             .trim()
@@ -24,7 +24,7 @@ function parsePaymentMethods(paymentMethodData) {
 }
 
 function formatPaymentDisplay(payments) {
-    if (!payments || payments.length === 0) return 'No payment method';
+    if (!payments || payments.length === 0) {return 'No payment method';}
 
     return payments
         .map((p) => {
@@ -40,10 +40,10 @@ function isEmpty(obj) {
 }
 
 function formatSealedDate(rawDate) {
-    if (!rawDate) return '';
+    if (!rawDate) {return '';}
     const timeStamp = String(rawDate).replace('Z', '');
     const date = new Date(timeStamp);
-    if (isNaN(date.getTime())) return '';
+    if (isNaN(date.getTime())) {return '';}
     return date.toLocaleDateString('sk-SK', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 

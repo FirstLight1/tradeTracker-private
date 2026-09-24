@@ -75,11 +75,11 @@ function paymentTypeRow(type = '', amount = 0, className = 'payment-row') {
 }
 
 function parsePaymentMethods(paymentMethodData) {
-    if (!paymentMethodData) return [];
+    if (!paymentMethodData) {return [];}
 
     try {
         const parsed = JSON.parse(paymentMethodData);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {return parsed;}
     } catch (e) {
         // Old format - space separated
         return paymentMethodData
@@ -129,7 +129,7 @@ function validatePayments(payments) {
 }
 
 function formatPaymentDisplay(payments) {
-    if (!payments || payments.length === 0) return 'No payment method';
+    if (!payments || payments.length === 0) {return 'No payment method';}
 
     // Escape HTML to prevent XSS, then join with <br>
     return payments
@@ -182,7 +182,7 @@ function calculateSealedBuyPrice(sealed) {
 }
 
 function getInputValueAndPatch(value, element, dataset, cardId) {
-    if (!Boolean(value)) {
+    if (!value) {
         return null;
     }
     replaceWithPElement(dataset, value, element);
@@ -225,7 +225,7 @@ async function patchSealedLanguage(sid, language) {
             body: JSON.stringify({ field: 'language', value: language }),
         });
         const data = await response.json();
-        if (response.ok && data.status === 'success') return true;
+        if (response.ok && data.status === 'success') {return true;}
         renderAlert('Failed to update sealed language', 'error');
     } catch (error) {
         renderAlert('Error updating sealed language: ' + error, 'error');
@@ -235,7 +235,7 @@ async function patchSealedLanguage(sid, language) {
 
 function enableSealedLanguageEditing(sealedDiv) {
     sealedDiv.addEventListener('dblclick', (event) => {
-        if (!event.target.classList.contains('sealed-language')) return;
+        if (!event.target.classList.contains('sealed-language')) {return;}
         event.preventDefault();
         event.stopPropagation();
 
@@ -250,7 +250,7 @@ function enableSealedLanguageEditing(sealedDiv) {
         let saving = false;
         let finished = false;
         const finishEditing = (value) => {
-            if (finished) return;
+            if (finished) {return;}
             finished = true;
             const replacement = document.createElement('p');
             replacement.classList.add('sealed-language');
@@ -274,10 +274,10 @@ function enableSealedLanguageEditing(sealedDiv) {
             { once: true },
         );
         select.addEventListener('blur', () => {
-            if (!saving) finishEditing(previousValue);
+            if (!saving) {finishEditing(previousValue);}
         });
         select.addEventListener('keydown', (keyEvent) => {
-            if (keyEvent.key === 'Escape') finishEditing(previousValue);
+            if (keyEvent.key === 'Escape') {finishEditing(previousValue);}
         });
     });
 }
@@ -452,7 +452,7 @@ function createSealedModal(sid, auctionId, initialValue, sourceName, sourceLangu
                 ),
             );
             item.soldDate = null;
-            if (item.marketValue == '') return;
+            if (item.marketValue == '') {return;}
             if (item.cardNum !== '') {
                 cards.push(item);
             } else {
@@ -487,7 +487,7 @@ function createSealedModal(sid, auctionId, initialValue, sourceName, sourceLangu
     const close = () => modal.remove();
     closeButton.addEventListener('click', close);
     modal.addEventListener('click', (event) => {
-        if (event.target === modal) close();
+        if (event.target === modal) {close();}
     });
 }
 
@@ -543,15 +543,15 @@ function gradingModal(cardId) {
     const close = () => {
         document.removeEventListener('keydown', handleKeydown);
         modal.remove();
-        if (restoreFocusTo?.isConnected) restoreFocusTo.focus();
+        if (restoreFocusTo?.isConnected) {restoreFocusTo.focus();}
     };
     const handleKeydown = (event) => {
-        if (event.key === 'Escape') close();
+        if (event.key === 'Escape') {close();}
     };
 
     closeButton.addEventListener('click', close);
     modal.addEventListener('click', (event) => {
-        if (event.target === modal) close();
+        if (event.target === modal) {close();}
     });
     const gradingForm = modal.querySelector('.direct-grading-form');
     const gradeNumeric = modal.querySelector('#grading-grade-numeric');
@@ -562,7 +562,7 @@ function gradingModal(cardId) {
         const grader = modal.querySelector('#grading-grader');
         const marketValue = modal.querySelector('#grading-market-value');
         const errors = {};
-        if (!grader.value.trim()) errors.grader = 'Grader is required.';
+        if (!grader.value.trim()) {errors.grader = 'Grader is required.';}
         if (!gradeNumeric.value && !gradeLabel.value.trim()) {
             errors.grade_numeric = 'Enter a numeric grade or a grade label.';
         } else if (gradeNumeric.value && !gradeNumeric.validity.valid) {
@@ -695,7 +695,7 @@ function cartValue(cartContent) {
 
 async function changeCardPricesBasedOnAuctionPrice(auctionTab) {
     const auctionId = auctionTab.getAttribute('data-id');
-    let auctionPrice = auctionTab.querySelector('.auction-price').textContent.replace('€', '');
+    const auctionPrice = auctionTab.querySelector('.auction-price').textContent.replace('€', '');
     const response = await csrfFetch(`/recalculateCardPrices/${auctionId}/${auctionPrice}`, {
         method: 'POST',
     });
@@ -783,7 +783,7 @@ function attachCartLineListeners(cardDiv, line, updateDisplay) {
             saveCartContentToSession();
         });
         input.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') input.blur();
+            if (event.key === 'Enter') {input.blur();}
         });
     });
 
@@ -795,7 +795,7 @@ function attachCartLineListeners(cardDiv, line, updateDisplay) {
             const removedIds = line.removeAll();
             removedIds.forEach((id) => existingIDs.delete(id));
             const idx = cartLines.indexOf(line);
-            if (idx !== -1) cartLines.splice(idx, 1);
+            if (idx !== -1) {cartLines.splice(idx, 1);}
             cardDiv.remove();
             const contentDiv = document.querySelector('.cart-content');
             if (contentDiv.childElementCount === 0) {
@@ -834,7 +834,7 @@ function attachCartLineListeners(cardDiv, line, updateDisplay) {
         const removedIds = line.removeAll();
         removedIds.forEach((id) => existingIDs.delete(id));
         const idx = cartLines.indexOf(line);
-        if (idx !== -1) cartLines.splice(idx, 1);
+        if (idx !== -1) {cartLines.splice(idx, 1);}
         cardDiv.remove();
         const contentDiv = document.querySelector('.cart-content');
         if (contentDiv.childElementCount === 0) {
@@ -891,7 +891,7 @@ function saveCartContentToSession() {
 
 function loadCartContentFromSession() {
     const savedData = sessionStorage.getItem('cartData');
-    if (!savedData) return;
+    if (!savedData) {return;}
 
     try {
         const cartData = JSON.parse(savedData);
@@ -1046,7 +1046,7 @@ function saveModalDataToSession() {
 
 function loadModalDataFromSession(recieverDiv) {
     const savedData = sessionStorage.getItem('invoiceModalData');
-    if (!savedData) return;
+    if (!savedData) {return;}
 
     try {
         const modalData = JSON.parse(savedData);
@@ -1063,17 +1063,17 @@ function loadModalDataFromSession(recieverDiv) {
         const priceInput = recieverDiv.querySelector('.price-input');
         const shippingPrice = recieverDiv.querySelector('.shipping-price');
 
-        if (clientName) clientName.value = DOMPurify.sanitize(modalData.clientName);
-        if (clientAddress) clientAddress.value = DOMPurify.sanitize(modalData.clientAddress);
-        if (clientCity) clientCity.value = DOMPurify.sanitize(modalData.clientCity);
-        if (clientCountry) clientCountry.value = DOMPurify.sanitize(modalData.clientCountry);
-        if (clientZip) clientZip.value = DOMPurify.sanitize(modalData.clientZip);
-        if (vatId) vatId.value = DOMPurify.sanitize(modalData.vatId);
-        if (ico) ico.value = DOMPurify.sanitize(modalData.ico);
+        if (clientName) {clientName.value = DOMPurify.sanitize(modalData.clientName);}
+        if (clientAddress) {clientAddress.value = DOMPurify.sanitize(modalData.clientAddress);}
+        if (clientCity) {clientCity.value = DOMPurify.sanitize(modalData.clientCity);}
+        if (clientCountry) {clientCountry.value = DOMPurify.sanitize(modalData.clientCountry);}
+        if (clientZip) {clientZip.value = DOMPurify.sanitize(modalData.clientZip);}
+        if (vatId) {vatId.value = DOMPurify.sanitize(modalData.vatId);}
+        if (ico) {ico.value = DOMPurify.sanitize(modalData.ico);}
         if (paybackDate && modalData.paybackDate)
-            paybackDate.value = DOMPurify.sanitize(modalData.paybackDate);
-        if (priceInput) priceInput.value = DOMPurify.sanitize(modalData.price);
-        if (shippingPrice) shippingPrice.value = DOMPurify.sanitize(modalData.shippingPrice);
+            {paybackDate.value = DOMPurify.sanitize(modalData.paybackDate);}
+        if (priceInput) {priceInput.value = DOMPurify.sanitize(modalData.price);}
+        if (shippingPrice) {shippingPrice.value = DOMPurify.sanitize(modalData.shippingPrice);}
 
         // Restore delivery method and conditional parcel/insurance fields
         const deliveryMethodSelect = recieverDiv.querySelector('.delivery-method-select');
@@ -1120,9 +1120,9 @@ function loadModalDataFromSession(recieverDiv) {
             if (firstPaymentDiv && modalData.paymentMethods[0]) {
                 const firstSelect = firstPaymentDiv.querySelector('.payment-type');
                 const firstAmount = firstPaymentDiv.querySelector('.amount');
-                if (firstSelect) firstSelect.value = modalData.paymentMethods[0].type;
+                if (firstSelect) {firstSelect.value = modalData.paymentMethods[0].type;}
                 if (firstAmount)
-                    firstAmount.value = DOMPurify.sanitize(modalData.paymentMethods[0].amount);
+                    {firstAmount.value = DOMPurify.sanitize(modalData.paymentMethods[0].amount);}
             }
 
             // Add additional payment methods (if any)
@@ -1137,7 +1137,7 @@ function loadModalDataFromSession(recieverDiv) {
                 // Set the payment type after adding to DOM
                 paymentContainer.append(newSelectDiv);
                 const select = newSelectDiv.querySelector('.payment-type');
-                if (select) select.value = DOMPurify.sanitize(modalData.paymentMethods[i].type);
+                if (select) {select.value = DOMPurify.sanitize(modalData.paymentMethods[i].type);}
 
                 // Add event listeners to restored inputs
                 const newInputs = newSelectDiv.querySelectorAll('input, select');
@@ -1451,7 +1451,7 @@ function shoppingCart() {
 
         const sealedItem = sealedContent.querySelectorAll('.sealed-item-cart');
         if (sealedItem) {
-            let sealed = [];
+            const sealed = [];
             sealedItem.forEach((item) => {
                 const sid = item.getAttribute('sid');
                 const auctionId = item.getAttribute('auction_id') || null;
@@ -1763,10 +1763,10 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
             // Update display
             if (existing.element) {
                 const qtyDisplay = existing.element.querySelector('.qty-display');
-                if (qtyDisplay) qtyDisplay.textContent = existing.quantity;
+                if (qtyDisplay) {qtyDisplay.textContent = existing.quantity;}
                 // Update +/- button states
                 const plusBtn = existing.element.querySelector('.qty-plus');
-                if (plusBtn) plusBtn.disabled = !existing.canIncrement;
+                if (plusBtn) {plusBtn.disabled = !existing.canIncrement;}
             }
             saveCartContentToSession();
         } else {
@@ -1804,11 +1804,11 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
                 existingIDs.add(id);
                 if (existing.element) {
                     const qtyDisplay = existing.element.querySelector('.qty-display');
-                    if (qtyDisplay) qtyDisplay.textContent = existing.quantity;
+                    if (qtyDisplay) {qtyDisplay.textContent = existing.quantity;}
                     const plusBtn = existing.element.querySelector('.qty-plus');
-                    if (plusBtn) plusBtn.disabled = !existing.canIncrement;
+                    if (plusBtn) {plusBtn.disabled = !existing.canIncrement;}
                     const minusBtn = existing.element.querySelector('.qty-minus');
-                    if (minusBtn) minusBtn.disabled = existing.cardIds.length <= 1;
+                    if (minusBtn) {minusBtn.disabled = existing.cardIds.length <= 1;}
                 }
                 saveCartContentToSession();
             }
@@ -1937,7 +1937,7 @@ function renderSealedCartLine(line) {
                 saveCartContentToSession();
             });
             input.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter') input.blur();
+                if (event.key === 'Enter') {input.blur();}
             });
         });
 
@@ -2164,8 +2164,8 @@ function startPolling() {
                         }
                     });
 
-                    if (validIds.length === 0) return;
-                    if (validIds.some((id) => existingIDs.has(id))) return;
+                    if (validIds.length === 0) {return;}
+                    if (validIds.some((id) => existingIDs.has(id))) {return;}
 
                     const line = new CartLine(
                         card.name,
@@ -2370,7 +2370,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
         } else {
             // Handle card display
             div.classList.add('card-search-result');
-            let card = new CardStruct();
+            const card = new CardStruct();
             card.cardName = result.card_name;
             card.cardNum = result.card_num;
             card.condition = result.condition;
@@ -2482,9 +2482,9 @@ function displaySearchResults(results, resultsQueue, searchInput) {
 }
 
 async function loadBulkHoloValues() {
-    let holoVal = document.querySelector('.holo-value');
-    let bulkVal = document.querySelector('.bulk-value');
-    let exVal = document.querySelector('.ex-value');
+    const holoVal = document.querySelector('.holo-value');
+    const bulkVal = document.querySelector('.bulk-value');
+    const exVal = document.querySelector('.ex-value');
     try {
         const response = await csrfFetch('/bulkCounterValue');
         const data = await response.json();
@@ -2671,7 +2671,7 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
 
     const deleteButton = box.querySelector('.delete-card');
     if (deleteButton)
-        deleteButton.addEventListener('click', async (e) => {
+        {deleteButton.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (deleteButton.textContent !== 'Confirm') {
                 deleteButton.textContent = 'Confirm';
@@ -2724,7 +2724,7 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
 
             box?.remove();
             box = null;
-        });
+        });}
 }
 
 document.addEventListener('click', (e) => {
@@ -2982,7 +2982,7 @@ async function loadAuctionContent(button) {
                                 'market_value',
                             ]);
                             if (event.target.classList.contains('condition')) {
-                                if (event.target.classList.contains('graded')) return;
+                                if (event.target.classList.contains('graded')) {return;}
                                 const value = event.target.textContent.trim();
                                 const select = document.createElement('select');
                                 const options = [
@@ -3131,7 +3131,7 @@ async function loadAuctionContent(button) {
                             if (button.textContent === 'Confirm') {
                                 const auctionDiv = cardsContainer.closest('.auction-tab');
                                 const deleted = await removeCard(cardId, cardDiv);
-                                if (!deleted) return;
+                                if (!deleted) {return;}
                                 if (auctionDiv.classList.contains('singles')) {
                                     await updateInventoryValueAndTotalProfit();
                                     if (cardsContainer.childElementCount < 3) {
@@ -3297,7 +3297,7 @@ async function loadAuctionContent(button) {
 
                             if (button.textContent === 'Confirm') {
                                 const deleted = await removeBulkItem(bulkId, bulkDiv);
-                                if (!deleted) return;
+                                if (!deleted) {return;}
                             } else {
                                 // First click: ask for confirmation
                                 button.textContent = 'Confirm';
@@ -3472,11 +3472,11 @@ async function loadAuctionContent(button) {
             const itemsToAdd = {};
             saveAddedCardButton.hidden = true;
             const auctionId = auctionDiv.getAttribute('data-id');
-            let cardsArray = [];
+            const cardsArray = [];
             const newCards = cardsContainer.querySelectorAll('.new-card');
             try {
                 newCards.forEach(async (card) => {
-                    let cardObj = new CardStruct();
+                    const cardObj = new CardStruct();
                     cardObj.cardName =
                         DOMPurify.sanitize(
                             card.querySelector('input.card-name').value.trim().toUpperCase(),
@@ -3504,8 +3504,8 @@ async function loadAuctionContent(button) {
                         ) || null;
                     cardObj.soldDate = null;
 
-                    if (cardObj.buyPrice === null) cardObj.buyPrice = cardObj.marketValue * 0.85;
-                    if (cardObj.sellPrice === null) cardObj.sellPrice = cardObj.marketValue;
+                    if (cardObj.buyPrice === null) {cardObj.buyPrice = cardObj.marketValue * 0.85;}
+                    if (cardObj.sellPrice === null) {cardObj.sellPrice = cardObj.marketValue;}
                     if (cardObj.cardName !== null && cardObj.marketValue !== null) {
                         cardsArray.push(cardObj);
                     } else {
@@ -3519,7 +3519,7 @@ async function loadAuctionContent(button) {
                 for (let i = 0; i < cardsArray.length; i++) {
                     let j = 0;
                     for (const [key, value] of Object.entries(cardsArray[i])) {
-                        if (key === 'soldDate' || key === 'grading') continue;
+                        if (key === 'soldDate' || key === 'grading') {continue;}
                         const cardElement = newCards[i].children;
                         replaceWithPElement(cardElement[j].dataset.field, value, cardElement[j]);
                         j++;
@@ -3692,7 +3692,7 @@ async function loadSealed(viewButton) {
                     ).toFixed(2);
                     const timeStamp = DOMPurify.sanitize(sealedData.date).replace('Z', '');
                     const date = new Date(timeStamp);
-                    let formatedDate = date.toLocaleDateString('sk-SK', {
+                    const formatedDate = date.toLocaleDateString('sk-SK', {
                         year: 'numeric',
                         month: '2-digit',
                         day: '2-digit',
@@ -3745,7 +3745,7 @@ async function loadSealed(viewButton) {
                 const saveButton = buttonsContainer.querySelector('.save-sealed-btn');
                 saveButton.addEventListener('click', async () => {
                     const inputDivs = contentDiv.querySelectorAll('.add-sealed');
-                    let inputValues = [];
+                    const inputValues = [];
                     inputDivs.forEach((div) => {
                         const inputs = div.querySelectorAll('input');
                         const row = {};
@@ -3841,7 +3841,7 @@ function openMergeAuctionModal(auctionId, auctionName) {
         const response = await csrfFetch(`/loadAuctions`);
         const data = await response.json();
         data.forEach((auction) => {
-            if (auction.id == auctionId) return;
+            if (auction.id == auctionId) {return;}
             const safeAuctionId = sanitizeNumericId(auction.id);
             const option = document.createElement('option');
             option.value = safeAuctionId;
@@ -3883,7 +3883,7 @@ function openMergeAuctionModal(auctionId, auctionName) {
     const closeButton = document.querySelector('.close-modal');
     closeButton.addEventListener('click', close);
     modal.addEventListener('click', (event) => {
-        if (event.target === modal) close();
+        if (event.target === modal) {close();}
     });
 }
 
@@ -3902,8 +3902,8 @@ async function loadAuctions() {
                 auctionDiv.classList.add('singles');
             }
             auctionDiv.setAttribute('data-id', safeAuctionId);
-            let auctionName = auction.auction_name || 'Auction ' + (auction.id - 1); // Fallback for name
-            let auctionPrice = auction.auction_price || null; // Fallback for buy price
+            const auctionName = auction.auction_name || 'Auction ' + (auction.id - 1); // Fallback for name
+            const auctionPrice = auction.auction_price || null; // Fallback for buy price
             const buyDate = new Date(auction.date_created);
             let formatedDate = buyDate.toLocaleDateString('sk-SK', {
                 year: 'numeric',
@@ -3982,7 +3982,7 @@ async function loadAuctions() {
                 const auctionDiv = event.target.closest('.auction-tab');
                 const auctionId = auctionDiv.getAttribute('data-id');
                 const selected = event.target.value;
-                if (selected === 'null') return;
+                if (selected === 'null') {return;}
                 try {
                     const res = await csrfFetch(`/linkAuctionToSale/${auctionId}`, {
                         method: 'POST',
@@ -4134,7 +4134,7 @@ async function loadAuctions() {
                 const value = event.target.value.replace(',', '.');
                 const auctionDiv = event.target.closest('.auction-tab');
                 const auctionId = auctionDiv.getAttribute('data-id');
-                if (!Boolean(value)) {
+                if (!value) {
                     return;
                 }
                 updateAuction(auctionId, value, 'auction_price');
@@ -4166,7 +4166,7 @@ async function loadAuctions() {
                     const value = blurEvent.target.value;
                     const auctionDiv = blurEvent.target.closest('.auction-tab');
                     const auctionId = auctionDiv.getAttribute('data-id');
-                    if (!Boolean(value)) {
+                    if (!value) {
                         return;
                     }
                     updateAuction(auctionId, value, 'auction_name');
@@ -4203,7 +4203,7 @@ async function loadAuctions() {
                     }
                     const auctionDiv = blurEvent.target.closest('.auction-tab');
                     const auctionId = auctionDiv.getAttribute('data-id');
-                    if (!Boolean(value)) {
+                    if (!value) {
                         return;
                     }
                     await updateAuction(auctionId, value, 'auction_price');
@@ -4244,14 +4244,14 @@ async function loadAuctions() {
                     let value = blurEvent.target.value;
                     const auctionDiv = blurEvent.target.closest('.auction-tab');
                     const auctionId = auctionDiv.getAttribute('data-id');
-                    if (!Boolean(value)) {
+                    if (!value) {
                         return;
                     }
                     await updateAuction(auctionId, value, 'date_created');
                     const p = document.createElement('p');
 
                     value = new Date(value);
-                    let formatedDate = value.toLocaleDateString('sk-SK', {
+                    const formatedDate = value.toLocaleDateString('sk-SK', {
                         year: 'numeric',
                         month: '2-digit',
                         day: '2-digit',

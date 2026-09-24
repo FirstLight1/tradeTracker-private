@@ -2,7 +2,7 @@ import { renderAlert, renderServerErrors, scrollOnLoad } from './utils/renderUti
 import { sanitizeNumericId, csrfFetch } from './utils/sanitizers.js';
 
 const GRADING_STATUSES = ['preparing', 'sent_for_grading', 'received_by_grader'];
-const ACTIVE_STATUSES = ['preparing', 'sent_for_grading', 'received_by_grader'];
+const ACTIVE_STATUSES = new Set(['preparing', 'sent_for_grading', 'received_by_grader']);
 const TERMINAL_STATUSES = ['graded', 'returned', 'cancelled'];
 
 function formatCurrency(value) {
@@ -360,16 +360,16 @@ function renderSubmission(container, submission) {
     const buttonContainer = document.createElement('div');
     buttonContainer.innerHTML = `
         <button class='view-auction' data-id=${submissionId}>View</button>
-        ${ACTIVE_STATUSES.includes(submission.status) ? `<button class='change-status' data-id=${submissionId}>Change Status</button>` : ''}
+        ${ACTIVE_STATUSES.has(submission.status) ? `<button class='change-status' data-id=${submissionId}>Change Status</button>` : ''}
         `;
-    if (ACTIVE_STATUSES.includes(submission.status)) {
+    if (ACTIVE_STATUSES.has(submission.status)) {
         const completeButton = document.createElement('button');
         completeButton.classList.add('complete');
         completeButton.type = 'button';
         completeButton.setAttribute('data-id', submissionId);
         completeButton.textContent = 'Complete';
         completeButton.addEventListener('click', () => {
-            if (!ACTIVE_STATUSES.includes(submission.status)) return;
+            if (!ACTIVE_STATUSES.has(submission.status)) {return;}
             window.location.href = `/grading/submissions/${submissionId}/complete`;
         });
         buttonContainer.append(completeButton);
@@ -406,7 +406,7 @@ function renderSubmission(container, submission) {
     );
     cancelSubmissionButton?.addEventListener('click', async () => {
         if (!window.confirm('Cancel this submission and release its cards back to raw inventory?'))
-            return;
+            {return;}
         cancelSubmissionButton.disabled = true;
         try {
             const response = await csrfFetch(`/grading/submissions/${submissionId}/cancel`, {
@@ -414,7 +414,7 @@ function renderSubmission(container, submission) {
             });
             const result = await response.json().catch(() => ({}));
             if (!response.ok)
-                throw new Error(result.message || `request failed with status ${response.status}`);
+                {throw new Error(result.message || `request failed with status ${response.status}`);}
             submission.status = 'cancelled';
             submissionElement.querySelector('.grading-status').textContent = formatStatus(
                 submission.status,
@@ -427,10 +427,10 @@ function renderSubmission(container, submission) {
         }
     });
     submissionElement.addEventListener('click', (event) => {
-        if (event.target === submissionElement) loadSubmissionCards(viewButton);
+        if (event.target === submissionElement) {loadSubmissionCards(viewButton);}
     });
 
-    if (submission.notes) submissionElement.title = submission.notes;
+    if (submission.notes) {submissionElement.title = submission.notes;}
     container.appendChild(submissionElement);
 }
 
@@ -440,10 +440,10 @@ async function loadSubmissions() {
 
     try {
         const response = await csrfFetch('/grading/submissions');
-        if (!response.ok) throw new Error(`request failed with status ${response.status}`);
+        if (!response.ok) {throw new Error(`request failed with status ${response.status}`);}
 
         const submissions = await response.json();
-        if (!Array.isArray(submissions)) throw new Error('invalid submissions response');
+        if (!Array.isArray(submissions)) {throw new Error('invalid submissions response');}
 
         container.replaceChildren();
         if (submissions.length === 0) {
