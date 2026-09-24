@@ -46,7 +46,7 @@ const saveButton = document.querySelector('.save-btn');
 const initialMarketValueInput = document.querySelector('.card .marketValue');
 
 if (initialMarketValueInput) {
-    initialMarketValueInput.addEventListener('input', function() {
+    initialMarketValueInput.addEventListener('input', function () {
         window.handleCardInput(this);
     });
 }
@@ -119,7 +119,7 @@ saveButton.addEventListener('click', async () => {
         cardsArr[0].buy = parseFloat(DOMPurify.sanitize(auctionValueCalculated.toFixed(2)));
     }
 
-    const payload = { 'auction': auction, 'cards': cardsArr };
+    const payload = { auction: auction, cards: cardsArr };
 
     const jsonbody = JSON.stringify(payload);
     const response = await csrfFetch('/add', {
@@ -128,7 +128,7 @@ saveButton.addEventListener('click', async () => {
             'Content-Type': 'application/json',
         },
         body: jsonbody,
-    })
+    });
     const data = await response.json();
     if (data.status === 'success') {
         window.location.href = '/';

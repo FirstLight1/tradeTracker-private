@@ -82,12 +82,12 @@ async function loadAuctionContent(button) {
                         const safeCardConditionClass = sanitizeClassToken(
                             card.condition || 'Unknown',
                         );
-                        let cardStatus = "";
+                        let cardStatus = '';
                         if (card.disposal_reason != null) {
                             cardStatus = card.disposal_reason;
-                        };
+                        }
                         if (card.sold_date != null) {
-                            cardStatus = "Sold";
+                            cardStatus = 'Sold';
                         }
                         const cardDiv = document.createElement('div');
                         cardDiv.classList.add('card');
