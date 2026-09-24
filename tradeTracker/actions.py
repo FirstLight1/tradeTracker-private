@@ -84,10 +84,10 @@ def validate_and_sanitize_payments(payments):
     Returns: (is_valid, sanitized_payments, error_message)
     """
     if payments is None: 
-        return False, None, "Invalid payments format"
+        return True, payments, None
 
     if len(payments) == 0:
-        return False, None, "At least one payment method required"
+        return True, payments, None
 
     if len(payments) > 10:  # Reasonable limit
         return False, None, "Too many payment methods (max 10)"
@@ -285,10 +285,8 @@ def add():
 
         try:
             auction_id = inventory_service.create_auction_with_items(auction, items_to_add)
-            db.commit()
             return jsonify({"status": "success", "auction_id": auction_id}), 201
         except Exception as e:
-            db.rollback()
             logger.error("Failed to create auction | %s", e)
             return jsonify({"status": "error", "message": f"Failed to create auction: {e}"}), 400
 
@@ -2062,7 +2060,7 @@ def _create_inventory(db, dataList=None):
         name=None,
         buy_price=buyPrice,
         date=dateCreted,
-        payments=[],
+        payments=json.dumps([]),
     )
     items = []
     for item in dataList:
@@ -2082,36 +2080,33 @@ def _create_inventory(db, dataList=None):
                     buy_price=float(item.get("buy_price", "0.0")),
                     market_value=float(item.get("market_value", "0.0")),
                     sell_price=float(item.get("sell_price", "0.0")),
-                    quantity=1,
+                    quantity=item.get("quantity", 1),
                     date=item.get("date", None),
                     cardmarketId=resolve_cardmarket_id(db, item, "name", "card_num"),
                 )
             )
         else:
-            items.append(
-                ItemInput(
-                    id=None,
-                    item_type=ItemType('card'),
-                    name=item["card_name"],
-                    normalized_name=normalize(item["card_name"]),
-                    number=normalize_text(item.get("card_num"), "number"),
-                    condition=item.get("condition", None),
-                    lang=item.get("language", None),
-                    buy_price=float(item.get("buy_price", "0.0")),
-                    market_value=float(item.get("market_value", "0.0")),
-                    sell_price=float(item.get("sell_price", "0.0")),
-                    quantity=1,
-                    date=item.get("date", None),
-                    cardmarketId=resolve_cardmarket_id(db, item, "name", "card_num"),
+            for _ in range(item.get("quantity", 1)):
+                items.append(
+                    ItemInput(
+                        id=None,
+                        item_type=ItemType('card'),
+                        name=item["card_name"],
+                        normalized_name=normalize(item["card_name"]),
+                        number=normalize_text(item.get("card_num"), "number"),
+                        condition=item.get("condition", None),
+                        lang=item.get("language", None),
+                        buy_price=float(item.get("buy_price", "0.0")),
+                        market_value=float(item.get("market_value", "0.0")),
+                        sell_price=float(item.get("sell_price", "0.0")),
+                        quantity=1,
+                        date=item.get("date", None),
+                        cardmarketId=resolve_cardmarket_id(db, item, "name", "card_num"),
+                    )
                 )
-            )
             
-    try:
-        inventory_service = InventoryService(db)
-        auctionId = inventory_service.create_auction_with_items(auction, items)
-        return jsonify({"status": "success", "auction_id": auctionId}), 201
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Failed to create auction: {e}"}), 400
+    inventory_service = InventoryService(db)
+    return inventory_service.create_auction_with_items(auction, items)
 
 
 def _fixArticlesUpload(file):

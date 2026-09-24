@@ -1,5 +1,7 @@
 import logging
 from typing import Any
+import json
+from collections import defaultdict
 from tradeTracker.services.models import InventoryWriteOff, AuctionInput, ItemInput, EditModel, GradeStatus
 from tradeTracker.utils.cardmarket import resolve_cardmarket_id_model
 import tradeTracker.CONSTANTS as CONSTANTS
@@ -34,6 +36,13 @@ class InventoryService:
                         FROM sale_items AS si
                         WHERE si.card_id = c.id
                     )
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM sealed AS s
+                    WHERE s.auction_id = a.id
+                    AND s.sale_id IS NULL
+                    AND s.disposal_reason IS NULL
                 )
             ORDER BY
                 CASE WHEN a.id = 1 THEN 0 ELSE 1 END,
@@ -76,6 +85,7 @@ class InventoryService:
             self.db.execute("DELETE FROM auctions WHERE id = ?", (auction_id,))
             self.db.execute("DELETE FROM cards WHERE auction_id = ?", (auction_id,))
             self.db.execute("DELETE FROM sealed WHERE auction_id = ?", (auction_id,))
+            self.db.execute("DELETE FROM bulk_items WHERE auction_id = ?", (auction_id,))
             self.db.commit()
         except Exception as e:
             self.db.rollback()
@@ -92,7 +102,7 @@ class InventoryService:
             try:
                 value = formating.parse_date_to_iso(auction.value)
             except ValueError as e:
-                raise ValueError(f"Invalid date format: {value!r}. Expected ISO 8601, YYYY-MM-DD, or dd-mm-yyyy.")
+                raise ValueError(f"Invalid date format: {auction.value}. Expected ISO 8601, YYYY-MM-DD, or dd-mm-yyyy.")
         else:
             value = auction.value
                 
@@ -111,6 +121,26 @@ class InventoryService:
                 "UPDATE auctions SET auction_price = auction_price + (SELECT auction_price FROM auctions WHERE id = ?) WHERE id = ?",
                 (auction_id, target_id),
             )
+            payments = self.db.execute(
+                "SELECT payment_method FROM auctions WHERE id IN (?, ?)", (auction_id, target_id)
+            ).fetchall()
+
+            if payments:
+                payment_1 = json.loads(payments[0][0])
+                payment_2 = json.loads(payments[1][0])
+
+                totals = defaultdict(float)
+                for payment in payment_1 + payment_2:
+                    totals[payment["type"]] += payment["amount"]
+
+                merged_payments = [
+                    {"type": payment_type,  "amount": amount}
+                    for payment_type, amount in totals.items()
+                ]
+
+                self.db.execute(
+                    "UPDATE auctions SET payment_method = ? WHERE id = ?", (json.dumps(merged_payments), target_id)
+                )
             self.db.execute("UPDATE cards SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id))
             self.db.execute("UPDATE sealed SET auction_id = ? WHERE auction_id = ?", (target_id, auction_id))
             self.db.execute(
@@ -126,7 +156,7 @@ class InventoryService:
     def load_items(self, auction_id: int | None, filter: str = 'sold') -> list[dict[str, Any]]:
         #TODO: rename the filter cause this is not sold items
         if filter == "sold":
-            cardFilter = "c.sold_date IS NULL AND si.card_id IS NULL AND c.disposal_reason IS NULL"
+            cardFilter = "c.sold_date IS NULL AND si.card_id IS NULL AND c.disposal_reason IS NULL "
             sealedFilter = "sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL"
         elif filter == "all":
             cardFilter = "1=1"
@@ -136,13 +166,20 @@ class InventoryService:
 
         if auction_id is not None:
             cardRows = self.db.execute(f"""
-                SELECT c.*,"card" as item_type, gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, gsc.cert_number
+                SELECT c.*,"card" as item_type, gsc.grader, gsc.grade_numeric, gsc.grade_label, gsc.qualifier, gsc.cert_number, gs.status,
+                CASE 
+                    WHEN gsc.id IS NULL THEN 'raw'
+                    WHEN gs.status = 'graded' THEN 'graded'
+                    ELSE 'at_grader'
+                END AS grade_status
                 FROM cards AS c
                 LEFT JOIN sale_items AS si
                     ON c.id = si.card_id
                 LEFT JOIN grading_submission_cards AS gsc
                     ON c.id = gsc.card_id
                     AND gsc.is_current = 1
+                LEFT JOIN grading_submissions as gs 
+                    ON gsc.submission_id = gs.id
                 WHERE c.auction_id = ?
                 AND {cardFilter}
                 """,(auction_id,)).fetchall()
