@@ -156,12 +156,12 @@ async function loadHistory() {
                     <div class="auction-options">
                         <button class="debit" data-id="${safeSaleId}" >Tarchopis</button>
                     </div>
+                    ${sale.invoice_number.includes('S') ? '' : `<div class='auction-options'><button class="show-invoice" data-in="${sale.invoice_number}">Show invoice</button></div>`}
                 </div>
             </div>
-            ${
-                sale.auction_id === null
-                    ? `<p></p>`
-                    : `<span class='auction-link-hint'><a href='/#${safeAuctionId}'><img class='link-img' src="/static/images/logo.png" alt="Show auction"></a></span>`
+            ${sale.auction_id === null
+                ? `<p></p>`
+                : `<span class='auction-link-hint'><a href='/#${safeAuctionId}'><img class='link-img' src="/static/images/logo.png" alt="Show auction"></a></span>`
             } 
             <div class="cards-container">
             <!-- Cards will be loaded here -->
@@ -229,6 +229,38 @@ async function loadHistory() {
                 });
             }
         });
+
+        const showInvoiceButton = saleElement?.querySelector('.show-invoice');
+        if (showInvoiceButton !== null) {
+            showInvoiceButton.addEventListener("click", async () => {
+                const invoiceNumber = showInvoiceButton.dataset.in;
+                const tab = window.open("", "_blank"); // Open during the click
+                if (!tab) return;
+
+                try {
+                    const response = await fetch(
+                        `/showInvoice/${encodeURIComponent(invoiceNumber)}`
+                    );
+                    console.log(response);
+                    if (response.status === 404) {
+                        tab.close();
+                        renderAlert("Failed to Find invoice", "error");
+                        return;
+                    }
+                    if (!response.ok) {
+                        throw new Error(`Failed to load invoice: ${response.status}`);
+                    }
+
+                    const pdf = await response.blob();
+                    tab.location.href = URL.createObjectURL(pdf);
+                } catch (error) {
+                    tab.close();
+                    console.error(error);
+                    alert("Could not open the invoice.");
+                }
+            });
+        };
+
     });
 }
 
