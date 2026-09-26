@@ -2457,6 +2457,11 @@ def importCSV():
             try:
                 reciept = saleResult.receipt.raw
 
+                if current_app.config.get("R2_ENABLED"):
+                    client = R2Service()
+                    file_name = "invoice/" + reciept['filename'].split('_')[0] + ".pdf"
+                    client.upload_file(reciept['bytes'], file_name, 'tradetracker')
+
                 shipping_method = item.shipping["shippingMethod"].lower()
                 method, insurance = _parse_shipping_method(shipping_method)
                 # POSTA API
