@@ -39,6 +39,7 @@ from tradeTracker.services.models import (
 )
 from tradeTracker.services.reciept_service import EKasaReceiptService, InvoiceReceiptService
 from tradeTracker.services.sale_service import SaleService
+from tradeTracker.services.r2_service import R2Service
 from tradeTracker.utils.cardmarket import resolve_cardmarket_id
 from tradeTracker.utils.formating import normalize
 
@@ -1151,6 +1152,13 @@ def generate_credit_note(saleId):
         "Credit note generated succesfully | original invoice num: %s", original_invoice_num
     )
 
+    if current_app.config.get("R2_ENABLED"):
+        try:
+            client = R2Service()
+            client.upload_file(pdf['bytes'], f"creditnotes/{creditNoteNum}.pdf", 'tradetracker')
+        except Exception as e:
+            logger.exception("Failed to upload to R2 | %s", e)
+
     return send_file(
         BytesIO(pdf["bytes"]),
         download_name=pdf["filename"],
@@ -1262,6 +1270,14 @@ def generateDebitNote(saleId):
         logger.critical("Debit note generation failed %s", e)
         return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax06"}), 500
     db.commit()
+
+    if current_app.config.get("R2_ENABLED"):
+        try:
+            client = R2Service()
+            client.upload_file(pdf['bytes'], f"debitnotes/{debitNoteNum}.pdf", 'tradetracker')
+        except Exception as e:
+            logger.exception("Failed to upload to R2 | %s", e)
+
     response = send_file(
         BytesIO(pdf["bytes"]),
         mimetype="application/pdf",
@@ -2441,6 +2457,11 @@ def importCSV():
             try:
                 reciept = saleResult.receipt.raw
 
+                if current_app.config.get("R2_ENABLED"):
+                    client = R2Service()
+                    file_name = "invoice/" + reciept['filename'].split('_')[0] + ".pdf"
+                    client.upload_file(reciept['bytes'], file_name, 'tradetracker')
+
                 shipping_method = item.shipping["shippingMethod"].lower()
                 method, insurance = _parse_shipping_method(shipping_method)
                 # POSTA API
@@ -2763,6 +2784,19 @@ def getCardIds():
         ids = [dict(row)["id"] for row in cardIds]
         return jsonify({"status": "success", "card_ids": ids}), 200
 
+@bp.route("/showInvoice/<int:invoiceNumber>", methods=("GET",))
+@verify_token
+def showInvoice(invoiceNumber):
+    client = R2Service()
+    try:
+        invoice = client.download_file(f"invoices/{invoiceNumber}.pdf", 'tradetracker')
+        return send_file(invoice, 
+                         mimetype="application/pdf",
+                         download_name=f"{invoiceNumber}.pdf",
+                         as_attachment=False, 
+                        )
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to find invoice"}), 404
 
 @bp.route("/createSale/<string:kind>", methods=("POST",))
 @limiter.limit("5 per minute")
@@ -2814,7 +2848,6 @@ def invoice(kind):
             try:
                 saleResult = SaleService(db, InvoiceReceiptService()).process_sale(saleInput)
                 receipt = saleResult.receipt.raw
-
                 db.commit()
             except Exception as e:
                 db.rollback
@@ -2822,6 +2855,14 @@ def invoice(kind):
                 return jsonify(
                     {"status": "error", "message": f"Failed to create invoice: {e}"}
                 ), 400
+
+            if current_app.config.get("R2_ENABLED"):
+                try: 
+                    client = R2Service()
+                    file_name = "invoices/" + receipt['filename'].split('_')[0] + ".pdf"
+                    client.upload_file(receipt['bytes'], file_name, 'tradetracker')
+                except Exception as e:
+                    logger.exception("Failed to upload to R2 | %s", e)
 
             try:
                 # EPHSERVICE create sheet

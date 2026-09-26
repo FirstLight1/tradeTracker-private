@@ -116,6 +116,7 @@ class ReceiptResult:
     kind: str
     number: str
     file_path: str | None = None
+    #TODO: create a class for this
     raw: dict[str, Any] | None = None
 
 
