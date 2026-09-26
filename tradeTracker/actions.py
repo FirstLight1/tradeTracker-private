@@ -1152,6 +1152,9 @@ def generate_credit_note(saleId):
         "Credit note generated succesfully | original invoice num: %s", original_invoice_num
     )
 
+    client = R2Service()
+    client.upload_file(pdf['bytes'], f"creditnotes/{creditNoteNum}.pdf", 'tradetracker')
+
     return send_file(
         BytesIO(pdf["bytes"]),
         download_name=pdf["filename"],
@@ -1263,6 +1266,10 @@ def generateDebitNote(saleId):
         logger.critical("Debit note generation failed %s", e)
         return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax06"}), 500
     db.commit()
+
+    client = R2Service()
+    client.upload_file(pdf['bytes'], f"debitnotes/{debitNoteNum}.pdf", 'tradetracker')
+
     response = send_file(
         BytesIO(pdf["bytes"]),
         mimetype="application/pdf",
