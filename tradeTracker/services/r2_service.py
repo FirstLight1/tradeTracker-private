@@ -20,10 +20,9 @@ class R2Service:
             raise Exception("File is required")
 
         try:
-            self.r2.put_object(Body=file, Bucket=bucket_name, Key=file_name)
+            self.r2.put_object(Body=file, Bucket=bucket_name, Key=file_name, ContentType='application/pdf')
         except ClientError as e:
             raise Exception(f"Failed to upload file to R2: {e}")
-
 
     def download_file(self, file_name, bucket_name: str) -> BytesIO:
         file = BytesIO()
