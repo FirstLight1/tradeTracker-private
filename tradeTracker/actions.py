@@ -39,6 +39,7 @@ from tradeTracker.services.models import (
 )
 from tradeTracker.services.reciept_service import EKasaReceiptService, InvoiceReceiptService
 from tradeTracker.services.sale_service import SaleService
+from tradeTracker.services.r2_service import R2Service
 from tradeTracker.utils.cardmarket import resolve_cardmarket_id
 from tradeTracker.utils.formating import normalize
 
@@ -2814,7 +2815,6 @@ def invoice(kind):
             try:
                 saleResult = SaleService(db, InvoiceReceiptService()).process_sale(saleInput)
                 receipt = saleResult.receipt.raw
-
                 db.commit()
             except Exception as e:
                 db.rollback
@@ -2822,6 +2822,14 @@ def invoice(kind):
                 return jsonify(
                     {"status": "error", "message": f"Failed to create invoice: {e}"}
                 ), 400
+
+            if current_app.config.get("R2_ENABLED"):
+                try: 
+                    client = R2Service()
+                    file_name = "invoices/" + receipt['filename'].split('_')[0] + ".pdf"
+                    client.upload_file(receipt['bytes'], file_name, 'tradetracker')
+                except Exception as e:
+                    logger.exception("Failed to upload to R2 | %s", e)
 
             try:
                 # EPHSERVICE create sheet
