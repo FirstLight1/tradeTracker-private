@@ -20,7 +20,7 @@ class R2Service:
             raise Exception("File is required")
 
         try:
-            self.r2.upload_file(file, bucket_name, file_name)
+            self.r2.put_object(Body=file, Bucket=bucket_name, Key=file_name)
         except ClientError as e:
             raise Exception(f"Failed to upload file to R2: {e}")
 
