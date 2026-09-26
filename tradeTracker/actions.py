@@ -2764,6 +2764,19 @@ def getCardIds():
         ids = [dict(row)["id"] for row in cardIds]
         return jsonify({"status": "success", "card_ids": ids}), 200
 
+@bp.route("/showInvoice/<int:invoiceNumber>", methods=("GET",))
+@verify_token
+def showInvoice(invoiceNumber):
+    client = R2Service()
+    try:
+        invoice = client.download_file(f"invoices/{invoiceNumber}.pdf", 'tradetracker')
+        return send_file(invoice, 
+                         mimetype="application/pdf",
+                         download_name=f"{invoiceNumber}.pdf",
+                         as_attachment=False, 
+                        )
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to find invoice"}), 404
 
 @bp.route("/createSale/<string:kind>", methods=("POST",))
 @limiter.limit("5 per minute")
