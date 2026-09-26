@@ -26,7 +26,7 @@ class R2Service:
 
     def download_file(self, file_name, bucket_name: str) -> BytesIO:
         file = BytesIO()
-        self.r2.download_object(bucket_name, file_name, file)
+        self.r2.download_fileobj(bucket_name, file_name, file)
         file.seek(0)
         return file
 
