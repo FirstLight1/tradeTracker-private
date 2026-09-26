@@ -1152,8 +1152,12 @@ def generate_credit_note(saleId):
         "Credit note generated succesfully | original invoice num: %s", original_invoice_num
     )
 
-    client = R2Service()
-    client.upload_file(pdf['bytes'], f"creditnotes/{creditNoteNum}.pdf", 'tradetracker')
+    if current_app.config.get("R2_ENABLED"):
+        try:
+            client = R2Service()
+            client.upload_file(pdf['bytes'], f"creditnotes/{creditNoteNum}.pdf", 'tradetracker')
+        except Exception as e:
+            logger.exception("Failed to upload to R2 | %s", e)
 
     return send_file(
         BytesIO(pdf["bytes"]),
@@ -1267,8 +1271,12 @@ def generateDebitNote(saleId):
         return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax06"}), 500
     db.commit()
 
-    client = R2Service()
-    client.upload_file(pdf['bytes'], f"debitnotes/{debitNoteNum}.pdf", 'tradetracker')
+    if current_app.config.get("R2_ENABLED"):
+        try:
+            client = R2Service()
+            client.upload_file(pdf['bytes'], f"debitnotes/{debitNoteNum}.pdf", 'tradetracker')
+        except Exception as e:
+            logger.exception("Failed to upload to R2 | %s", e)
 
     response = send_file(
         BytesIO(pdf["bytes"]),
