@@ -21,6 +21,7 @@ from flask_wtf import FlaskForm
 
 from tradeTracker.db import get_db
 from tradeTracker.services import report_service
+from tradeTracker.services import barter_service
 from tradeTracker.services.cfAuth import verify_token
 from tradeTracker.services.eph_service import EPHService
 from tradeTracker.services.grading_validation import (
@@ -916,8 +917,32 @@ def linkAuctionToSale(auction_id,sale_id):
     try:
         barter_service.link_barter(auction_id, sale_id)
         return jsonify({"status": "success"})
-    except:
+    except Exception as e:
+        logger.error("Failed to link auction to sale | %s", e)
         return jsonify({"status": "error", "message": "Failed to link auction to sale"}), 400
+
+@bp.route("/unlinkAuctionToSale/<int:auction_id>/<int:sale_id>", methods=("POST",))
+@verify_token
+def unlinkAuctionToSale(auction_id,sale_id):
+    barter_service = BarterService(get_db())
+    try:
+        barter_service.unlink_barter(auction_id, sale_id)
+        return jsonify({"status": "success"})
+    except Exception as e:
+        logger.error("Failed to unlink auction to sale | %s", e)
+        return jsonify({"status": "error", "message": "Failed to unlink auction to sale"}), 400
+
+@bp.route("/changeBarterLink/", methods=("POST",))
+@verify_token
+def changeBarterLink():
+    data = request.get_json()
+    barter_service = BarterService(get_db())
+    try:
+        barter_service.change_barter_link(data.get("auction_id"), data.get("sale_id"), data.get("new_sale_id"))
+        return jsonify({"status": "success"})
+    except Exception as e:
+        logger.error("Failed to change barter link | %s", e)
+        return jsonify({"status": "error", "message": "Failed to change barter link"}), 400
 
 def _orderReturn(saleId, itemIds, db, shipping_value=0):
     cardIds = itemIds.get("cards") or []
