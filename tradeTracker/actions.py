@@ -40,6 +40,7 @@ from tradeTracker.services.models import (
 from tradeTracker.services.reciept_service import EKasaReceiptService, InvoiceReceiptService
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.r2_service import R2Service
+from tradeTracker.services.barter_service import BarterService
 from tradeTracker.utils.cardmarket import resolve_cardmarket_id
 from tradeTracker.utils.formating import normalize
 
@@ -903,24 +904,20 @@ def mergeAuctions(auction_id, target_id):
 @bp.route("/unlinkedBarterIds", methods=("GET",))
 @verify_token
 def unlinkedBarterIds():
-    db = get_db()
-    ids = db.execute(
-        'SELECT id, invoice_number FROM sales WHERE id NOT IN (SELECT sale_id FROM barter WHERE sale_id IS NOT NULL) AND invoice_number NOT LIKE "S%" ORDER BY id DESC'
-    )
-    return jsonify({"status": "success", "data": [dict(row) for row in ids]})
+    barter_service = BarterService(get_db())
+    ids = barter_service.get_unlinked_ids()
+    return jsonify({"status": "success", "data": ids})
 
 
-@bp.route("/linkAuctionToSale/<int:auction_id>", methods=("POST",))
+@bp.route("/linkAuctionToSale/<int:auction_id>/<int:sale_id>", methods=("POST",))
 @verify_token
-def linkAuctionToSale(auction_id):
-    db = get_db()
-    id = request.get_json()
-
-    db.execute("INSERT INTO barter(auction_id, sale_id) VALUES (?,?)", (auction_id, id["sale_id"]))
-    db.commit()
-
-    return jsonify({"status": "success"})
-
+def linkAuctionToSale(auction_id,sale_id):
+    barter_service = BarterService(get_db())
+    try:
+        barter_service.link_barter(auction_id, sale_id)
+        return jsonify({"status": "success"})
+    except:
+        return jsonify({"status": "error", "message": "Failed to link auction to sale"}), 400
 
 def _orderReturn(saleId, itemIds, db, shipping_value=0):
     cardIds = itemIds.get("cards") or []
