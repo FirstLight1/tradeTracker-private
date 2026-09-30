@@ -110,6 +110,95 @@ p {
     justify-content: center;
 }
 
+/* Sold rows keep their original hover menu for invoice actions. */
+.sold-tab .auction-options {
+    visibility: hidden;
+    position: relative;
+    transition: visibility 0s .5s;
+}
+
+.sold-tab:hover .auction-options,
+.sold-tab .auction-options:focus-within {
+    visibility: visible;
+    transition: visibility 0s;
+}
+
+.sold-tab .auction-options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    position: absolute;
+    top: 50%;
+    right: -120px;
+    transform: translateY(-50%);
+    min-width: 175px;
+    padding: 8px;
+    border: 1px solid rgba(127, 255, 212, .3);
+    border-radius: 8px;
+    background: var(--primary-dark);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .6), 0 0 30px rgba(147, 112, 219, .2);
+    color: var(--text-color);
+    z-index: 1001;
+}
+
+.sold-tab .auction-options-list > div {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.sold-tab .auction-options-list button {
+    width: 100%;
+    height: auto;
+    margin: 0;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 4px;
+    background: none;
+    color: var(--text-color);
+    font: 13px var(--primary-font), serif;
+    text-align: left;
+    text-shadow: none;
+}
+
+.sold-tab .auction-options-list button:hover,
+.sold-tab .auction-options-list button:focus-visible {
+    background: rgba(127, 255, 212, .12);
+    color: var(--text-accent);
+}
+
+.sold-tab .auction-options-list .sold-auction-link-row {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(127, 255, 212, .2);
+}
+
+.sold-tab .auction-options-list .sold-auction-link {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 4px;
+    color: var(--text-color);
+    font: 13px var(--primary-font), serif;
+    letter-spacing: 2px;
+    text-align: left;
+    text-decoration: none;
+    text-shadow: none;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.sold-tab .auction-options-list .sold-auction-link:hover,
+.sold-tab .auction-options-list .sold-auction-link:focus-visible {
+    background: rgba(127, 255, 212, .12);
+    color: var(--text-accent);
+}
+
+.sold-tab .auction-options-list :focus-visible {
+    outline: 2px solid var(--text-accent);
+    outline-offset: -2px;
+}
+
 .auction-header {
     display: grid;
     grid-template-columns: repeat(3, 150px);
