@@ -21,6 +21,7 @@ from flask_wtf import FlaskForm
 
 from tradeTracker.db import get_db
 from tradeTracker.services import report_service
+from tradeTracker.services import barter_service
 from tradeTracker.services.cfAuth import verify_token
 from tradeTracker.services.eph_service import EPHService
 from tradeTracker.services.grading_validation import (
@@ -40,6 +41,7 @@ from tradeTracker.services.models import (
 from tradeTracker.services.reciept_service import EKasaReceiptService, InvoiceReceiptService
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.r2_service import R2Service
+from tradeTracker.services.barter_service import BarterService
 from tradeTracker.utils.cardmarket import resolve_cardmarket_id
 from tradeTracker.utils.formating import normalize
 
@@ -903,24 +905,44 @@ def mergeAuctions(auction_id, target_id):
 @bp.route("/unlinkedBarterIds", methods=("GET",))
 @verify_token
 def unlinkedBarterIds():
-    db = get_db()
-    ids = db.execute(
-        'SELECT id, invoice_number FROM sales WHERE id NOT IN (SELECT sale_id FROM barter WHERE sale_id IS NOT NULL) AND invoice_number NOT LIKE "S%" ORDER BY id DESC'
-    )
-    return jsonify({"status": "success", "data": [dict(row) for row in ids]})
+    barter_service = BarterService(get_db())
+    ids = barter_service.get_unlinked_ids()
+    return jsonify({"status": "success", "data": ids})
 
 
-@bp.route("/linkAuctionToSale/<int:auction_id>", methods=("POST",))
+@bp.route("/linkAuctionToSale/<int:auction_id>/<int:sale_id>", methods=("POST",))
 @verify_token
-def linkAuctionToSale(auction_id):
-    db = get_db()
-    id = request.get_json()
+def linkAuctionToSale(auction_id,sale_id):
+    barter_service = BarterService(get_db())
+    try:
+        barter_service.link_barter(auction_id, sale_id)
+        return jsonify({"status": "success"})
+    except Exception as e:
+        logger.error("Failed to link auction to sale | %s", e)
+        return jsonify({"status": "error", "message": "Failed to link auction to sale"}), 400
 
-    db.execute("INSERT INTO barter(auction_id, sale_id) VALUES (?,?)", (auction_id, id["sale_id"]))
-    db.commit()
+@bp.route("/unlinkAuctionToSale/<int:auction_id>/<int:sale_id>", methods=("POST",))
+@verify_token
+def unlinkAuctionToSale(auction_id,sale_id):
+    barter_service = BarterService(get_db())
+    try:
+        barter_service.unlink_barter(auction_id, sale_id)
+        return jsonify({"status": "success"})
+    except Exception as e:
+        logger.error("Failed to unlink auction to sale | %s", e)
+        return jsonify({"status": "error", "message": "Failed to unlink auction to sale"}), 400
 
-    return jsonify({"status": "success"})
-
+@bp.route("/changeBarterLink/", methods=("POST",))
+@verify_token
+def changeBarterLink():
+    data = request.get_json()
+    barter_service = BarterService(get_db())
+    try:
+        barter_service.change_barter_link(data.get("auction_id"), data.get("sale_id"), data.get("new_sale_id"))
+        return jsonify({"status": "success"})
+    except Exception as e:
+        logger.error("Failed to change barter link | %s", e)
+        return jsonify({"status": "error", "message": "Failed to change barter link"}), 400
 
 def _orderReturn(saleId, itemIds, db, shipping_value=0):
     cardIds = itemIds.get("cards") or []

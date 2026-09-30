@@ -150,19 +150,16 @@ async function loadHistory() {
             <button class="view-auction" data-id="${safeSaleId}">View</button>
             <div class="auction-options">
                 <div class="auction-options-list">
-                    <div claa="auction-options">
+                    <div>
                         <button class="return" data-id="${safeSaleId}" >Return</button>
                     </div>
-                    <div class="auction-options">
+                    <div>
                         <button class="debit" data-id="${safeSaleId}" >Tarchopis</button>
                     </div>
-                    ${sale.invoice_number.includes('S') ? '' : `<div class='auction-options'><button class="show-invoice" data-in="${sale.invoice_number}">Show invoice</button></div>`}
+                    ${sale.invoice_number.includes('S') ? '' : `<div><button class="show-invoice" data-in="${sale.invoice_number}">Show invoice</button></div>`}
+                    ${sale.auction_id === null ? '' : `<div class="sold-auction-link-row"><a class="sold-auction-link" href="/#${safeAuctionId}" aria-label="Show auction #${safeAuctionId}">Auction #${safeAuctionId}</a></div>`}
                 </div>
             </div>
-            ${sale.auction_id === null
-                ? `<p></p>`
-                : `<span class='auction-link-hint'><a href='/#${safeAuctionId}'><img class='link-img' src="/static/images/logo.png" alt="Show auction"></a></span>`
-            } 
             <div class="cards-container">
             <!-- Cards will be loaded here -->
             </div>
@@ -174,7 +171,7 @@ async function loadHistory() {
             loadContent(viewButton, saleDate);
         });
         saleElement.addEventListener('click', (event) => {
-            if (event.target !== viewButton) {
+            if (event.target !== viewButton && !event.target.closest('.auction-options')) {
                 loadContent(viewButton, saleDate);
             }
         });

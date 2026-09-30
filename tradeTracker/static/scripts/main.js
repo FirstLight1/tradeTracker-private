@@ -3804,7 +3804,9 @@ async function loadUnlinkedIds() {
 
 async function renderBarterSelect(select) {
     const data = await loadUnlinkedIds();
-
+    if (!data) return;
+    // Reopening a selector should not append the same invoices again.
+    select.querySelectorAll('option:not([value="null"])').forEach((option) => option.remove());
     data.forEach((row) => {
         const option = document.createElement('option');
         option.value = sanitizeNumericId(row.id);
@@ -3812,6 +3814,83 @@ async function renderBarterSelect(select) {
         select.appendChild(option);
     });
     return select;
+}
+
+async function openInvoiceLinkModal(auctionDiv) {
+    const auctionOptions = auctionDiv.querySelector('.auction-options');
+    auctionOptions.classList.remove('is-open');
+    auctionOptions.querySelector('.auction-actions-toggle').setAttribute('aria-expanded', 'false');
+    const auctionId = auctionDiv.dataset.id;
+    const currentSaleId = auctionDiv.dataset.saleId;
+    const auctionName = auctionDiv.querySelector('.auction-name').textContent;
+    const currentInvoice = auctionDiv.dataset.invoiceNumber;
+    const modal = document.createElement('div');
+    modal.className = 'reciever-div invoice-link-overlay';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'invoice-link-title');
+    const content = document.createElement('div');
+    content.className = 'modal-content invoice-link-modal';
+    content.innerHTML = `
+        <button class="close-modal" type="button" aria-label="Close">&times;</button>
+        <h2 id="invoice-link-title">Change invoice link</h2>
+        <p class="invoice-link-description"></p>
+        <label for="invoice-link-target">Link to invoice</label>
+        <select id="invoice-link-target" disabled><option value="">Loading invoices…</option></select>
+        <div class="invoice-link-modal-actions">
+            <button class="invoice-link-cancel" type="button">Cancel</button>
+            <button class="invoice-link-save" type="button" disabled>Save link</button>
+        </div>`;
+    content.querySelector('.invoice-link-description').textContent = `${auctionName} is linked to invoice #${currentInvoice}. Choose an unlinked invoice to replace it.`;
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+    content.querySelector('.close-modal').focus();
+
+    const close = () => {
+        modal.remove();
+        auctionDiv.querySelector('.auction-actions-toggle')?.focus();
+    };
+    content.querySelector('.close-modal').addEventListener('click', close);
+    content.querySelector('.invoice-link-cancel').addEventListener('click', close);
+    modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    const onKeyDown = (event) => { if (event.key === 'Escape') close(); };
+    modal.addEventListener('keydown', onKeyDown);
+    const select = content.querySelector('#invoice-link-target');
+    const save = content.querySelector('.invoice-link-save');
+    try {
+        const invoices = await loadUnlinkedIds();
+        if (!invoices || !modal.isConnected) {
+            if (modal.isConnected) renderAlert('Could not load available invoices. Please try again.', 'error');
+            return;
+        }
+        select.replaceChildren(new Option('Select an invoice', ''));
+        invoices.forEach((invoice) => {
+            select.add(new Option(sanitizePlainText(invoice.invoice_number), sanitizeNumericId(invoice.id)));
+        });
+        if (!invoices.length) renderAlert('There are no unlinked invoices available.', 'error');
+        select.disabled = !invoices.length;
+        select.focus();
+    } catch (err) {
+        renderAlert('Could not load available invoices. Please try again.', 'error');
+    }
+    select.addEventListener('change', () => { save.disabled = !select.value; });
+    save.addEventListener('click', async () => {
+        if (!select.value) return;
+        save.disabled = true;
+        try {
+            const response = await csrfFetch('/changeBarterLink/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ auction_id: auctionId, sale_id: currentSaleId, new_sale_id: select.value }),
+            });
+            const result = await response.json();
+            if (!response.ok || result.status !== 'success') throw new Error(result.message);
+            window.location.reload();
+        } catch (err) {
+            renderAlert(err.message || 'Could not change the invoice link. Please try again.', 'error');
+            save.disabled = false;
+        }
+    });
 }
 
 function openMergeAuctionModal(auctionId, auctionName) {
@@ -3902,6 +3981,8 @@ async function loadAuctions() {
                 auctionDiv.classList.add('singles');
             }
             auctionDiv.setAttribute('data-id', safeAuctionId);
+            auctionDiv.dataset.saleId = safeSaleId || '';
+            auctionDiv.dataset.invoiceNumber = auction.invoice_number || '';
             const auctionName = auction.auction_name || 'Auction ' + (auction.id - 1); // Fallback for name
             const auctionPrice = auction.auction_price || null; // Fallback for buy price
             const buyDate = new Date(auction.date_created);
@@ -3937,19 +4018,18 @@ async function loadAuctions() {
                     <button class="view-auction" data-id="${safeAuctionId}">View</button>
                 </div>
                 <div class="auction-options">
-                    <div class="auction-options-list">
-                        <div class="auction-option">
-                            <button class="delete-auction" data-id="${safeAuctionId}">Delete</button>
+                    <button class="auction-actions-toggle" type="button" aria-label="Manage ${sanitizeAttrValue(auctionName)}" aria-expanded="false" aria-controls="auction-menu-${safeAuctionId}">Manage</button>
+                    <div class="auction-options-list" id="auction-menu-${safeAuctionId}">
+                        <div class="auction-link-section">
+                            <span class="auction-menu-label">Linked invoice</span>
+                            ${auction.sale_id == null
+                                ? `<span class="auction-link-empty">None</span><select class="barter-id-select" aria-label="Link an invoice"><option value="null">Link an invoice…</option></select>`
+                                : `<a class="sale-link" href="/sold#${safeSaleId}">Invoice #${DOMPurify.sanitize(invoiceNumber)}</a>
+                                   <div class="auction-link-actions"><button class="change-invoice-link" type="button">Change link</button><button class="remove-invoice-link" type="button">Remove link</button></div>`}
                         </div>
-                        <div class="auction-option">
-                            <button class="merge-button">Merge</button>
-                        </div>
-                        <div class="auction-option auction-link-cell">
-                            ${
-                                auction.sale_id == null
-                                    ? `<select class='barter-id-select'><option value="null">Select Invoice Number to link</option></select>`
-                                    : `<a class="sale-link" href="/sold#${safeSaleId}">Invoice Number: ${DOMPurify.sanitize(invoiceNumber)}</a>`
-                            }
+                        <div class="auction-menu-record-actions">
+                            <button class="merge-button" type="button">Merge auction</button>
+                            <button class="delete-auction" type="button" data-id="${safeAuctionId}">Delete auction</button>
                         </div>
                     </div>
                 </div>
@@ -3973,6 +4053,69 @@ async function loadAuctions() {
             });
         });
 
+        document.querySelectorAll('.auction-actions-toggle').forEach((button) => {
+            const row = button.closest('.auction-tab');
+            const options = button.closest('.auction-options');
+            const placeMenu = () => {
+                const rect = button.getBoundingClientRect();
+                options.classList.toggle('drop-up', window.innerHeight - rect.bottom < 250 && rect.top > 250);
+            };
+            row.addEventListener('mouseenter', () => {
+                placeMenu();
+                button.setAttribute('aria-expanded', 'true');
+            });
+            row.addEventListener('mouseleave', () => {
+                if (!options.classList.contains('is-open')) button.setAttribute('aria-expanded', 'false');
+            });
+            button.addEventListener('click', () => {
+                placeMenu();
+                const open = !options.classList.contains('is-open');
+                document.querySelectorAll('.auction-options.is-open').forEach((other) => {
+                    other.classList.remove('is-open');
+                    other.querySelector('.auction-actions-toggle').setAttribute('aria-expanded', 'false');
+                });
+                options.classList.toggle('is-open', open);
+                button.setAttribute('aria-expanded', String(open || row.matches(':hover')));
+            });
+        });
+        document.addEventListener('click', (event) => {
+            if (event.target.closest('.auction-options')) return;
+            document.querySelectorAll('.auction-options.is-open').forEach((options) => {
+                options.classList.remove('is-open');
+                options.querySelector('.auction-actions-toggle').setAttribute('aria-expanded', 'false');
+            });
+        });
+        document.querySelectorAll('.change-invoice-link').forEach((button) => {
+            button.addEventListener('click', () => openInvoiceLinkModal(button.closest('.auction-tab')));
+        });
+        document.querySelectorAll('.remove-invoice-link').forEach((button) => {
+            button.addEventListener('click', async () => {
+                if (button.dataset.confirm !== 'true') {
+                    button.dataset.confirm = 'true';
+                    button.textContent = 'Confirm remove';
+                    setTimeout(() => {
+                        if (!button.isConnected || button.disabled) return;
+                        button.dataset.confirm = 'false';
+                        button.textContent = 'Remove link';
+                    }, 4000);
+                    return;
+                }
+                const auctionDiv = button.closest('.auction-tab');
+                button.disabled = true;
+                try {
+                    const response = await csrfFetch(`/unlinkAuctionToSale/${auctionDiv.dataset.id}/${auctionDiv.dataset.saleId}`, { method: 'POST' });
+                    const result = await response.json();
+                    if (!response.ok || result.status !== 'success') throw new Error(result.message);
+                    window.location.reload();
+                } catch (err) {
+                    renderAlert(err.message || 'Could not remove the invoice link.', 'error');
+                    button.disabled = false;
+                    button.dataset.confirm = 'false';
+                    button.textContent = 'Remove link';
+                }
+            });
+        });
+
         const barterSelects = document.querySelectorAll('.barter-id-select');
         barterSelects.forEach((select) => {
             select.addEventListener('focus', () => {
@@ -3984,16 +4127,14 @@ async function loadAuctions() {
                 const selected = event.target.value;
                 if (selected === 'null') {return;}
                 try {
-                    const res = await csrfFetch(`/linkAuctionToSale/${auctionId}`, {
+                    const res = await csrfFetch(`/linkAuctionToSale/${auctionId}/${selected}`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ sale_id: selected }),
                     });
                     const data = await res.json();
                     if (data.status === 'success') {
-                        console.log('success');
+                        window.location.reload();
+                    } else {
+                        renderAlert(data.message || 'Could not link the invoice.', 'error');
                     }
                 } catch (err) {
                     renderAlert('There was an error' + err, 'error');
@@ -4295,19 +4436,22 @@ async function loadAuctions() {
             button.addEventListener('click', () => {
                 const auctionId = button.getAttribute('data-id');
                 if (auctionId != 1) {
-                    if (button.textContent === 'Confirm') {
+                    if (button.dataset.confirm === 'true') {
                         const auctionDiv = button.closest('.auction-tab');
                         deleteAuction(auctionId, auctionDiv);
                         updateInventoryValueAndTotalProfit();
                     } else {
-                        button.textContent = 'Confirm';
+                        button.dataset.confirm = 'true';
+                        button.textContent = 'Confirm delete';
                         const timerID = setTimeout(() => {
-                            button.textContent = 'Delete';
+                            button.dataset.confirm = 'false';
+                            button.textContent = 'Delete auction';
                         }, 3000);
                         // Remove confirmation if user clicks elsewhere
                         document.addEventListener('click', function handler(e) {
                             if (e.target !== button) {
-                                button.textContent = 'Delete';
+                                button.dataset.confirm = 'false';
+                                button.textContent = 'Delete auction';
                                 document.removeEventListener('click', handler);
                                 clearTimeout(timerID);
                             }
