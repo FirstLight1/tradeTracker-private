@@ -1,17 +1,19 @@
-import boto3
 import os
-from botocore.exceptions import ClientError
 from io import BytesIO
+
+import boto3
+from botocore.exceptions import ClientError
+
 
 class R2Service:
     def __init__(self):
         self.r2 = boto3.client(
-                service_name='s3',
-                endpoint_url=os.environ.get('R2_ENDPOINT'),
-                aws_access_key_id=os.environ.get('R2_KEY_ID'),
-                aws_secret_access_key=os.environ.get('R2_API_KEY'),
-                region_name='auto', 
-                )
+            service_name="s3",
+            endpoint_url=os.environ.get("R2_ENDPOINT"),
+            aws_access_key_id=os.environ.get("R2_KEY_ID"),
+            aws_secret_access_key=os.environ.get("R2_API_KEY"),
+            region_name="auto",
+        )
 
     def upload_file(self, file: bytes, file_name: str, bucket_name: str) -> None:
         if file_name is None:
@@ -20,7 +22,9 @@ class R2Service:
             raise Exception("File is required")
 
         try:
-            self.r2.put_object(Body=file, Bucket=bucket_name, Key=file_name, ContentType='application/pdf')
+            self.r2.put_object(
+                Body=file, Bucket=bucket_name, Key=file_name, ContentType="application/pdf"
+            )
         except ClientError as e:
             raise Exception(f"Failed to upload file to R2: {e}")
 
@@ -29,4 +33,3 @@ class R2Service:
         self.r2.download_fileobj(bucket_name, file_name, file)
         file.seek(0)
         return file
-

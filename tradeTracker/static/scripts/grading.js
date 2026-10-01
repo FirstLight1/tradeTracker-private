@@ -3,7 +3,7 @@ import { sanitizeNumericId, csrfFetch } from './utils/sanitizers.js';
 
 const GRADING_STATUSES = ['preparing', 'sent_for_grading', 'received_by_grader'];
 const ACTIVE_STATUSES = new Set(['preparing', 'sent_for_grading', 'received_by_grader']);
-const TERMINAL_STATUSES = ['graded', 'returned', 'cancelled'];
+const TERMINAL_STATUSES = new Set(['graded', 'returned', 'cancelled']);
 
 function formatCurrency(value) {
     if (value === null || value === undefined || value === '') return '0.00€';
@@ -140,7 +140,7 @@ function removeMutationButtons(submissionElement) {
 }
 
 function openStatusModal(button, submission, terminalStatus = null) {
-    if (TERMINAL_STATUSES.includes(submission.status)) {
+    if (TERMINAL_STATUSES.has(submission.status)) {
         renderAlert('Finalized grading submissions cannot be changed', 'error');
         return;
     }
@@ -314,7 +314,7 @@ function openStatusModal(button, submission, terminalStatus = null) {
                     submission.returned_at,
                 );
             }
-            if (TERMINAL_STATUSES.includes(submission.status)) {
+            if (TERMINAL_STATUSES.has(submission.status)) {
                 removeMutationButtons(submissionElement);
             }
             if (submission.notes) {
@@ -331,8 +331,11 @@ function openStatusModal(button, submission, terminalStatus = null) {
         }
     });
 
-    if (terminalStatus === 'returned') returnedDate.focus();
-    else statusSelect.focus();
+    if (terminalStatus === 'returned') {
+        returnedDate.focus();
+    } else {
+        statusSelect.focus();
+    }
 }
 
 function renderSubmission(container, submission) {
@@ -369,7 +372,9 @@ function renderSubmission(container, submission) {
         completeButton.setAttribute('data-id', submissionId);
         completeButton.textContent = 'Complete';
         completeButton.addEventListener('click', () => {
-            if (!ACTIVE_STATUSES.has(submission.status)) {return;}
+            if (!ACTIVE_STATUSES.has(submission.status)) {
+                return;
+            }
             window.location.href = `/grading/submissions/${submissionId}/complete`;
         });
         buttonContainer.append(completeButton);
@@ -405,16 +410,20 @@ function renderSubmission(container, submission) {
         openStatusModal(returnedButton, submission, 'returned'),
     );
     cancelSubmissionButton?.addEventListener('click', async () => {
-        if (!window.confirm('Cancel this submission and release its cards back to raw inventory?'))
-            {return;}
+        if (
+            !window.confirm('Cancel this submission and release its cards back to raw inventory?')
+        ) {
+            return;
+        }
         cancelSubmissionButton.disabled = true;
         try {
             const response = await csrfFetch(`/grading/submissions/${submissionId}/cancel`, {
                 method: 'POST',
             });
             const result = await response.json().catch(() => ({}));
-            if (!response.ok)
-                {throw new Error(result.message || `request failed with status ${response.status}`);}
+            if (!response.ok) {
+                throw new Error(result.message || `request failed with status ${response.status}`);
+            }
             submission.status = 'cancelled';
             submissionElement.querySelector('.grading-status').textContent = formatStatus(
                 submission.status,
@@ -427,10 +436,14 @@ function renderSubmission(container, submission) {
         }
     });
     submissionElement.addEventListener('click', (event) => {
-        if (event.target === submissionElement) {loadSubmissionCards(viewButton);}
+        if (event.target === submissionElement) {
+            loadSubmissionCards(viewButton);
+        }
     });
 
-    if (submission.notes) {submissionElement.title = submission.notes;}
+    if (submission.notes) {
+        submissionElement.title = submission.notes;
+    }
     container.appendChild(submissionElement);
 }
 
@@ -440,10 +453,14 @@ async function loadSubmissions() {
 
     try {
         const response = await csrfFetch('/grading/submissions');
-        if (!response.ok) {throw new Error(`request failed with status ${response.status}`);}
+        if (!response.ok) {
+            throw new Error(`request failed with status ${response.status}`);
+        }
 
         const submissions = await response.json();
-        if (!Array.isArray(submissions)) {throw new Error('invalid submissions response');}
+        if (!Array.isArray(submissions)) {
+            throw new Error('invalid submissions response');
+        }
 
         container.replaceChildren();
         if (submissions.length === 0) {

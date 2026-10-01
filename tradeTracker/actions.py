@@ -21,7 +21,7 @@ from flask_wtf import FlaskForm
 
 from tradeTracker.db import get_db
 from tradeTracker.services import report_service
-from tradeTracker.services import barter_service
+from tradeTracker.services.barter_service import BarterService
 from tradeTracker.services.cfAuth import verify_token
 from tradeTracker.services.eph_service import EPHService
 from tradeTracker.services.grading_validation import (
@@ -38,10 +38,9 @@ from tradeTracker.services.models import (
     PacketaHomeDeliveryResult,
     SaleInput,
 )
+from tradeTracker.services.r2_service import R2Service
 from tradeTracker.services.reciept_service import EKasaReceiptService, InvoiceReceiptService
 from tradeTracker.services.sale_service import SaleService
-from tradeTracker.services.r2_service import R2Service
-from tradeTracker.services.barter_service import BarterService
 from tradeTracker.utils.cardmarket import resolve_cardmarket_id
 from tradeTracker.utils.formating import normalize
 
@@ -912,7 +911,7 @@ def unlinkedBarterIds():
 
 @bp.route("/linkAuctionToSale/<int:auction_id>/<int:sale_id>", methods=("POST",))
 @verify_token
-def linkAuctionToSale(auction_id,sale_id):
+def linkAuctionToSale(auction_id, sale_id):
     barter_service = BarterService(get_db())
     try:
         barter_service.link_barter(auction_id, sale_id)
@@ -921,9 +920,10 @@ def linkAuctionToSale(auction_id,sale_id):
         logger.error("Failed to link auction to sale | %s", e)
         return jsonify({"status": "error", "message": "Failed to link auction to sale"}), 400
 
+
 @bp.route("/unlinkAuctionToSale/<int:auction_id>/<int:sale_id>", methods=("POST",))
 @verify_token
-def unlinkAuctionToSale(auction_id,sale_id):
+def unlinkAuctionToSale(auction_id, sale_id):
     barter_service = BarterService(get_db())
     try:
         barter_service.unlink_barter(auction_id, sale_id)
@@ -932,17 +932,21 @@ def unlinkAuctionToSale(auction_id,sale_id):
         logger.error("Failed to unlink auction to sale | %s", e)
         return jsonify({"status": "error", "message": "Failed to unlink auction to sale"}), 400
 
+
 @bp.route("/changeBarterLink/", methods=("POST",))
 @verify_token
 def changeBarterLink():
     data = request.get_json()
     barter_service = BarterService(get_db())
     try:
-        barter_service.change_barter_link(data.get("auction_id"), data.get("sale_id"), data.get("new_sale_id"))
+        barter_service.change_barter_link(
+            data.get("auction_id"), data.get("sale_id"), data.get("new_sale_id")
+        )
         return jsonify({"status": "success"})
     except Exception as e:
         logger.error("Failed to change barter link | %s", e)
         return jsonify({"status": "error", "message": "Failed to change barter link"}), 400
+
 
 def _orderReturn(saleId, itemIds, db, shipping_value=0):
     cardIds = itemIds.get("cards") or []
@@ -1177,7 +1181,7 @@ def generate_credit_note(saleId):
     if current_app.config.get("R2_ENABLED"):
         try:
             client = R2Service()
-            client.upload_file(pdf['bytes'], f"creditnotes/{creditNoteNum}.pdf", 'tradetracker')
+            client.upload_file(pdf["bytes"], f"creditnotes/{creditNoteNum}.pdf", "tradetracker")
         except Exception as e:
             logger.exception("Failed to upload to R2 | %s", e)
 
@@ -1296,7 +1300,7 @@ def generateDebitNote(saleId):
     if current_app.config.get("R2_ENABLED"):
         try:
             client = R2Service()
-            client.upload_file(pdf['bytes'], f"debitnotes/{debitNoteNum}.pdf", 'tradetracker')
+            client.upload_file(pdf["bytes"], f"debitnotes/{debitNoteNum}.pdf", "tradetracker")
         except Exception as e:
             logger.exception("Failed to upload to R2 | %s", e)
 
@@ -2481,8 +2485,8 @@ def importCSV():
 
                 if current_app.config.get("R2_ENABLED"):
                     client = R2Service()
-                    file_name = "invoices/" + reciept['filename'].split('_')[0] + ".pdf"
-                    client.upload_file(reciept['bytes'], file_name, 'tradetracker')
+                    file_name = "invoices/" + reciept["filename"].split("_")[0] + ".pdf"
+                    client.upload_file(reciept["bytes"], file_name, "tradetracker")
 
                 shipping_method = item.shipping["shippingMethod"].lower()
                 method, insurance = _parse_shipping_method(shipping_method)
@@ -2806,19 +2810,22 @@ def getCardIds():
         ids = [dict(row)["id"] for row in cardIds]
         return jsonify({"status": "success", "card_ids": ids}), 200
 
+
 @bp.route("/showInvoice/<int:invoiceNumber>", methods=("GET",))
 @verify_token
 def showInvoice(invoiceNumber):
     client = R2Service()
     try:
-        invoice = client.download_file(f"invoices/{invoiceNumber}.pdf", 'tradetracker')
-        return send_file(invoice, 
-                         mimetype="application/pdf",
-                         download_name=f"{invoiceNumber}.pdf",
-                         as_attachment=False, 
-                        )
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Failed to find invoice"}), 404
+        invoice = client.download_file(f"invoices/{invoiceNumber}.pdf", "tradetracker")
+        return send_file(
+            invoice,
+            mimetype="application/pdf",
+            download_name=f"{invoiceNumber}.pdf",
+            as_attachment=False,
+        )
+    except Exception:
+        return jsonify({"status": "error", "message": "Failed to find invoice"}), 404
+
 
 @bp.route("/createSale/<string:kind>", methods=("POST",))
 @limiter.limit("5 per minute")
@@ -2879,10 +2886,10 @@ def invoice(kind):
                 ), 400
 
             if current_app.config.get("R2_ENABLED"):
-                try: 
+                try:
                     client = R2Service()
-                    file_name = "invoices/" + receipt['filename'].split('_')[0] + ".pdf"
-                    client.upload_file(receipt['bytes'], file_name, 'tradetracker')
+                    file_name = "invoices/" + receipt["filename"].split("_")[0] + ".pdf"
+                    client.upload_file(receipt["bytes"], file_name, "tradetracker")
                 except Exception as e:
                     logger.exception("Failed to upload to R2 | %s", e)
 
