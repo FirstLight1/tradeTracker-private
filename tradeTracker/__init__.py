@@ -38,19 +38,21 @@ def create_app(test_config=None):
     limiter.init_app(app)
     csrf.init_app(app)
 
-    if os.environ.get("FLASK_ENV") != "production":
+    APP_ENV = os.environ.get("FLASK_ENV", "development")
+
+    if APP_ENV == "development":
         from dotenv import load_dotenv
 
         load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-    ALLOWED_ORIGINS = [
-        "https://app.cardanvil.sk",
-        f"chrome-extension://{os.environ['CHROME_EXTENSION_ID']}",
-        "https://www.cardmarket.com",
-    ]
+    from .configs import config
+    app.config.from_object(config[APP_ENV])
+    if app.config["SECRET_KEY"] is None:
+        raise RuntimeError("SECRET_KEY is not set")
+
     CORS(
         app,
-        origins=ALLOWED_ORIGINS,
+        origins=app.config['ALLOWED_ORIGINS'],
         supports_credentials=True,
         allow_headers=["Content-Type", "X-CSRF-Token", "Authorization"],
         methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
@@ -76,7 +78,7 @@ def create_app(test_config=None):
         SESSION_COOKIE_SAMESITE="Lax",
     )
     # Use DATA_DIR for database storage in production
-    if os.getenv("FLASK_ENV") == "prod":
+    if APP_ENV != "development":
         data_dir = os.getenv("DATA_DIR", app.instance_path)
         os.makedirs(data_dir, exist_ok=True)
         db_path = os.path.join(data_dir, "tradeTracker.sqlite")
@@ -86,10 +88,7 @@ def create_app(test_config=None):
 
     app.config.from_mapping(
         DATABASE=db_path,
-        SECRET_KEY=os.environ.get("SECRET_KEY") or abort_secret_key(),
         WTF_CSRF_TIME_LIMIT=86400,
-        R2_ENABLED=os.environ.get("R2_ENABLED", "false").lower() == "true",
-
     )
 
     # I dont even need this I think
