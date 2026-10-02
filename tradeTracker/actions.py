@@ -23,7 +23,7 @@ from tradeTracker.db import get_db
 from tradeTracker.services import report_service
 from tradeTracker.services import barter_service
 from tradeTracker.services.cfAuth import verify_token
-from tradeTracker.services.eph_service import EPHService
+from tradeTracker.services.shipping_service import get_eph_service
 from tradeTracker.services.grading_validation import (
     normalize_text,
 )
@@ -35,7 +35,6 @@ from tradeTracker.services.models import (
     InventoryWriteOff,
     ItemInput,
     ItemType,
-    PacketaHomeDeliveryResult,
     SaleInput,
 )
 from tradeTracker.services.reciept_service import EKasaReceiptService, InvoiceReceiptService
@@ -46,10 +45,6 @@ from tradeTracker.utils.cardmarket import resolve_cardmarket_id
 from tradeTracker.utils.formating import normalize
 
 from . import CONSTANTS, generateInvoice
-
-# Packeta integration disabled — service hits the network (WSDL fetch) at construction
-# and requires the `postal` native dep. Re-enable together with the blocks in importCSV.
-# from tradeTracker.services.packeta_service import PacketaService
 
 if os.environ.get("FLASK_ENV") != "production":
     from dotenv import load_dotenv
@@ -2451,17 +2446,9 @@ def importCSV():
         invoices = []
         failed = []
         order = defaultdict(str)
-        eph = EPHService()
+        eph = get_eph_service()
         EPHSheets = []
         EPHlabels = []
-        # Packeta disabled — PacketaService() fetches the WSDL over the network on
-        # construction, on every CSV import, even though all Packeta code is dead.
-        # packeta = PacketaService()
-        # packetsData = {
-        #             "pickupPointPackets": [],
-        #             "homeDeliveryPackets": [],
-        #         }
-        # packetaLabels = []
 
         for item in completed:
             try:
@@ -2517,23 +2504,9 @@ def importCSV():
                         )
                     )
 
-                # PACKETA
-                if False:
-                    #    else:
-                    homeDelivery = "home delivery" in shipping_method
-                    if homeDelivery:
-                        packetId = packeta.create_packet(item, homeDelivery=True)
-                        courierNumber = packeta.packet_courier_number(packetId)
-                        home_res = PacketaHomeDeliveryResult(packetId, courierNumber)
-                        packetsData["homeDeliveryPackets"].append(home_res)
-
-                    else:
-                        packetId = packeta.create_packet(item)
-                        packetsData["pickupPointPackets"].append(packetId)
-
             except Exception as e:
                 logger.exception(
-                    "Failed to create EPH label for order id: %s | %s", item.idOrder, e
+                    "Failed to process shipping for order id: %s | %s", item.idOrder, e
                 )
                 failed.append(
                     {
@@ -2564,20 +2537,6 @@ def importCSV():
             except Exception as e:
                 logger.warning("Failed to register EPH sheet %s: %s", sheet_id, e)
 
-        # PACKETA LABELS — disabled together with PacketaService above
-        # if packetsData["pickupPointPackets"]:
-        #     try:
-        #         labels = packeta.packets_labels_pdf(packetsData["pickupPointPackets"])
-        #         packetaLabels.append(LabelResult(filename="packeta_pickup_labels.pdf", bytes=labels))
-        #     except Exception as e:
-        #         logger.warning('Failed to generate Packeta pickup labels: %s', e)
-        # if packetsData["homeDeliveryPackets"]:
-        #     try:
-        #         labels = packeta.packet_courier_labels_pdf(packetsData["homeDeliveryPackets"])
-        #         packetaLabels.append(LabelResult(filename="packeta_home_labels.pdf", bytes=labels))
-        #     except Exception as e:
-        #         logger.warning('Failed to generate Packeta home-delivery labels: %s', e)
-
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
             for filename, bytes in invoices:
@@ -2585,9 +2544,6 @@ def importCSV():
                 # write labels to zip
             for label in EPHlabels:
                 zip_file.writestr(label.filename, label.bytes)
-            # Packeta disabled
-            # for label in packetaLabels:
-            #     zip_file.writestr(label.filename, label.bytes)
 
         token = uuid.uuid4().hex
         d = _downloads_dir()
@@ -2908,7 +2864,7 @@ def invoice(kind):
                     state = (cartContent["recieverInfo"].get("state") or "").strip().lower()
                     if state in CONSTANTS.EUROPE_COUNTRY_CODES:
                         cartContent["recieverInfo"]["state"] = CONSTANTS.EUROPE_COUNTRY_CODES[state]
-                    eph = EPHService()
+                    eph = get_eph_service()
                     sheet_id = eph.createSheet(
                         parcel_category=delivery["parcelCategory"],
                         reception_method="post",

@@ -24,6 +24,7 @@ import sys
 import json
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -156,9 +157,7 @@ class SoldCSVImportTestCase(unittest.TestCase):
             base_url="https://localhost",
         )
 
-    # PacketaService is disabled in actions.py (commented out), so there is
-    # nothing left to patch for it here.
-    @patch("tradeTracker.actions.EPHService")
+    @patch("tradeTracker.actions.get_eph_service")
     def test_sold_import_end_to_end(self, mock_eph_service):
         # Stub the carrier services so the test does not hit live APIs.
         mock_eph = MagicMock()
@@ -225,6 +224,44 @@ class SoldCSVImportTestCase(unittest.TestCase):
             self.client.get(f"/download/{token}", base_url="https://localhost").status_code,
             404,
         )
+
+    def test_fake_eph_import(self):
+        self.app.config.update(EPH_ENABLED=False, PACKETA_ENABLED=False, R2_ENABLED=False)
+        resp = self._post()
+        body = resp.get_json()
+        self.assertEqual(resp.status_code, 200, body)
+        self.assertEqual(body["failed"], [])
+        download = self.client.get(body["download_url"], base_url="https://localhost")
+        self.assertEqual(download.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(download.data)) as archive:
+            labels = [name for name in archive.namelist() if name.startswith("label_")]
+            self.assertEqual(len(labels), 2)
+            for name in labels:
+                self.assertTrue(archive.read(name).startswith(b"%PDF-"))
+
+    def _assert_packeta_disabled(self, shipping_method, enabled):
+        self.app.config.update(EPH_ENABLED=False, PACKETA_ENABLED=enabled, R2_ENABLED=False)
+        orders = _orders_csv().replace(b'"Letter"', f'"{shipping_method}"'.encode())
+        with patch(__name__ + "._orders_csv", return_value=orders), patch(
+            "tradeTracker.services.shipping_service.get_packeta_service",
+            side_effect=AssertionError("Packeta must remain disabled"),
+        ) as packeta_factory:
+            resp = self._post()
+        packeta_factory.assert_not_called()
+        body = resp.get_json()
+        self.assertEqual(resp.status_code, 200, body)
+        self.assertEqual(body["failed"], [])
+        download = self.client.get(body["download_url"], base_url="https://localhost")
+        self.assertEqual(download.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(download.data)) as archive:
+            self.assertEqual(len(archive.namelist()), 2)
+            self.assertTrue(all(not name.startswith(("label_", "packeta_")) for name in archive.namelist()))
+
+    def test_packeta_pickup_disabled_even_when_enabled(self):
+        self._assert_packeta_disabled("Packeta", enabled=True)
+
+    def test_packeta_home_delivery_disabled(self):
+        self._assert_packeta_disabled("Home delivery - Packeta", enabled=False)
 
 
 if __name__ == "__main__":
