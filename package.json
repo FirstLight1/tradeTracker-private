@@ -20,10 +20,10 @@
     "type": "commonjs",
     "main": "index.js",
     "scripts": {
-        "lint": "oxlint static/js",
-        "lint:fix": "oxlint --fix static/js",
-        "format": "oxfmt static/js",
-        "format:check": "oxfmt --check static/js"
+        "lint": "oxlint tradeTracker/static/scripts",
+        "lint:fix": "oxlint --fix tradeTracker/static/scripts",
+        "format": "oxfmt tradeTracker/static/scripts",
+        "format:check": "oxfmt --check tradeTracker/static/scripts"
     },
     "devDependencies": {
         "oxfmt": "^0.65.0",

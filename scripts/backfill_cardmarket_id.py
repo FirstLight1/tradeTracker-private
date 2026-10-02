@@ -3,24 +3,24 @@ One-off backfill: populate cardMarketID on the cards or sealed table from a CSV.
 
 This is NOT a startup migration. The CSV is not in the repo, and this should run
 exactly once (per CSV) by hand on the server, after a DB backup. The schema column
-already exists on both tables (see migration.py / db.py).
+already exists on both tables (see migrations/ and tradeTracker/db.py).
 
-Usage (PowerShell, on the prod box, venv active):
+Usage (PowerShell, from the repository root on the prod box, venv active):
 
     # 1. ALWAYS back up first -- SQLite is a single file, the copy is your rollback:
     Copy-Item $env:DATA_DIR\tradeTracker.sqlite $env:DATA_DIR\tradeTracker.sqlite.bak
 
     # 2. Dry run -- writes nothing, just reports what WOULD happen:
-    python backfill_cardmarket_id.py --csv cards.csv --db $env:DATA_DIR\tradeTracker.sqlite
+    python scripts/backfill_cardmarket_id.py --csv cards.csv --db $env:DATA_DIR\tradeTracker.sqlite
 
     # 3. If the numbers look right, commit:
-    python backfill_cardmarket_id.py --csv cards.csv --db $env:DATA_DIR\tradeTracker.sqlite --commit
+    python scripts/backfill_cardmarket_id.py --csv cards.csv --db $env:DATA_DIR\tradeTracker.sqlite --commit
 
     # Sealed products are matched by name only -- pass --table sealed:
-    python backfill_cardmarket_id.py --table sealed --csv sealed.csv --db ... --commit
+    python scripts/backfill_cardmarket_id.py --table sealed --csv sealed.csv --db ... --commit
 
     # Or do both tables in one go (cards then sealed) from a single CSV:
-    python backfill_cardmarket_id.py --table both --csv cards.csv --db ... --commit
+    python scripts/backfill_cardmarket_id.py --table both --csv cards.csv --db ... --commit
 
 Matching key depends on the table:
   - cards : card_name + card_num (case/whitespace-insensitive). The Cardmarket
