@@ -1,3 +1,6 @@
+"""Historical pre-Yoyo migration; not used by application startup."""
+
+import sqlite3
 import os
 import sqlite3
 

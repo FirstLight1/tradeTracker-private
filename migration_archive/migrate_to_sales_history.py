@@ -1,5 +1,6 @@
 """
-Migration script to convert existing sold cards data to the new sales history structure.
+Historical pre-Yoyo migration; not used by application startup.
+Converts existing sold cards data to the new sales history structure.
 This script:
 1. Backs up the existing database
 2. Creates a temporary table with old cards data
@@ -150,7 +151,8 @@ def migrate_to_sales_history(db_path):
 
 
 if __name__ == "__main__":
-    # Default database path - adjust if needed
-    db_path = os.path.join(os.path.dirname(__file__), "instance", "tracker.db")
+    # Preserve the historical repository-root default; adjust before manual use.
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    db_path = os.path.join(project_root, "instance", "tracker.db")
 
     migrate_to_sales_history(db_path)

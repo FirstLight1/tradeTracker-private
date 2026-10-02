@@ -3,6 +3,12 @@
 Features/bugfixes with concrete, codebase-grounded implementation suggestions.
 Ordered by priority (item 1 = highest).
 
+Code references are repository-relative, not relative to `docs/`; shorthand paths
+such as `actions.py`, `services/`, and `static/` refer to files under `tradeTracker/`.
+Historical line references, implementation descriptions, and completion statuses
+may be stale; check the current code before implementing an item. Feature ideas and
+recorded statuses below are retained as backlog history.
+
 ## Context
 
 Data-model facts these suggestions rely on (verified against the code):
@@ -11,7 +17,12 @@ Data-model facts these suggestions rely on (verified against the code):
 - A sale writes `sales` + `sale_items` and sets `cards.sold_date` (`services/sale_service.py:90`).
 - Removal today is **hard delete only** (`/deleteCard`, `/deleteSealed`, `/deleteBulkItem` in `actions.py`).
 - `/addToExistingAuction/<auction_id>` (`actions.py:507`) already appends **cards + sealed** to an existing auction.
-- Migrations are idempotent functions in `tradeTracker/migration.py`, registered in `migrate_database()`.
+- Active migrations are Yoyo files in `migrations/`, applied automatically on app startup.
+  For schema changes, add a new migration with `from yoyo import step`, declare required
+  predecessor IDs in `__depends__`, and define `steps` with forward and rollback SQL.
+  Follow existing migration conventions and verify apply/rollback on a disposable database
+  copy after backing up the original. Yoyo tracks applied migrations; no function registration
+  is needed. `migration_archive/` is historical reference only, not an active migration source.
 - Mutations live in the `actions` blueprint; CSP forbids inline JS/CSS (put assets in `static/`).
 
 ---
@@ -31,7 +42,7 @@ but drops out of sellable inventory so it isn't double-counted against its conte
 - The only genuinely new piece is an **"opened" state** for sealed (none exists today).
 
 **Where.**
-- `tradeTracker/migration.py` — add `sealed.opened` flag (idempotent).
+- `migrations/` — add a Yoyo migration for the `sealed.opened` flag with rollback.
 - `tradeTracker/actions.py` — mark-opened endpoint (or extend `/addToExistingAuction`); exclude opened
   sealed from `/loadSealed` sellable lists (`:421`–`430`) and `/inventoryValue` (`:439`).
 - `tradeTracker/static/scripts/main.js` — "Open" button on the sealed row (`~:2066`–`2090`); open-contents
@@ -39,7 +50,7 @@ but drops out of sellable inventory so it isn't double-counted against its conte
 - `tradeTracker/templates/index.html` — sealed row markup.
 
 **How.**
-1. **Opened flag** — `sealed.opened INTEGER NOT NULL DEFAULT 0` via idempotent migration.
+1. **Opened flag** — `sealed.opened INTEGER NOT NULL DEFAULT 0` via a Yoyo migration with rollback.
 2. **Open UI** — "Open" button on each sealed row → modal with the reusable card-rows + sealed-rows
    inputs (card_name, card_num, condition, market_value; sealed name + market_value). Read the box's
    `auction_id` from the parent `.auction-tab` `data-id`.
@@ -73,17 +84,17 @@ is left to the accountant (zero for margin-scheme goods anyway).
 written off (`disposal_reason` set).
 
 **Where.**
-- `tradeTracker/migration.py` — add idempotent migrations.
+- `migrations/` — add Yoyo migrations with rollback.
 - `tradeTracker/actions.py` — new write-off + undo routes (near delete routes ~`:452`; mirror `/deleteCard` and `/orderReturn` `:651`).
 - `tradeTracker/db.py` — schema reference for `cards` (`:156`) and `sealed` (`:234`).
 - Renderers/templates + a `static/` JS file for the write-off modal.
 
 **How.**
-1. **Migration** — add `_add_disposal_fields_to_cards(cursor)` and `_add_disposal_fields_to_sealed(...)`,
-   following the `PRAGMA table_info` idempotent pattern (`migration.py:52` `_add_sold_date_to_cards`).
-   New nullable columns on both `cards` and `sealed`:
+1. **Migration** — add a new Yoyo migration with forward/rollback `step(...)` entries
+   for new nullable columns on both `cards` and `sealed`:
    `disposal_reason TEXT` (`'giveaway' | 'personal' | 'other'`), `disposal_date TEXT`,
-   `disposal_recipient TEXT` (giveaway only), `disposal_note TEXT`. Register both in `migrate_database()`.
+   `disposal_recipient TEXT` (giveaway only), `disposal_note TEXT`. Declare required dependencies
+   and verify apply/rollback on a database copy; check existing migrations for fields already added.
 2. **Write-off route** — `POST /writeOffCard/<card_id>` and `POST /writeOffSealed/<sid>` in `actions.py`.
    Set the disposal fields; do **not** touch `sold_date`; do **not** create `sales`/`sale_items`.
    Reuse the existing CSRF/auth/host-routing setup that the other `actions` routes use.
@@ -112,7 +123,7 @@ in partial amounts** (sell 2 of 5; the rest stay in stock) — mirroring how `bu
 Quantity is enterable both in the **manual "Add Sealed" form** and the **Chrome-extension import**.
 
 **Where.**
-- `tradeTracker/migration.py` — add quantity column (`addSealedProductsTable` is at `:237`).
+- `migrations/` — add a Yoyo migration for the quantity column with rollback.
 - `tradeTracker/actions.py` — `/addSealed` (`:386`), `/loadSealed` + `/loadSealed/<auction_id>` (`:378`–`430`), `/deleteSealed` (`:468`).
 - `tradeTracker/services/sale_service.py` — sealed sale logic (`:105`–`111`); compare bulk FIFO (`:170`–`200`).
 - `tradeTracker/services/models.py` — sealed dataclass/model (`:13`) if it enumerates fields.
@@ -121,9 +132,10 @@ Quantity is enterable both in the **manual "Add Sealed" form** and the **Chrome-
 - Chrome-extension import payload (sends to `/addSealed`).
 
 **How.**
-1. **Migration** — `addQuantityToSealed(db_path)`: idempotent `PRAGMA table_info(sealed)` check, then
+1. **Migration** — add a Yoyo `step` with forward SQL
    `ALTER TABLE sealed ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1` (DEFAULT required by SQLite for a
-   NOT NULL add; existing rows become qty 1). Register in `migrate_database()`.
+   NOT NULL add; existing rows become qty 1) and rollback SQL to drop the column.
+   Declare required dependencies and verify apply/rollback on a database copy.
 2. **Add** — `/addSealed` reads optional `quantity` per item (default 1) and stores it on the row.
    Do **not** upsert/merge like bulk does — sealed `name` is free-form with no stable natural key, so keep
    one row per add, carrying its quantity. Add a qty field to the manual form and to the extension payload.
@@ -164,7 +176,7 @@ plumbing first.
 - `tradeTracker/services/` — new `carriers/` package (mirror the `ReceiptService` abstract-class
   pattern in `reciept_service.py:11`); HTTP via `requests` (already a dep) with timeouts/error
   handling like `cfAuth.py:22`.
-- `tradeTracker/migration.py` — add carrier/tracking columns to `sales`.
+- `migrations/` — add carrier/tracking columns to `sales` via Yoyo steps with rollback.
 - `tradeTracker/services/sale_service.py:52` — receiver JSON (add phone/email/zip).
 - `tradeTracker/actions.py` — decrypt sites (`:589`, `:693`) + new fulfillment route; serve label
   PDF via `send_file(BytesIO(...))` like the invoice route (`:1654`).
@@ -176,9 +188,9 @@ plumbing first.
 1. **Recipient fields** — add `phone`, `email`, `psc` (postal code) to the receiver object collected
    in the sale modal; they flow into the existing encrypted `notes` JSON (no migration — it's a blob).
    Ship step decrypts `notes` to build the parcel.
-2. **Migration** — `addShippingFulfillmentColumns(sales)`: idempotent `PRAGMA table_info`, add
+2. **Migration** — add a new Yoyo migration with forward/rollback steps for
    `carrier TEXT`, `tracking_number TEXT`, `label_path TEXT` (or label BLOB), `shipment_id TEXT`,
-   `cod_amount REAL`, `pickup_point_id TEXT`. Register in `migrate_database()`.
+   `cod_amount REAL`, `pickup_point_id TEXT`. Declare required dependencies and verify apply/rollback.
 3. **Carrier layer** — abstract `CarrierClient` with `create_shipment(sale, parcel) ->
    {tracking_number, shipment_id, label_pdf: bytes}`. Concrete clients per carrier.
 4. **Fulfillment route** — `POST /createShipment/<sale_id>/<carrier>` in the **`actions`** blueprint
@@ -296,7 +308,7 @@ that is **excluded from inventory** (so a "Giveaway" tab's items don't count as 
 **Where.**
 - `tradeTracker/actions.py` — new single-item move route; `/inventoryValue` (`:439`) must exclude
   disposal tabs; auction create path.
-- `tradeTracker/migration.py` — add `auctions.is_disposal` (flag) and a note column
+- `migrations/` — add Yoyo steps with rollback for `auctions.is_disposal` (flag) and a note column
   (`cards.note` / `sealed.note`, and/or `auctions.note`).
 - `tradeTracker/static/scripts/main.js` — "Move to tab" UI on an item; exclude disposal tabs from the
   sale/cart flow; show notes.
@@ -305,7 +317,7 @@ that is **excluded from inventory** (so a "Giveaway" tab's items don't count as 
 **How.**
 1. **Single-item move** — `POST /moveItem` `{type: card|sealed|bulk, id, target_auction_id}` →
    `UPDATE <table> SET auction_id = ?`; for bulk, reuse the ON CONFLICT upsert (item 6) for collisions.
-2. **Disposal tab flag** — `auctions.is_disposal` via idempotent migration; exclude `is_disposal=1`
+2. **Disposal tab flag** — `auctions.is_disposal` via a Yoyo migration with rollback; exclude `is_disposal=1`
    tabs from `/inventoryValue` and from sellable item lists (these items generate **no income**, per item 2).
 3. **Custom note** — add note column(s); editable inline (dblclick like other fields) and shown on the item.
 4. **UI** — item-row "Move to…" picker (target tab dropdown) + note field; disposal tabs visually marked.
@@ -375,13 +387,14 @@ flagged this as "asi ale neviem ako to funguje" — exact mechanics are open, ne
 - `tradeTracker/api.py` — webhook receiver; verify Shopify HMAC header (`X-Shopify-Hmac-Sha256`).
 - `tradeTracker/services/sale_service.py` — order → sale translation (line items, buyer, shipping).
 - `tradeTracker/generateInvoice.py` — existing invoice; reuse for the email attachment.
-- `tradeTracker/migration.py` — `sales.shopify_order_id TEXT UNIQUE` (idempotency); optional
+- `migrations/` — Yoyo steps with rollback for `sales.shopify_order_id TEXT UNIQUE` (idempotency); optional
   `cards.sku` / `sealed.sku` for matching.
 - `.env` + README env table — `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_ADMIN_TOKEN`, `SHOPIFY_WEBHOOK_SECRET`,
   SMTP creds (`SMTP_HOST/PORT/USER/PASS/FROM`).
 
 **How.**
-1. **Migration** — `addShopifyOrderIdToSales`, idempotent; add SKU columns to `cards`/`sealed`.
+1. **Migration** — add Yoyo steps for the order ID and SKU columns on `cards`/`sealed`,
+   with rollback, required dependencies, and apply/rollback verification on a database copy.
 2. **Webhook** — `POST /shopify/webhook/orders-create` (no JWT, but verify HMAC). Idempotent on
    `shopify_order_id` — duplicate deliveries are a no-op.
 3. **Order → sale** — map line items by SKU to existing inventory rows; reuse `sale_service` to
@@ -417,13 +430,14 @@ document an accountant needs. Covers both **full returns** (dobropis for the who
   original invoice number + state the reason; line amounts negative for credit.
 - `tradeTracker/actions.py` — `/orderReturn` (`:651`) should auto-emit a dobropis; add
   `/issueDobropis/<sale_id>` and `/issueTarchopis/<sale_id>` for standalone corrections.
-- `tradeTracker/migration.py` — new `corrective_documents` table (id, original_sale_id, type
+- `migrations/` — Yoyo migration with rollback for a new `corrective_documents` table (id, original_sale_id, type
   `'dobropis'|'tarchopis'`, document_number, date, amount, reason, pdf bytes or path).
 - `tradeTracker/db.py` — schema reference.
 - `tradeTracker/static/scripts/sold.js` — UI to issue from a past sale.
 
 **How.**
-1. **Migration** — `addCorrectiveDocumentsTable(db_path)`, idempotent `sqlite_master` check.
+1. **Migration** — add a Yoyo step to create the table, with rollback to drop it;
+   declare required dependencies and verify apply/rollback on a database copy.
    Numbering sequence is **separate from invoices** and must be gapless per year (Slovak
    convention) — store year + sequence and compute the display number.
 2. **Renderer** — extend `generateInvoice.py` with `generateCreditNote(...)` /
@@ -493,7 +507,7 @@ exposed write surface**, so security/abuse handling drives most of the design.
   `app.cardanvil.sk` (`restrict_by_host`); add a third host (e.g. `vykup.cardanvil.sk`) that does
   **not** require Cloudflare Access JWT, only CSRF + rate limit + CAPTCHA.
 - New `tradeTracker/buyout.py` blueprint for the public routes (separate from `actions`).
-- `tradeTracker/migration.py` — new `buyout_offers` table (id, submitter_name, submitter_email,
+- `migrations/` — Yoyo migration with rollback for a new `buyout_offers` table (id, submitter_name, submitter_email,
   submitter_phone, items_json, photos_json, status `pending|accepted|rejected`, created_at, ip,
   user_agent).
 - `tradeTracker/templates/buyout/` — new public template (no app chrome, simpler styling).
@@ -503,7 +517,8 @@ exposed write surface**, so security/abuse handling drives most of the design.
   auction (purchase batch) via the existing `/addAuction` flow with submitter prices as cost basis.
 
 **How.**
-1. **Migration** — `addBuyoutOffersTable(db_path)`, idempotent.
+1. **Migration** — add a Yoyo step to create `buyout_offers`, with rollback to drop it;
+   declare required dependencies and verify apply/rollback on a database copy.
 2. **Public host** — new blueprint resolvable only on `vykup.*`; relax JWT for that host while
    keeping CSRF (Flask-WTF) + rate limit (Flask-Limiter) + hCaptcha. CSP `script-src` needs
    adjusting to allow the CAPTCHA provider — scope the relaxed CSP to the public host only.
@@ -612,7 +627,7 @@ goods — **the margin total is wrong** (margin is a §66 concept and shouldn't 
 section** with their own DPH breakdown (base / 23% DPH / total), kept apart from the margin items.
 
 **Where.**
-- `tradeTracker/migration.py` — new idempotent flag marking an item's tax regime (none today).
+- `migrations/` — Yoyo migration with rollback for a flag marking an item's tax regime (none today).
 - `tradeTracker/actions.py` — `generateSoldReport()` queries (`:779`–`796`) must select the flag;
   `generatePDF()` margin loops (`:886`–`903`) must skip normal-DPH items; totals print at `:912`–`919`.
 - `tradeTracker/actions.py` `/addSealed` (`:386`) + the Chrome-extension import payload — set the flag
@@ -627,8 +642,8 @@ section** with their own DPH breakdown (base / 23% DPH / total), kept apart from
    - *Alternatives:* a tax-regime flag on the **auction tab** (`auctions`), or infer from item kind
      (all sealed = normal-DPH) — simpler but wrong if a sealed item is ever resold as margin goods.
      **Confirm with the user / accountant which granularity they actually need.**
-2. **Migration** — add the column(s) via the `PRAGMA table_info` idempotent pattern
-   (`migration.py:52` `_add_sold_date_to_cards`), register in `migrate_database()`.
+2. **Migration** — add the column(s) in a new Yoyo migration with forward/rollback
+   `step(...)` entries, required dependencies, and apply/rollback verification on a database copy.
 3. **Intake** — `/addSealed` + extension import accept the regime; default sealed/new goods to
    normal-DPH, singles to margin-scheme. Add the toggle to the manual forms.
 4. **Report — exclude from margin.** In the three margin loops (`:886`–`903`), `continue` when the

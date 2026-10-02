@@ -1,3 +1,8 @@
+"""Backfill normalized names; run from the repository root after a database backup.
+
+Writes immediately to instance/tradeTracker.sqlite relative to the working directory.
+"""
+
 import sqlite3
 import unicodedata
 

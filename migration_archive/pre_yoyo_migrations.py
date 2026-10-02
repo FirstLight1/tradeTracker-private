@@ -2,15 +2,15 @@
 
 import os
 import re
-import sqlite3
-import sys
 import unicodedata
 
-# Import the sales history migration logic
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, parent_dir)
-from add_bulk import add_bulk_sales_table
-from migrate_to_sales_history import migrate_to_sales_history
+# Keep historical helpers local for module imports and direct script execution.
+if __package__:
+    from .add_bulk import add_bulk_sales_table
+    from .migrate_to_sales_history import migrate_to_sales_history
+else:
+    from add_bulk import add_bulk_sales_table
+    from migrate_to_sales_history import migrate_to_sales_history
 
 
 def migrate_database(db_path):

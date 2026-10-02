@@ -19,6 +19,7 @@ Production deployment: `https://app.cardanvil.sk` (API on `https://api.cardanvil
 
 ```
 run_app.py                 # WSGI entry — exposes `app` for Waitress / Flask
+conftest.py                # Repository-root pytest configuration
 tradeTracker/
   __init__.py              # create_app() — CORS, CSP, CSRF, blueprints
   api.py                   # /api endpoints (extension)
@@ -26,7 +27,6 @@ tradeTracker/
   actions.py               # Mutating endpoints (auctions, sales, etc.)
   renderers.py             # HTML rendering routes
   db.py                    # SQLite connection + init
-  migration.py             # Schema migrations run on startup
   generateInvoice.py       # PDF invoice generation
   services/
     cfAuth.py              # Cloudflare Access JWT + API token decorators
@@ -35,9 +35,20 @@ tradeTracker/
     models.py
   static/, templates/, fonts/
 tests/                     # pytest suite (payments, bulk FIFO, endpoints)
+migrations/                # Active Yoyo migrations applied on app startup
+migration_archive/         # Historical scripts only; not applied on startup
+  pre_yoyo_migrations.py   # Legacy pre-Yoyo migration implementation
+  add_bulk.py
+  migrate_to_sales_history.py
+scripts/                   # Manual maintenance utilities; not startup migrations
+  backfill_cardmarket_id.py
+  normalize_names.py
+docs/TODO.md               # Feature / bugfix backlog
 requirements.txt
-secureApp.md               # Deployment & hardening plan
 ```
+
+Root configuration files and dependency manifests remain at the repository root alongside
+`run_app.py` and `conftest.py`.
 
 ## Requirements
 
@@ -81,7 +92,38 @@ $env:FLASK_ENV = "prod"
 waitress-serve --listen=127.0.0.1:420 run_app:app
 ```
 
-In production the app expects to sit behind a Cloudflare Tunnel; bind only to `127.0.0.1`. See `secureApp.md` for the full deployment plan.
+In production the app expects to sit behind a Cloudflare Tunnel; bind only to `127.0.0.1`.
+
+## Database migrations and maintenance
+
+`create_app()` applies pending Yoyo migrations from the repository's `migrations/`
+directory on startup, using the configured database. Yoyo tracks applied migrations;
+there is no `tradeTracker/migration.py` or manual `migrate_database()` registration.
+For schema changes, add a new migration importing `step` from `yoyo`, declare any
+required predecessor IDs in `__depends__`, and define `steps` with both forward SQL
+and rollback SQL (see existing migrations). Verify apply and rollback on a disposable
+database copy before deployment, and back up the live database first.
+
+`migration_archive/` is historical reference only, including `add_bulk.py` and
+`migrate_to_sales_history.py`; do not run these as part of startup or routine maintenance.
+
+Run manual utilities from the **repository root** with the virtual environment active,
+after taking a consistent SQLite backup (stop writers or use SQLite's backup facility).
+For Cardmarket ID backfills, supply the intended database and CSV explicitly, review
+the default dry run, and only then repeat with `--commit`:
+
+```powershell
+python scripts/backfill_cardmarket_id.py --csv cards.csv --db "instance/tradeTracker.sqlite"
+python scripts/backfill_cardmarket_id.py --csv cards.csv --db "instance/tradeTracker.sqlite" --commit
+python scripts/normalize_names.py
+```
+
+`normalize_names.py` writes immediately and uses the root-relative
+`instance/tradeTracker.sqlite`; confirm that is the intended database before running it.
+For backfills against production, pass the actual database path (for example under
+`DATA_DIR`) instead. Neither utility is a startup migration.
+
+See `docs/TODO.md` for the backlog; historical line references and statuses there may be stale.
 
 ## Tests
 
