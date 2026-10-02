@@ -1177,7 +1177,8 @@ def generate_credit_note(saleId):
     if current_app.config.get("R2_ENABLED"):
         try:
             client = R2Service()
-            client.upload_file(pdf['bytes'], f"creditnotes/{creditNoteNum}.pdf", 'tradetracker')
+            bucket_name = str(current_app.config.get("R2_BUCKET_NAME"))
+            client.upload_file(pdf['bytes'], f"creditnotes/{creditNoteNum}.pdf", bucket_name)
         except Exception as e:
             logger.exception("Failed to upload to R2 | %s", e)
 
@@ -1296,7 +1297,8 @@ def generateDebitNote(saleId):
     if current_app.config.get("R2_ENABLED"):
         try:
             client = R2Service()
-            client.upload_file(pdf['bytes'], f"debitnotes/{debitNoteNum}.pdf", 'tradetracker')
+            bucket_name = str(current_app.config.get("R2_BUCKET_NAME"))
+            client.upload_file(pdf['bytes'], f"debitnotes/{debitNoteNum}.pdf", bucket_name)
         except Exception as e:
             logger.exception("Failed to upload to R2 | %s", e)
 
@@ -2481,8 +2483,9 @@ def importCSV():
 
                 if current_app.config.get("R2_ENABLED"):
                     client = R2Service()
+                    bucket_name = str(current_app.config.get("R2_BUCKET_NAME"))
                     file_name = "invoice/" + reciept['filename'].split('_')[0] + ".pdf"
-                    client.upload_file(reciept['bytes'], file_name, 'tradetracker')
+                    client.upload_file(reciept['bytes'], file_name, bucket_name)
 
                 shipping_method = item.shipping["shippingMethod"].lower()
                 method, insurance = _parse_shipping_method(shipping_method)
@@ -2810,8 +2813,9 @@ def getCardIds():
 @verify_token
 def showInvoice(invoiceNumber):
     client = R2Service()
+    bucket_name = str(current_app.config.get("R2_BUCKET_NAME"))
     try:
-        invoice = client.download_file(f"invoices/{invoiceNumber}.pdf", 'tradetracker')
+        invoice = client.download_file(f"invoices/{invoiceNumber}.pdf", bucket_name)
         return send_file(invoice, 
                          mimetype="application/pdf",
                          download_name=f"{invoiceNumber}.pdf",
@@ -2881,8 +2885,9 @@ def invoice(kind):
             if current_app.config.get("R2_ENABLED"):
                 try: 
                     client = R2Service()
+                    bucket_name = str(current_app.config.get("R2_BUCKET_NAME"))
                     file_name = "invoices/" + receipt['filename'].split('_')[0] + ".pdf"
-                    client.upload_file(receipt['bytes'], file_name, 'tradetracker')
+                    client.upload_file(receipt['bytes'], file_name, bucket_name)
                 except Exception as e:
                     logger.exception("Failed to upload to R2 | %s", e)
 
