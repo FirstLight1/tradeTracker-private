@@ -105,18 +105,14 @@ class SealedLanguageTestCase(unittest.TestCase):
                 SaleService(db, None)._check_inventory(_sale_input("jp", 1))
 
             with self.assertRaises(ValueError):
-                InventoryService(db).allocate_sealed_to_sale(
-                    "Booster Box", "jp", 1, 999, 120.0
-                )
+                InventoryService(db).allocate_sealed_to_sale("Booster Box", "jp", 1, 999, 120.0)
             row = db.execute("SELECT quantity, sale_id FROM sealed WHERE id = 11").fetchone()
             self.assertEqual((row["quantity"], row["sale_id"]), (3, None))
 
     def test_fifo_preserves_language_and_does_not_touch_other_stock(self):
         with self.app.app_context():
             db = get_db()
-            InventoryService(db).allocate_sealed_to_sale(
-                "Booster Box", "jp", 2, 999, 120.0
-            )
+            InventoryService(db).allocate_sealed_to_sale("Booster Box", "jp", 2, 999, 120.0)
             db.commit()
 
             english = db.execute("SELECT quantity, sale_id FROM sealed WHERE id = 10").fetchone()

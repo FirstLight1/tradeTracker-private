@@ -2,7 +2,6 @@
 
 from yoyo import step
 
-
 __depends__ = {"20260812_01_u4Gpx-baseline-migrations"}
 
 

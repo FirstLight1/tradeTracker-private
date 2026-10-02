@@ -232,9 +232,7 @@ async function loadHistory() {
             showInvoiceButton.addEventListener('click', async () => {
                 const invoiceNumber = showInvoiceButton.dataset.in;
                 const tab = window.open('', '_blank'); // Open during the click
-                if (!tab) {
-                    return;
-                }
+                if (!tab) return;
 
                 try {
                     const response = await fetch(

@@ -3949,14 +3949,10 @@ async function openInvoiceLinkModal(auctionDiv) {
     content.querySelector('.close-modal').addEventListener('click', close);
     content.querySelector('.invoice-link-cancel').addEventListener('click', close);
     modal.addEventListener('click', (event) => {
-        if (event.target === modal) {
-            close();
-        }
+        if (event.target === modal) close();
     });
     const onKeyDown = (event) => {
-        if (event.key === 'Escape') {
-            close();
-        }
+        if (event.key === 'Escape') close();
     };
     modal.addEventListener('keydown', onKeyDown);
     const select = content.querySelector('#invoice-link-target');
@@ -3964,9 +3960,8 @@ async function openInvoiceLinkModal(auctionDiv) {
     try {
         const invoices = await loadUnlinkedIds();
         if (!invoices || !modal.isConnected) {
-            if (modal.isConnected) {
+            if (modal.isConnected)
                 renderAlert('Could not load available invoices. Please try again.', 'error');
-            }
             return;
         }
         select.replaceChildren(new Option('Select an invoice', ''));
@@ -4200,9 +4195,8 @@ async function loadAuctions() {
                 button.setAttribute('aria-expanded', 'true');
             });
             row.addEventListener('mouseleave', () => {
-                if (!options.classList.contains('is-open')) {
+                if (!options.classList.contains('is-open'))
                     button.setAttribute('aria-expanded', 'false');
-                }
             });
             button.addEventListener('click', () => {
                 placeMenu();
@@ -4255,9 +4249,8 @@ async function loadAuctions() {
                         { method: 'POST' },
                     );
                     const result = await response.json();
-                    if (!response.ok || result.status !== 'success') {
+                    if (!response.ok || result.status !== 'success')
                         throw new Error(result.message);
-                    }
                     window.location.reload();
                 } catch (err) {
                     renderAlert(err.message || 'Could not remove the invoice link.', 'error');

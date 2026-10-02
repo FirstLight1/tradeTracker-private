@@ -1,16 +1,16 @@
 """Archived pre-Yoyo migrations. Kept for historical reference only."""
 
-import sqlite3
 import os
 import re
+import sqlite3
 import sys
 import unicodedata
 
 # Import the sales history migration logic
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
-from migrate_to_sales_history import migrate_to_sales_history
 from add_bulk import add_bulk_sales_table
+from migrate_to_sales_history import migrate_to_sales_history
 
 
 def migrate_database(db_path):

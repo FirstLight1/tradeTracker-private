@@ -20,7 +20,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from tradeTracker import create_app
 from tradeTracker.db import get_db
 
-
 # Real CardMarket inventory export header (comma-separated)
 CSV_HEADER = (
     "cardmarketId,quantity,name,set,setCode,cn,condition,language,"

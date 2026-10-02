@@ -9,7 +9,6 @@
 
 # Runtime hook for multiprocessing to prevent "cannot load module more than once" error
 import sys
-import os
 
 # Ensure multiprocessing uses 'spawn' on Windows when frozen
 if sys.platform.startswith("win") and getattr(sys, "frozen", False):

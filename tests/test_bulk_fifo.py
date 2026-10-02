@@ -2,11 +2,11 @@
 Unit tests for bulk/holo FIFO inventory deduction system
 """
 
-import sys
-import os
-import unittest
-import tempfile
 import json
+import os
+import sys
+import tempfile
+import unittest
 from datetime import date
 
 # Add parent directory to path

@@ -7,10 +7,10 @@ This script:
 4. Updates the cards table structure
 """
 
-import sqlite3
 import os
-from datetime import datetime
 import shutil
+import sqlite3
+from datetime import datetime
 
 
 def migrate_to_sales_history(db_path):
