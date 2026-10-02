@@ -2,10 +2,10 @@
 Unit tests for sealed FIFO inventory deduction (quantity-aware sale path).
 """
 
-import sys
 import os
-import unittest
+import sys
 import tempfile
+import unittest
 from datetime import date
 from unittest.mock import patch
 
@@ -13,11 +13,11 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from tradeTracker import create_app
+from tradeTracker.actions import normalize
 from tradeTracker.db import get_db
 from tradeTracker.services.inventory_service import InventoryService
-from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.models import SaleInput
-from tradeTracker.actions import normalize
+from tradeTracker.services.sale_service import SaleService
 
 
 def _sale_input(sealed):
@@ -82,9 +82,7 @@ class SealedFIFOTestCase(unittest.TestCase):
         """Sell 2 of a 5-unit row -> inventory row drops to 3, sold row of 2 created."""
         with self.app.app_context():
             db = get_db()
-            InventoryService(db).allocate_sealed_to_sale(
-                "Booster Box", "en", 2, 999, 0
-            )
+            InventoryService(db).allocate_sealed_to_sale("Booster Box", "en", 2, 999, 0)
             db.commit()
 
             # Original inventory row reduced and still unsold
@@ -110,9 +108,7 @@ class SealedFIFOTestCase(unittest.TestCase):
         """Sell exactly 5 of a 5-unit row -> row stamped sold, no new row."""
         with self.app.app_context():
             db = get_db()
-            InventoryService(db).allocate_sealed_to_sale(
-                "Booster Box", "en", 5, 999, 0
-            )
+            InventoryService(db).allocate_sealed_to_sale("Booster Box", "en", 5, 999, 0)
             db.commit()
 
             row = db.execute("SELECT quantity, sale_id FROM sealed WHERE id = 10").fetchone()
@@ -127,9 +123,7 @@ class SealedFIFOTestCase(unittest.TestCase):
         """Sell 7 -> consume all 5 from oldest row, split 2 from the next."""
         with self.app.app_context():
             db = get_db()
-            InventoryService(db).allocate_sealed_to_sale(
-                "Booster Box", "en", 7, 999, 0
-            )
+            InventoryService(db).allocate_sealed_to_sale("Booster Box", "en", 7, 999, 0)
             db.commit()
 
             # Oldest row fully sold (whole row, quantity kept)
@@ -244,6 +238,7 @@ class SealedFIFOTestCase(unittest.TestCase):
     def test_cardmarketorder_allocates_quantity(self):
         """/cardMarketOrder emits one match with quantity=min(count, available)."""
         import json
+
         from tradeTracker import actions
 
         token = os.environ["CHROME_EXTENSION_API_TOKEN"]
@@ -273,6 +268,7 @@ class SealedFIFOTestCase(unittest.TestCase):
     def test_cardmarketorder_caps_at_availability(self):
         """Requesting more than stock caps quantity at availability."""
         import json
+
         from tradeTracker import actions
 
         token = os.environ["CHROME_EXTENSION_API_TOKEN"]

@@ -46,13 +46,14 @@ def create_app(test_config=None):
         load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
     from .configs import config
+
     app.config.from_object(config[APP_ENV])
     if app.config["SECRET_KEY"] is None:
         raise RuntimeError("SECRET_KEY is not set")
 
     CORS(
         app,
-        origins=app.config['ALLOWED_ORIGINS'],
+        origins=app.config["ALLOWED_ORIGINS"],
         supports_credentials=True,
         allow_headers=["Content-Type", "X-CSRF-Token", "Authorization"],
         methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],

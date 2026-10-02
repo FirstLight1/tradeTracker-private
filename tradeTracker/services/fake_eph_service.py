@@ -1,6 +1,7 @@
+from uuid import uuid4
+
 import tradeTracker.services.models as models
 from tradeTracker.utils.fake_pdf_gen import make_fake_label_pdf
-from uuid import uuid4
 
 
 class FakeEPHService:

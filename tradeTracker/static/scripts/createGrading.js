@@ -22,7 +22,9 @@ function searchBar() {
     const searchContainer = document.querySelector('.grading-card-search .search-results');
 
     searchInput.addEventListener('keydown', (event) => {
-        if (!currentResultsQueue) {return;}
+        if (!currentResultsQueue) {
+            return;
+        }
         if (event.key === 'ArrowDown') {
             event.preventDefault();
             currentResultsQueue.moveNext();
@@ -215,7 +217,9 @@ function setupForm() {
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
         clearFieldErrors(form);
-        if (!form.reportValidity()) {return;}
+        if (!form.reportValidity()) {
+            return;
+        }
         const payload = submissionPayload();
         if (payload.cards.length === 0) {
             renderAlert('Add at least one card', 'error');

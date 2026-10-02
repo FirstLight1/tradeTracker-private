@@ -1,13 +1,14 @@
-from sys import argv
-import requests
 import json
+from sys import argv
+
+import requests
 
 
 def testAddAuction(payload_path):
     headers = {"Content-Type": "application/json"}
 
     # Load the JSON payload from file
-    with open(payload_path, "r") as f:
+    with open(payload_path) as f:
         payload = json.load(f)
 
     response = requests.post("http://127.0.0.1:5000/add", json=payload, headers=headers)

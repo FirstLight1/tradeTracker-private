@@ -229,19 +229,19 @@ async function loadHistory() {
 
         const showInvoiceButton = saleElement?.querySelector('.show-invoice');
         if (showInvoiceButton !== null) {
-            showInvoiceButton.addEventListener("click", async () => {
+            showInvoiceButton.addEventListener('click', async () => {
                 const invoiceNumber = showInvoiceButton.dataset.in;
-                const tab = window.open("", "_blank"); // Open during the click
+                const tab = window.open('', '_blank'); // Open during the click
                 if (!tab) return;
 
                 try {
                     const response = await fetch(
-                        `/showInvoice/${encodeURIComponent(invoiceNumber)}`
+                        `/showInvoice/${encodeURIComponent(invoiceNumber)}`,
                     );
                     console.log(response);
                     if (response.status === 404) {
                         tab.close();
-                        renderAlert("Failed to Find invoice", "error");
+                        renderAlert('Failed to Find invoice', 'error');
                         return;
                     }
                     if (!response.ok) {
@@ -253,11 +253,10 @@ async function loadHistory() {
                 } catch (error) {
                     tab.close();
                     console.error(error);
-                    alert("Could not open the invoice.");
+                    alert('Could not open the invoice.');
                 }
             });
-        };
-
+        }
     });
 }
 

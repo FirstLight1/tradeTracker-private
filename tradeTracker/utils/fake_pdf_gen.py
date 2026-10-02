@@ -1,7 +1,9 @@
 from io import BytesIO
+
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A6
 from reportlab.pdfgen import canvas
-from reportlab.lib import colors
+
 
 def make_fake_label_pdf(parcel_id, carrier="EPH"):
     buffer = BytesIO()

@@ -3,15 +3,13 @@ Test suite for payment method functionality.
 Tests validation, sanitization, and API endpoints.
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import unittest
-import json
-from tradeTracker import create_app
-from tradeTracker.db import get_db
+
 from tradeTracker.actions import validate_and_sanitize_payments
 from tradeTracker.CONSTANTS import ALLOWED_PAYMENT_TYPES
 

@@ -43,16 +43,12 @@ def app(tmp_path):
 def test_allocate_sealed_to_sale_uses_fifo_and_splits_last_row(app):
     with app.app_context():
         db = get_db()
-        InventoryService(db).allocate_sealed_to_sale(
-            "booster box", "en", 7, 999, 120.0
-        )
+        InventoryService(db).allocate_sealed_to_sale("booster box", "en", 7, 999, 120.0)
 
         first = db.execute(
             "SELECT quantity, sale_id, sell_price FROM sealed WHERE id = 10"
         ).fetchone()
-        second = db.execute(
-            "SELECT quantity, sale_id FROM sealed WHERE id = 11"
-        ).fetchone()
+        second = db.execute("SELECT quantity, sale_id FROM sealed WHERE id = 11").fetchone()
         split = db.execute(
             "SELECT quantity, price, market_value, sell_price, date, auction_id, "
             "cardMarketID FROM sealed WHERE sale_id = 999 AND id != 10"
@@ -95,12 +91,8 @@ def test_sale_service_allocates_sealed_inventory_through_inventory_service(app):
 
         SaleService(db, None)._insert_sale_items(999, sale_input)
 
-        available = db.execute(
-            "SELECT quantity FROM sealed WHERE id = 10"
-        ).fetchone()[0]
-        sold = db.execute(
-            "SELECT quantity, sell_price FROM sealed WHERE sale_id = 999"
-        ).fetchone()
+        available = db.execute("SELECT quantity FROM sealed WHERE id = 10").fetchone()[0]
+        sold = db.execute("SELECT quantity, sell_price FROM sealed WHERE sale_id = 999").fetchone()
         assert available == 3
         assert tuple(sold) == (2, 120.0)
         db.rollback()
@@ -117,15 +109,9 @@ def test_order_debit_allocates_from_the_selected_sealed_row(app):
         )
 
         assert error is None
-        available = db.execute(
-            "SELECT quantity FROM sealed WHERE id = 11"
-        ).fetchone()[0]
-        sold = db.execute(
-            "SELECT quantity, sell_price FROM sealed WHERE sale_id = 999"
-        ).fetchone()
-        sale_total = db.execute(
-            "SELECT total_amount FROM sales WHERE id = 999"
-        ).fetchone()[0]
+        available = db.execute("SELECT quantity FROM sealed WHERE id = 11").fetchone()[0]
+        sold = db.execute("SELECT quantity, sell_price FROM sealed WHERE sale_id = 999").fetchone()
+        sale_total = db.execute("SELECT total_amount FROM sales WHERE id = 999").fetchone()[0]
         assert available == 1
         assert tuple(sold) == (3, 120.0)
         assert sale_total == 360.0
@@ -143,9 +129,7 @@ def test_order_debit_rejects_zero_sealed_quantity(app):
         )
 
         assert isinstance(error, ValueError)
-        row = db.execute(
-            "SELECT quantity, sale_id FROM sealed WHERE id = 11"
-        ).fetchone()
+        row = db.execute("SELECT quantity, sale_id FROM sealed WHERE id = 11").fetchone()
         assert tuple(row) == (4, None)
 
 
@@ -157,9 +141,7 @@ def test_allocate_exact_sealed_row_does_not_consume_another_lot(app):
         with pytest.raises(ValueError, match="requested quantity"):
             service.allocate_sealed_row_to_sale(11, 5, 999, 120.0)
 
-        rows = db.execute(
-            "SELECT id, quantity, sale_id FROM sealed ORDER BY id"
-        ).fetchall()
+        rows = db.execute("SELECT id, quantity, sale_id FROM sealed ORDER BY id").fetchall()
         assert [tuple(row) for row in rows] == [(10, 5, None), (11, 4, None)]
 
 
@@ -171,9 +153,7 @@ def test_fifo_rejects_insufficient_stock_before_allocating_rows(app):
         with pytest.raises(ValueError, match="requested quantity"):
             service.allocate_sealed_to_sale("Booster Box", "en", 10, 999, 120.0)
 
-        rows = db.execute(
-            "SELECT id, quantity, sale_id FROM sealed ORDER BY id"
-        ).fetchall()
+        rows = db.execute("SELECT id, quantity, sale_id FROM sealed ORDER BY id").fetchall()
         assert [tuple(row) for row in rows] == [(10, 5, None), (11, 4, None)]
 
 
@@ -184,12 +164,8 @@ def test_sealed_allocation_does_not_commit_the_callers_transaction(app):
 
         db.rollback()
 
-        row = db.execute(
-            "SELECT quantity, sale_id FROM sealed WHERE id = 10"
-        ).fetchone()
-        sold_count = db.execute(
-            "SELECT COUNT(*) FROM sealed WHERE sale_id = 999"
-        ).fetchone()[0]
+        row = db.execute("SELECT quantity, sale_id FROM sealed WHERE id = 10").fetchone()
+        sold_count = db.execute("SELECT COUNT(*) FROM sealed WHERE sale_id = 999").fetchone()[0]
         assert tuple(row) == (5, None)
         assert sold_count == 0
 
@@ -200,8 +176,6 @@ def test_sealed_allocation_requires_positive_quantity(app, quantity):
         service = InventoryService(get_db())
 
         with pytest.raises(ValueError, match="greater than zero"):
-            service.allocate_sealed_to_sale(
-                "Booster Box", "en", quantity, 999, 120.0
-            )
+            service.allocate_sealed_to_sale("Booster Box", "en", quantity, 999, 120.0)
         with pytest.raises(ValueError, match="greater than zero"):
             service.allocate_sealed_row_to_sale(10, quantity, 999, 120.0)

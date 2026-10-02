@@ -9,12 +9,12 @@ These tests verify the two correctness fixes:
   3. Happy path: correction row created, return applied, PDF returned.
 """
 
-import sys
-import os
-import unittest
-import tempfile
 import json
+import os
 import sqlite3
+import sys
+import tempfile
+import unittest
 from datetime import date
 from unittest.mock import patch
 

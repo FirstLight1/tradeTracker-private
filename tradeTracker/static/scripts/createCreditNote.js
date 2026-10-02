@@ -2,7 +2,9 @@ import { renderField, renderAlert, scrollOnLoad, downloadFile } from './utils/re
 import { sanitizeNumericId, sanitizeClassToken, csrfFetch } from './utils/sanitizers.js';
 
 function conditionClass(condition) {
-    if (!condition) {return '';}
+    if (!condition) {
+        return '';
+    }
     const norm = condition.toLowerCase().replace(/[\s_-]+/g, '');
     const map = {
         mint: 'mint',

@@ -11,8 +11,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from tradeTracker import create_app
-from tradeTracker import actions
+from tradeTracker import actions, create_app
 from tradeTracker.db import get_db
 from tradeTracker.services.models import ReceiptResult, SaleInput
 from tradeTracker.services.sale_service import SaleService

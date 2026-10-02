@@ -1,6 +1,7 @@
 from uuid import uuid4
+
 from tradeTracker.utils.fake_pdf_gen import make_fake_label_pdf
-from tradeTracker.services.models import LabelResult
+
 
 class FakePacketaService:
     def __init__(self):

@@ -126,7 +126,7 @@ def main():
 
     conn = sqlite3.connect(args.db)
 
-    print(f"--- auctions.date_created ---")
+    print("--- auctions.date_created ---")
     a_counts, a_updates, a_unknowns = migrate_table(
         conn, "auctions", "date_created", normalize_auction_date, args.apply
     )
@@ -135,7 +135,7 @@ def main():
     print(f"  Unknown (skipped): {a_unknowns}")
     print()
 
-    print(f"--- sealed.date ---")
+    print("--- sealed.date ---")
     s_counts, s_updates, s_unknowns = migrate_table(
         conn, "sealed", "date", normalize_sealed_date, args.apply
     )

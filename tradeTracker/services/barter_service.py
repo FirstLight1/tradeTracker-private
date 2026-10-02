@@ -1,5 +1,3 @@
-
-
 class BarterService:
     def __init__(self, db):
         self.db = db
@@ -12,7 +10,9 @@ class BarterService:
 
     def link_barter(self, auction_id: int, sale_id: int) -> None:
         try:
-            self.db.execute("INSERT INTO barter(auction_id, sale_id) VALUES (?,?)", (auction_id,sale_id))
+            self.db.execute(
+                "INSERT INTO barter(auction_id, sale_id) VALUES (?,?)", (auction_id, sale_id)
+            )
             self.db.commit()
         except Exception as e:
             self.db.rollback()
@@ -20,7 +20,9 @@ class BarterService:
 
     def unlink_barter(self, auction_id: int, sale_id: int) -> None:
         try:
-            cursor = self.db.execute("DELETE FROM barter WHERE auction_id = ? AND sale_id = ?", (auction_id, sale_id))
+            cursor = self.db.execute(
+                "DELETE FROM barter WHERE auction_id = ? AND sale_id = ?", (auction_id, sale_id)
+            )
             if cursor.rowcount != 1:
                 self.db.rollback()
                 raise ValueError(f"Barter link not found | {auction_id} and {sale_id}")
@@ -29,9 +31,12 @@ class BarterService:
             self.db.rollback()
             raise Exception(f"Failed to unlink barter | {e}")
 
-    def change_barter_link(self, auction_id:int, sale_id: int, new_sale_id: int) -> None:
+    def change_barter_link(self, auction_id: int, sale_id: int, new_sale_id: int) -> None:
         try:
-            cursor = self.db.execute("UPDATE barter SET sale_id = ? WHERE auction_id = ? AND sale_id = ?", (new_sale_id, auction_id, sale_id))
+            cursor = self.db.execute(
+                "UPDATE barter SET sale_id = ? WHERE auction_id = ? AND sale_id = ?",
+                (new_sale_id, auction_id, sale_id),
+            )
             if cursor.rowcount != 1:
                 self.db.rollback()
                 raise ValueError(f"Barter link not found | {auction_id} and {sale_id}")
@@ -39,5 +44,3 @@ class BarterService:
         except Exception as e:
             self.db.rollback()
             raise Exception(f"Failed to change barter link | {e}")
-
-

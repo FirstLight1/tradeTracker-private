@@ -1,6 +1,5 @@
-import sqlite3
 import os
-import shutil
+import sqlite3
 
 
 def add_bulk_sales_table(db_path):

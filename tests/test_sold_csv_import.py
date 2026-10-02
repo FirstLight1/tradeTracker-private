@@ -19,20 +19,19 @@ Orders covered:
 """
 
 import io
+import json
 import os
 import sys
-import json
 import tempfile
 import unittest
 import zipfile
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from tradeTracker import create_app
-from tradeTracker.db import get_db
 from tradeTracker.actions import normalize
-
+from tradeTracker.db import get_db
 
 ORDERS_HEADER = (
     "idOrder,customer,status,dateBought,datePaid,dateSent,dateReceived,"
@@ -242,10 +241,13 @@ class SoldCSVImportTestCase(unittest.TestCase):
     def _assert_packeta_disabled(self, shipping_method, enabled):
         self.app.config.update(EPH_ENABLED=False, PACKETA_ENABLED=enabled, R2_ENABLED=False)
         orders = _orders_csv().replace(b'"Letter"', f'"{shipping_method}"'.encode())
-        with patch(__name__ + "._orders_csv", return_value=orders), patch(
-            "tradeTracker.services.shipping_service.get_packeta_service",
-            side_effect=AssertionError("Packeta must remain disabled"),
-        ) as packeta_factory:
+        with (
+            patch(__name__ + "._orders_csv", return_value=orders),
+            patch(
+                "tradeTracker.services.shipping_service.get_packeta_service",
+                side_effect=AssertionError("Packeta must remain disabled"),
+            ) as packeta_factory,
+        ):
             resp = self._post()
         packeta_factory.assert_not_called()
         body = resp.get_json()
@@ -255,7 +257,9 @@ class SoldCSVImportTestCase(unittest.TestCase):
         self.assertEqual(download.status_code, 200)
         with zipfile.ZipFile(io.BytesIO(download.data)) as archive:
             self.assertEqual(len(archive.namelist()), 2)
-            self.assertTrue(all(not name.startswith(("label_", "packeta_")) for name in archive.namelist()))
+            self.assertTrue(
+                all(not name.startswith(("label_", "packeta_")) for name in archive.namelist())
+            )
 
     def test_packeta_pickup_disabled_even_when_enabled(self):
         self._assert_packeta_disabled("Packeta", enabled=True)
