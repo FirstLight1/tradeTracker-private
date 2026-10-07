@@ -683,7 +683,7 @@ function cardConditionDisplay(card) {
     return card.condition || 'Unknown';
 }
 
-window.handleSealedInput = function (input, container) {
+window.handleSealedInput = function(input, container) {
     window.handleCardInput(input, {
         itemSelector: '.sealed-item-row',
         container,
@@ -760,13 +760,13 @@ function renderCartLine(line) {
     const updateDisplay = () => {
         const gradeDisplay = line.grading
             ? [
-                  line.grading.grader,
-                  line.grading.grade_numeric,
-                  line.grading.grade_label,
-                  line.grading.qualifier,
-              ]
-                  .filter((value) => value !== null && value !== undefined && value !== '')
-                  .join(' ') || 'Graded'
+                line.grading.grader,
+                line.grading.grade_numeric,
+                line.grading.grade_label,
+                line.grading.qualifier,
+            ]
+                .filter((value) => value !== null && value !== undefined && value !== '')
+                .join(' ') || 'Graded'
             : line.condition;
         const minusDisabled = line.cardIds.length <= 1 ? 'disabled' : '';
         const plusDisabled = !line.canIncrement ? 'disabled' : '';
@@ -958,8 +958,8 @@ function loadCartContentFromSession() {
                     item.marketValue != null
                         ? item.marketValue
                         : item.price
-                          ? item.price.replace('€', '').replace(',', '.').trim()
-                          : '';
+                            ? item.price.replace('€', '').replace(',', '.').trim()
+                            : '';
                 addSealedToCart(
                     { name: item.name, language: item.language || 'en', market_value: marketValue },
                     item.sid,
@@ -1366,12 +1366,12 @@ async function collectModalData(recieverDiv, cartVal, cartContent, kind) {
             : 0;
         const sealedSub = cartContent.sealed
             ? cartContent.sealed.reduce(
-                  (sum, item) =>
-                      sum +
-                      Number(String(item.marketValue).replace('€', '')) *
-                          (Number(item.quantity) || 1),
-                  0,
-              )
+                (sum, item) =>
+                    sum +
+                    Number(String(item.marketValue).replace('€', '')) *
+                    (Number(item.quantity) || 1),
+                0,
+            )
             : 0;
 
         const adjustableSubtotal = cardsSub + sealedSub;
@@ -2266,6 +2266,7 @@ function startPolling() {
                         return;
                     }
                     const qty = Number(item.quantity) || item.count || 1;
+                    const auctionId = item.auction_id || null;
                     const available = item.available != null ? Number(item.available) : null;
                     addSealedToCart(
                         {
@@ -2274,7 +2275,7 @@ function startPolling() {
                             market_value: item.market_value,
                         },
                         sealedIds[0],
-                        null,
+                        auctionId,
                         qty,
                         available,
                     );
@@ -2456,19 +2457,19 @@ function displaySearchResults(results, resultsQueue, searchInput) {
             card.marketValue = result.market_value;
             card.grading = result.is_graded
                 ? {
-                      grader: result.grader,
-                      grade_numeric:
-                          result.grade_numeric != null ? String(result.grade_numeric) : null,
-                      grade_label: result.grade_label,
-                      qualifier: result.qualifier,
-                      cert_number: result.cert_number,
-                  }
+                    grader: result.grader,
+                    grade_numeric:
+                        result.grade_numeric != null ? String(result.grade_numeric) : null,
+                    grade_label: result.grade_label,
+                    qualifier: result.qualifier,
+                    cert_number: result.cert_number,
+                }
                 : null;
             const safeConditionClass = sanitizeClassToken(result.condition || 'Unknown');
             const gradeDisplay = card.grading
                 ? [result.grader, result.grade_numeric, result.grade_label, result.qualifier]
-                      .filter((value) => value !== null && value !== undefined && value !== '')
-                      .join(' ') || 'Graded'
+                    .filter((value) => value !== null && value !== undefined && value !== '')
+                    .join(' ') || 'Graded'
                 : result.condition || 'Unknown';
 
             const availableCount = result.available_count ? result.available_count : 1;
@@ -2604,48 +2605,42 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
     box.style.top = e.pageY - 25 + 'px';
     box.innerHTML = `<div class="">
                             <div class="">
-                                ${
-                                    isSealed
-                                        ? `<div class="">
+                                ${isSealed
+            ? `<div class="">
                                     <button class="open-sealed-item">Open</button>
                                 </div>`
-                                        : ''
-                                }
-                                ${
-                                    canAddToCart
-                                        ? `<div class="">
+            : ''
+        }
+                                ${canAddToCart
+            ? `<div class="">
                                     <button class="add-to-cart">Add to cart</button>
                                 </div>`
-                                        : ''
-                                }
-                                ${
-                                    canDelete
-                                        ? `<div class="">
+            : ''
+        }
+                                ${canDelete
+            ? `<div class="">
                                     <button class="delete-card" data-id="${cardId}">Delete</button>
                                 </div>`
-                                        : ''
-                                }
-                                ${
-                                    canGrade
-                                        ? `<div class="">
+            : ''
+        }
+                                ${canGrade
+            ? `<div class="">
                                     <button class="grade-card" data-id="${cardId}">Grade</button>
                                 </div>`
-                                        : ''
-                                }
-                                ${
-                                    canViewGrading
-                                        ? `<div class="">
+            : ''
+        }
+                                ${canViewGrading
+            ? `<div class="">
                                     <button class="view-grading">View grading</button>
                                 </div>`
-                                        : ''
-                                }
-                                ${
-                                    canWriteOff
-                                        ? `<div class="">
+            : ''
+        }
+                                ${canWriteOff
+            ? `<div class="">
                                         <button class="write-off-inventory" data-id="${cardId}">Write off inventory</button>
                                     </div>`
-                                        : ''
-                                }
+            : ''
+        }
                             </div>
                         </div>
                         <span hidden class="card-id">${cardId}</span>
@@ -2723,12 +2718,12 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
             card.grading =
                 itemLine.dataset.isGraded === 'true'
                     ? {
-                          grader: itemLine.dataset.grader || null,
-                          grade_numeric: itemLine.dataset.gradeNumeric || null,
-                          grade_label: itemLine.dataset.gradeLabel || null,
-                          qualifier: itemLine.dataset.qualifier || null,
-                          cert_number: itemLine.dataset.certNumber || null,
-                      }
+                        grader: itemLine.dataset.grader || null,
+                        grade_numeric: itemLine.dataset.gradeNumeric || null,
+                        grade_label: itemLine.dataset.gradeLabel || null,
+                        qualifier: itemLine.dataset.qualifier || null,
+                        cert_number: itemLine.dataset.certNumber || null,
+                    }
                     : null;
             const marketValueText = itemLine.querySelector('.market-value').textContent;
             card.marketValue = marketValueText ? marketValueText.replace('€', '') : null;
@@ -3007,8 +3002,8 @@ async function loadAuctionContent(button) {
                             card.grading_state === 'graded'
                                 ? ' graded'
                                 : card.grading_state === 'at_grader'
-                                  ? ' at-grader'
-                                  : '';
+                                    ? ' at-grader'
+                                    : '';
                         const cardDiv = document.createElement('div');
                         cardDiv.classList.add('card');
                         cardDiv.setAttribute('data-id', safeCardId);
@@ -4147,12 +4142,11 @@ async function loadAuctions() {
                     <div class="auction-options-list" id="auction-menu-${safeAuctionId}">
                         <div class="auction-link-section">
                             <span class="auction-menu-label">Linked invoice</span>
-                            ${
-                                auction.sale_id == null
-                                    ? `<span class="auction-link-empty">None</span><select class="barter-id-select" aria-label="Link an invoice"><option value="null">Link an invoice…</option></select>`
-                                    : `<a class="sale-link" href="/sold#${safeSaleId}">Invoice #${DOMPurify.sanitize(invoiceNumber)}</a>
+                            ${auction.sale_id == null
+                    ? `<span class="auction-link-empty">None</span><select class="barter-id-select" aria-label="Link an invoice"><option value="null">Link an invoice…</option></select>`
+                    : `<a class="sale-link" href="/sold#${safeSaleId}">Invoice #${DOMPurify.sanitize(invoiceNumber)}</a>
                                    <div class="auction-link-actions"><button class="change-invoice-link" type="button">Change link</button><button class="remove-invoice-link" type="button">Remove link</button></div>`
-                            }
+                }
                         </div>
                         <div class="auction-menu-record-actions">
                             <button class="merge-button" type="button">Merge auction</button>

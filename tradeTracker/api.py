@@ -194,12 +194,13 @@ def cardMarketOrder():
                     (item["name"].lower(), language),
                 ).fetchone()[0]
                 first = db.execute(
-                    "SELECT id FROM sealed WHERE lower(name) = ? AND language = ? AND sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL ORDER BY id ASC LIMIT 1",
+                    "SELECT id, auction_id FROM sealed WHERE lower(name) = ? AND language = ? AND sale_id IS NULL AND opened = 0 AND disposal_reason IS NULL ORDER BY id ASC LIMIT 1",
                     (item["name"].lower(), language),
                 ).fetchone()
                 item["language"] = language
                 if first is not None and available > 0:
                     item["id"] = [first[0]]
+                    item["auction_id"] = first[1]
                     item["quantity"] = min(count, available)
                     item["available"] = available
         except:
