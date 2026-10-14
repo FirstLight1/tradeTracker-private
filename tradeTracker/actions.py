@@ -1078,15 +1078,17 @@ def partyInfo(saleId):
 @verify_token
 def load_sale(saleId):
     db = get_db()
+    #TODO: add bulk
+    #TODO: change to union
     cards = db.execute(
-        "SELECT c.card_name, c.card_num, c.condition, c.id, si.sell_price FROM cards c "
+        "SELECT c.card_name, c.card_num, c.condition, c.language, c.id, 'card' as item_type, si.sell_price FROM cards c "
         "JOIN sale_items si ON c.id = si.card_id "
         "WHERE si.sale_id = ? ",
         (saleId,),
     ).fetchall()
 
     sealed = db.execute(
-        "SELECT s.name, s.language, s.price, s.market_value, s.date, s.id, s.auction_id, s.quantity FROM sealed s "
+        "SELECT s.name, s.language, s.price, s.market_value,s.language, s.date, s.id, s.auction_id, s.quantity, 'sealed' as item_type FROM sealed s "
         "WHERE s.sale_id = ? ",
         (saleId,),
     ).fetchall()
@@ -1094,6 +1096,7 @@ def load_sale(saleId):
     data = {
         "items": [dict(c) for c in cards] + [dict(s) for s in sealed],
     }
+    print(data)
     return jsonify({"status": "success", "data": data}), 200
 
 

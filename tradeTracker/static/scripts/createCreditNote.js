@@ -61,7 +61,6 @@ async function loadContent() {
     }
     const res = await csrfFetch(`/partyInfo/${saleId}`);
     const partyInfo = await res.json();
-    console.log(partyInfo);
 
     const saleInfo = partyInfo.sale;
     const originalInvoiceNum = saleInfo.invoice_number;
@@ -83,7 +82,7 @@ async function loadContent() {
     });
 
     items.forEach((item) => {
-        if (item.card_num) {
+        if (item.item_type === 'card') {
             const div = document.createElement('div');
             div.classList.add('card', 'creditnote-item-row');
             const condClass = conditionClass(item.condition);
@@ -167,7 +166,6 @@ async function loadContent() {
     confirmBtn.addEventListener('click', async (event) => {
         const returnNote = {
             items: [],
-            shipping: false,
         };
         const payload = {};
         itemsContainer.querySelectorAll('.creditnote-item-row').forEach((item) => {
@@ -184,17 +182,19 @@ async function loadContent() {
         }
 
         const itemsToReturn = items.filter((item) => returnNote.items.includes(String(item.id)));
-        payload.items = itemsToReturn.filter((item) => item.card_num);
+        payload.cards = itemsToReturn.filter((item) => item.item_type === 'card');
+
         const sealedReturnCounts = {};
         itemsContainer.querySelectorAll('.sealed-item .item-checkbox:checked').forEach((cb) => {
             const id = cb.closest('.creditnote-item-row').getAttribute('data-id');
             sealedReturnCounts[id] = (sealedReturnCounts[id] || 0) + 1;
         });
         payload.sealed = itemsToReturn
-            .filter((item) => !item.card_num)
+            .filter((item) => item.item_type === 'sealed')
             .map((s) => ({ ...s, returnQuantity: sealedReturnCounts[s.id] || 0 }))
             .filter((s) => s.returnQuantity > 0);
-        //bulk, holo, ex
+
+        //TODO: bulk, holo, ex
         payload.reciever = recieverInfo;
         payload.originalInvoiceNum = originalInvoiceNum;
         payload.valueChanged = itemsToReturn.reduce(
