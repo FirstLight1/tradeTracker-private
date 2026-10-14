@@ -299,3 +299,55 @@ class InventoryWriteOff:
             disposal_note=normalize_text(item.get("disposal_note"), "disposal_note"),
             quantity=quantity,
         )
+
+@dataclass
+class RecieverDTO:
+    nameAndSurname: str | None
+    address: str | None
+    city: str | None
+    state: str | None
+    paybackDate: str | None
+    total: float | None
+
+    @classmethod
+    def from_dict(cls, reciever: dict[str, Any]) -> "RecieverDTO":
+        return cls(
+                nameAndSurname=normalize_text(reciever.get("nameAndSurname"), "nameAndSurname"),
+                address=reciever.get("address"),
+                city=reciever.get("city"),
+                state=reciever.get("state"),
+                paybackDate=reciever.get("paybackDate"),
+                total=reciever.get("total"),
+        )
+
+@dataclass
+class ShippingDTO:
+    type = "Doprava / Poštovné – samostatná služba"
+    shippingPrice: float
+
+
+@dataclass
+class SaleCorrectionRequest:
+    reciever: RecieverDTO
+    shipping: ShippingDTO | None
+    cards: list[ItemInput] | None
+    sealed: list[ItemInput] | None
+    original_invoice_num: str
+    value_change: float
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SaleCorrectionRequest":
+        return cls(
+                reciever=RecieverDTO.from_dict(data["reciever"]),
+                shipping=ShippingDTO(shippingPrice=data["shipping"]["shippingPrice"]) if data.get("shipping") else None,
+                cards=[ItemInput.from_dict(item) for item in data.get("cards")] if data.get("cards") else None,
+                sealed=[ItemInput.from_dict(item) for item in data.get("sealed")] if data.get("sealed") else None,
+                original_invoice_num=data["originalInvoiceNum"],
+                value_change=data["valueChanged"],
+                )
+
+@dataclass
+class SaleCorrectionItem:
+    card_id: int | None
+    sealed_id: int | None
+    sealed_quantity: int | None
