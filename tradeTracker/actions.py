@@ -34,6 +34,7 @@ from tradeTracker.services.models import (
     InventoryWriteOff,
     ItemInput,
     ItemType,
+    SaleCorrectionRequest,
     SaleInput,
 )
 from tradeTracker.services.r2_service import R2Service
@@ -1105,18 +1106,20 @@ def load_sale(saleId):
 def generate_credit_note(saleId):
     db = get_db()
     data = request.get_json()
+    sale_correction = SaleCorrectionRequest.from_dict(data)
+    print(data)
+    print(sale_correction)
     original_invoice_num = data.get("originalInvoiceNum")
 
-    itemIds = {
-        "cards": [c["id"] for c in data.get("items") or []],
+    itemsToReturn = {
+        "cards": data.get("cards") or [],
         "sealed": data.get("sealed") or [],
+        "shipping_value": (data.get("shipping") or {}).get("shippingPrice", 0) or 0
     }
-    shipping_value = (data.get("shipping") or {}).get("shippingPrice", 0) or 0
 
-    if not getattr(db, "in_transaction", False):
-        db.execute("BEGIN IMMEDIATE")
 
-    err, returned_value = _orderReturn(saleId, itemIds, db, shipping_value)
+
+    err, returned_value = _orderReturn(saleId, itemsToReturn, db)
     if err:
         db.rollback()
         status_code = 400 if "exceeds available" in err else 500
