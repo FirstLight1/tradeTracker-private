@@ -474,6 +474,7 @@ function createSealedModal(sid, auctionId, initialValue, sourceName, sourceLangu
             if (item.cardNum !== '') {
                 cards.push(item);
             } else {
+                item.itemType = 'sealed';
                 sealed.push(item);
             }
         });

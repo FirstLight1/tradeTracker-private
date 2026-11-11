@@ -69,18 +69,18 @@ class ItemInput:
     def from_dict(cls, item: dict[str, Any]) -> "ItemInput":
         return cls(
             id=int(item.get("id")),
-            item_type=ItemType(item["item_type"]),
-            name=item["name"],
-            normalized_name=normalize(item.get("name")),
-            number=normalize_text(item.get("number"), "number"),
+            item_type=ItemType(item["itemType"]),
+            name=item["cardName"],
+            normalized_name=normalize(item.get("cardName")),
+            number=normalize_text(item.get("cardNum"), "number"),
             condition=normalize_text(item.get("condition"), "condition"),
-            lang=normalize_text(item.get("lang"), "language"),
-            buy_price=float(money(item.get("buy_price"), "buy_price")),
-            market_value=float(money(item.get("market_value"), "market_value")),
-            sell_price=float(money(item.get("sell_price"), "sell_price")),
+            lang=normalize_text(item.get("language"), "language"),
+            buy_price=float(money(item.get("buyPrice"), "buy_price")),
+            market_value=float(money(item.get("marketValue"), "market_value")),
+            sell_price=float(money(item.get("sellPrice"), "sell_price")),
             quantity=int(item.get("quantity", 1)),
             date=item.get("date", datetime.date.today().isoformat()),
-            cardmarketId=item.get("cardmarketId"),
+            cardmarketId=item.get("cardmarketId",),
         )
 
 

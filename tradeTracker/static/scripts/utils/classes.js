@@ -1,7 +1,10 @@
 import { renderAlert } from './renderUtil.js';
 
+//TODO: make this also for sealed
 export class CardStruct {
     constructor() {
+        this.id = null;
+        this.itemType = 'card';
         this.cardName = null;
         this.cardNum = null;
         this.condition = null;
@@ -11,6 +14,9 @@ export class CardStruct {
         this.sellPrice = null;
         this.soldDate = null;
         this.grading = null;
+        this.quantity = 1;
+        this.date = null;
+        this.cardMarketId = null;
     }
 }
 
@@ -164,13 +170,13 @@ export class CartLine {
             marketValue: this.marketValue,
             displayCondition: this.grading
                 ? [
-                      this.grading.grader,
-                      this.grading.grade_numeric,
-                      this.grading.grade_label,
-                      this.grading.qualifier,
-                  ]
-                      .filter((value) => value !== null && value !== undefined && value !== '')
-                      .join(' ')
+                    this.grading.grader,
+                    this.grading.grade_numeric,
+                    this.grading.grade_label,
+                    this.grading.qualifier,
+                ]
+                    .filter((value) => value !== null && value !== undefined && value !== '')
+                    .join(' ')
                 : this.condition,
             certNumber: this.grading?.cert_number || null,
         }));
