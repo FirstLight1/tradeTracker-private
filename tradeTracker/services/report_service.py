@@ -66,7 +66,7 @@ class ReportService:
         )
 
         total_buy_price = sum(
-            item.get("buy_price", 0) * item.get("quantity", 1) for item in items
+            item.get("buy_price", 0) * item.get("qty", 1) for item in items
         ) + sum(
             CONSTANTS.BULK_ITEM_UNIT_PRICES.get(row.get("item_type", 0), "0")
             * row.get("quantity", 1)
@@ -74,7 +74,7 @@ class ReportService:
         )
 
         total_sell_price = sum(
-            item.get("sell_price", 0) * item.get("quantity", 1) for item in items
+            item.get("sell_price", 0) * item.get("qty", 1) for item in items
         ) + sum(row["total_price"] or 0 for row in bulk)
 
         total_profit = Decimal(total_sell_price) - Decimal(total_buy_price)
