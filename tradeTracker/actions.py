@@ -925,9 +925,10 @@ def changeBarterLink():
         return jsonify({"status": "error", "message": "Failed to change barter link"}), 400
 
 
-def _orderReturn(saleId, itemIds, db, shipping_value=0):
-    cardIds = itemIds.get("cards") or []
-    sealedEntries = itemIds.get("sealed") or []
+def _orderReturn(saleId, items, db, shipping_value=0):
+    cardEntries= items.get("cards") or []
+    cardIds = [card.get("id") for card in cardEntries]
+    sealedEntries = items.get("sealed") or []
 
     returned_value = 0.0
 

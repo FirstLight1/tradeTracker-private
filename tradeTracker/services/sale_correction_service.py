@@ -9,7 +9,7 @@ class SaleCorrectionService:
     def __init__(self, db):
         self.db = db
 
-    def _order_return(self, items: list[SaleCorrectionItem], shipping_value: float) -> float:
+    def _order_return(self,sale_id:int, items: list[SaleCorrectionItem], shipping_value: float = 0) -> float:
         #TODO: when cards and sealed DTO exist
         # change proces so order return will cal other methods
         raise NotImplementedError
@@ -39,19 +39,10 @@ class SaleCorrectionService:
             except sqlite3.IntegrityError as e:
                 if "UNIQUE constraint" not in str(e):
                     self.db.rollack()
-                    logger.critical(
-                        "Non-UNIQUE IntegrityError on sales_correction | saleId: %s | e: %s", saleId, e
-                    )
-                    return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax07"}), 500
-                logger.warning(
-                    "record_number collision (attempt %d), retrying | saleId: %s", attempt + 1, saleId
-                )
+                    raise Exception("IntegrityError on sales_correction")
                 if attempt == 2:
                     self.db.rollback()
-                    logger.critical("record_number conflict exhausted retries | saleId: %s", saleId)
-                    return jsonify(
-                        {"status": "error", "message": "Credit note number conflict, Error code: Ax07"}
-                    ), 500
+                    raise Exception("Exhausted retries") 
                 continue
 
         try:
