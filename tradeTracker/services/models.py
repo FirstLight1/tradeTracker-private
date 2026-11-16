@@ -64,20 +64,25 @@ class ItemInput:
     date: str = datetime.date.today().isoformat()
     cardmarketId: str | None = None
 
-    # TODO: improve this or remake card class in js
     @classmethod
     def from_dict(cls, item: dict[str, Any]) -> "ItemInput":
         return cls(
-            id=int(item.get("id")),
-            item_type=ItemType(item["itemType"]),
-            name=item["cardName"],
-            normalized_name=normalize(item.get("cardName")),
-            number=normalize_text(item.get("cardNum"), "number"),
+            id=int(item["id"]) if item.get("id") is not None else None,
+            item_type=ItemType(item["item_type"]),
+            name=item["name"] if "name" in item else item["card_name"],
+            normalized_name=normalize(item.get("name", item.get("card_name"))),
+            number=normalize_text(item.get("number", item.get("card_number")), "number"),
             condition=normalize_text(item.get("condition"), "condition"),
-            lang=normalize_text(item.get("language"), "language"),
-            buy_price=float(money(item.get("buyPrice"), "buy_price")),
-            market_value=float(money(item.get("marketValue"), "market_value")),
-            sell_price=float(money(item.get("sellPrice"), "sell_price")),
+            lang=normalize_text(item.get("lang", item.get("language")), "language"),
+            buy_price=(lambda value: float(value) if value is not None else None)(
+                money(item.get("buy_price"), "buy_price", nullable=True)
+            ),
+            market_value=(lambda value: float(value) if value is not None else None)(
+                money(item.get("market_value"), "market_value", nullable=True)
+            ),
+            sell_price=(lambda value: float(value) if value is not None else None)(
+                money(item.get("sell_price"), "sell_price", nullable=True)
+            ),
             quantity=int(item.get("quantity", 1)),
             date=item.get("date", datetime.date.today().isoformat()),
             cardmarketId=item.get("cardmarketId",),

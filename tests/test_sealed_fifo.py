@@ -179,19 +179,19 @@ class SealedFIFOTestCase(unittest.TestCase):
                     "openedItem": {"id": "s10", "initialValue": 100.0},
                     "cards": [
                         {
-                            "cardName": "Pikachu",
-                            "cardNum": "25",
+                            "name": "Pikachu",
+                            "number": "25",
                             "condition": "NM",
-                            "language": "en",
-                            "marketValue": 120.0,
+                            "lang": "en",
+                            "market_value": 120.0,
                         }
                     ],
                     "sealed": [
                         {
-                            "cardName": "Mini Tin",
-                            "cardNum": "",
-                            "language": "en",
-                            "marketValue": 60.0,
+                            "name": "Mini Tin",
+                            "number": "",
+                            "lang": "en",
+                            "market_value": 60.0,
                         }
                     ],
                 }

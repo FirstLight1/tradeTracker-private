@@ -255,27 +255,8 @@ def add():
         payment_method_json = json.dumps(sanitized_payments)
         auction.payments = payment_method_json
 
-        items_to_add = []
-        # TODO: make it also work with sealed
-        for item in cards:
-            items_to_add.append(
-                ItemInput(
-                    id=None,
-                    item_type=ItemType("card"),
-                    name=item["cardName"],
-                    normalized_name=normalize(item["cardName"]),
-                    number=normalize_text(item.get("cardNum"), "number"),
-                    condition=normalize_text(item.get("condition"), "condition"),
-                    lang=normalize_text(item.get("language"), "language"),
-                    buy_price=float(item.get("buyPrice", "0.0")),
-                    market_value=float(item.get("marketValue", "0.0")),
-                    sell_price=float(item.get("sellPrice", "0.0")),
-                    quantity=1,
-                    date=auction.date,
-                )
-            )
-
         try:
+            items_to_add = [ItemInput.from_dict({**item, "date": auction.date}) for item in cards]
             auction_id = inventory_service.create_auction_with_items(auction, items_to_add)
             return jsonify({"status": "success", "auction_id": auction_id}), 201
         except Exception as e:
@@ -674,7 +655,7 @@ def addToExistingAuction(auction_id):
         db = get_db()
         try:
             for card in cards:
-                if card.get("language") not in CONSTANTS.ALLOWED_LANGUAGES:
+                if card.get("lang") not in CONSTANTS.ALLOWED_LANGUAGES:
                     return jsonify(
                         {"status": "error", "message": "Invalid language code, Error code: Ax27"}
                     ), 400
@@ -682,15 +663,15 @@ def addToExistingAuction(auction_id):
                     "INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id, cardMarketID)"
                     " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
-                        card.get("cardName"),
-                        normalize(card.get("cardName")),
-                        card.get("cardNum"),
+                        card.get("name"),
+                        normalize(card.get("name")),
+                        card.get("number"),
                         card.get("condition"),
-                        card.get("language"),
-                        card.get("buyPrice"),
-                        card.get("marketValue"),
+                        card.get("lang"),
+                        card.get("buy_price"),
+                        card.get("market_value"),
                         auction_id,
-                        resolve_cardmarket_id(db, card, "cardName", "cardNum"),
+                        resolve_cardmarket_id(db, card, "name", "number"),
                     ),
                 )
 
@@ -1514,27 +1495,10 @@ def addToSingles():
     if request.method == "POST":
         auction_id = 1
         data = request.get_json()
-        cards = []
-        for card in data:
-            cards.append(
-                ItemInput(
-                    id=None,
-                    name=card.get("cardName"),
-                    number=card.get("cardNum"),
-                    normalized_name=normalize(card.get("name")),
-                    quantity=1,
-                    item_type=ItemType("card"),
-                    condition=card.get("condition"),
-                    lang=card.get("language"),
-                    buy_price=card.get("buyPrice"),
-                    market_value=card.get("marketValue"),
-                    sell_price=None,
-                    cardmarketId=resolve_cardmarket_id(get_db(), card, "name", "cardNum"),
-                )
-            )
         try:
+            cards = [ItemInput.from_dict(card) for card in data]
             inventory_service = InventoryService(get_db())
-            inventory_service.add_items_to_auction(auction_id, data)
+            inventory_service.add_items_to_auction(auction_id, cards)
         except Exception as e:
             return jsonify({"status": "error", "message": f"Failed to add to singles: {e}"}), 400
 
@@ -1584,46 +1548,46 @@ def updatePaymentMethod(auction_id):
 def openInAuction(cur, auction_id, openedItem, sealed, cards, newTotal, priceDiff):
     try:
         for card in cards:
-            if card["marketValue"] is not None and card["marketValue"] > 0:
-                discount = (card["marketValue"] / newTotal) * priceDiff
-                new_price = round(card["marketValue"] - discount, 2)
-                if card.get("language") not in CONSTANTS.ALLOWED_LANGUAGES:
+            if card["market_value"] is not None and card["market_value"] > 0:
+                discount = (card["market_value"] / newTotal) * priceDiff
+                new_price = round(card["market_value"] - discount, 2)
+                if card.get("lang") not in CONSTANTS.ALLOWED_LANGUAGES:
                     raise Exception("Language not allowed")
                 cur.execute(
                     "INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id, cardmarketId)"
                     " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
-                        card.get("cardName"),
-                        normalize(card.get("cardName")),
-                        card.get("cardNum"),
+                        card.get("name"),
+                        normalize(card.get("name")),
+                        card.get("number"),
                         card.get("condition"),
-                        card.get("language"),
+                        card.get("lang"),
                         new_price,
-                        card.get("marketValue"),
+                        card.get("market_value"),
                         auction_id,
-                        resolve_cardmarket_id(cur, card, "cardName", "cardNum"),
+                        resolve_cardmarket_id(cur, card, "name", "number"),
                     ),
                 )
 
         for item in sealed:
-            if item["marketValue"] is not None and item["marketValue"] > 0:
-                if item.get("language") not in CONSTANTS.ALLOWED_LANGUAGES:
+            if item["market_value"] is not None and item["market_value"] > 0:
+                if item.get("lang") not in CONSTANTS.ALLOWED_LANGUAGES:
                     raise Exception("Language not allowed")
-                discount = (item["marketValue"] / newTotal) * priceDiff
-                new_price = round(item["marketValue"] - discount, 2)
+                discount = (item["market_value"] / newTotal) * priceDiff
+                new_price = round(item["market_value"] - discount, 2)
                 cur.execute(
                     "INSERT INTO sealed (name, normalized_name, quantity, language, price, market_value, date, auction_id, cardmarketId)"
                     " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
-                        item.get("cardName"),
-                        normalize(item.get("cardName")),
+                        item.get("name"),
+                        normalize(item.get("name")),
                         1,
-                        item.get("language"),
+                        item.get("lang"),
                         new_price,
-                        item.get("marketValue"),
+                        item.get("market_value"),
                         datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                         auction_id,
-                        resolve_cardmarket_id(cur, item, "cardName", "cardNum"),
+                        resolve_cardmarket_id(cur, item, "name", "number"),
                     ),
                 )
 
@@ -1658,24 +1622,24 @@ def openSingleSealed(cur, openedItem, sealed, cards, newTotal, priceDiff):
             )
             auctionId = cur.lastrowid
             for card in cards:
-                if card["marketValue"] is not None and card["marketValue"] > 0:
-                    if card.get("language") not in CONSTANTS.ALLOWED_LANGUAGES:
+                if card["market_value"] is not None and card["market_value"] > 0:
+                    if card.get("lang") not in CONSTANTS.ALLOWED_LANGUAGES:
                         raise Exception("Language not allowed")
-                    discount = (card["marketValue"] / newTotal) * priceDiff
-                    new_price = round(card["marketValue"] - discount, 2)
+                    discount = (card["market_value"] / newTotal) * priceDiff
+                    new_price = round(card["market_value"] - discount, 2)
                     cur.execute(
                         "INSERT INTO cards (card_name, normalized_name, card_num, condition, language, card_price, market_value, auction_id, cardmarketId)"
                         " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (
-                            card.get("cardName"),
-                            normalize(card.get("cardName")),
-                            card.get("cardNum"),
+                            card.get("name"),
+                            normalize(card.get("name")),
+                            card.get("number"),
                             card.get("condition"),
-                            card.get("language"),
+                            card.get("lang"),
                             new_price,
-                            card.get("marketValue"),
+                            card.get("market_value"),
                             auctionId,
-                            resolve_cardmarket_id(cur, card, "cardName", "cardNum"),
+                            resolve_cardmarket_id(cur, card, "name", "number"),
                         ),
                     )
         except Exception as e:
@@ -1687,24 +1651,24 @@ def openSingleSealed(cur, openedItem, sealed, cards, newTotal, priceDiff):
 
     try:
         for item in sealed:
-            if item["marketValue"] is not None and item["marketValue"] > 0:
-                if item.get("language") not in CONSTANTS.ALLOWED_LANGUAGES:
+            if item["market_value"] is not None and item["market_value"] > 0:
+                if item.get("lang") not in CONSTANTS.ALLOWED_LANGUAGES:
                     raise Exception("Language not allowed")
-                discount = (item["marketValue"] / newTotal) * priceDiff
-                new_price = round(item["marketValue"] - discount, 2)
+                discount = (item["market_value"] / newTotal) * priceDiff
+                new_price = round(item["market_value"] - discount, 2)
                 cur.execute(
                     "INSERT INTO sealed (name, normalized_name, quantity, language, price, market_value, date, auction_id, cardmarketId)"
                     " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
-                        item.get("cardName"),
-                        normalize(item.get("cardName")),
+                        item.get("name"),
+                        normalize(item.get("name")),
                         1,
-                        item.get("language"),
+                        item.get("lang"),
                         new_price,
-                        item.get("marketValue"),
+                        item.get("market_value"),
                         datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                         auctionId,
-                        resolve_cardmarket_id(cur, item, "cardName", "cardNum"),
+                        resolve_cardmarket_id(cur, item, "name", "number"),
                     ),
                 )
     except Exception as e:
@@ -1732,9 +1696,8 @@ def openSealed(auction_id):
     sealed = data.get("sealed")
     cards = data.get("cards")
 
-    # marketValue may be None — if so, the user needs therapy, but we tolerate it as 0.
-    newTotal = sum(float(c.get("marketValue")) or 0.0 for c in cards) + sum(
-        float(s.get("marketValue")) or 0.0 for s in sealed
+    newTotal = sum(float(c.get("market_value") or 0) for c in cards) + sum(
+        float(s.get("market_value") or 0) for s in sealed
     )
     if newTotal == 0:
         return jsonify(

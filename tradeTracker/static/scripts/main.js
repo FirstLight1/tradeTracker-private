@@ -453,28 +453,27 @@ function createSealedModal(sid, auctionId, initialValue, sourceName, sourceLangu
         const sealed = [];
         rowsContainer.querySelectorAll('.sealed-item-row').forEach((div) => {
             const item = new CardStruct();
-            item.cardName = DOMPurify.sanitize(div.querySelector('.sealed-name-input').value);
-            item.cardNum = DOMPurify.sanitize(div.querySelector('.sealed-number-input').value);
+            item.name = DOMPurify.sanitize(div.querySelector('.sealed-name-input').value);
+            item.number = DOMPurify.sanitize(div.querySelector('.sealed-number-input').value);
             item.condition = DOMPurify.sanitize(
                 div.querySelector('.sealed-condition-select').value,
             );
-            item.language = DOMPurify.sanitize(div.querySelector('.sealed-language-select').value);
-            item.buyPrice = Number(
+            item.lang = DOMPurify.sanitize(div.querySelector('.sealed-language-select').value);
+            item.buy_price = Number(
                 DOMPurify.sanitize(div.querySelector('.sealed-price-input').value.replace('€', '')),
             );
-            item.marketValue = Number(
+            item.market_value = Number(
                 DOMPurify.sanitize(
                     div.querySelector('.sealed-market-value-input').value.replace('€', ''),
                 ),
             );
-            item.soldDate = null;
-            if (item.marketValue == '') {
+            if (item.market_value == '') {
                 return;
             }
-            if (item.cardNum !== '') {
+            if (item.number !== '') {
                 cards.push(item);
             } else {
-                item.itemType = 'sealed';
+                item.item_type = 'sealed';
                 sealed.push(item);
             }
         });
@@ -1806,7 +1805,7 @@ function shoppingCart() {
     });
 }
 
-async function addToShoppingCart(card, auctionId, cardId = null) {
+async function addToShoppingCart(card, auctionId, cardId = null, grading = null) {
     // Entry B: From auction tab (cardId provided)
     if (cardId !== null) {
         if (existingIDs.has(cardId)) {
@@ -1818,7 +1817,7 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
         const existing = cartLines.find(
             (l) =>
                 l.itemType === 'card' &&
-                l.matches(card.cardName, card.cardNum, card.condition, card.grading),
+                l.matches(card.name, card.number, card.condition, grading),
         );
         if (existing) {
             existing.cardIds.push(cardId);
@@ -1839,13 +1838,13 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
         } else {
             // Create new CartLine with just this one cardId, empty pool
             const line = new CartLine(
-                card.cardName,
-                card.cardNum,
+                card.name,
+                card.number,
                 card.condition,
                 card.auctionName || '',
-                card.marketValue || '',
+                card.market_value || '',
                 [cardId],
-                card.grading,
+                grading,
             );
             cartLines.push(line);
             existingIDs.add(cardId);
@@ -1858,7 +1857,7 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
     const existing = cartLines.find(
         (l) =>
             l.itemType === 'card' &&
-            l.matches(card.cardName, card.cardNum, card.condition, card.grading),
+            l.matches(card.name, card.number, card.condition, grading),
     );
     if (existing) {
         // Try to increment existing line
@@ -1897,11 +1896,11 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                card_name: card.cardName,
-                card_num: card.cardNum,
+                card_name: card.name,
+                card_num: card.number,
                 condition: card.condition,
-                is_graded: card.grading !== null,
-                ...card.grading,
+                is_graded: grading !== null,
+                ...grading,
                 exclude_ids: [...existingIDs],
             }),
         });
@@ -1915,13 +1914,13 @@ async function addToShoppingCart(card, auctionId, cardId = null) {
             return;
         }
         const line = new CartLine(
-            card.cardName,
-            card.cardNum,
+            card.name,
+            card.number,
             card.condition,
             card.auctionName || '',
-            card.marketValue || '',
+            card.market_value || '',
             data.card_ids,
-            card.grading,
+            grading,
         );
         cartLines.push(line);
         existingIDs.add(line.cardIds[0]);
@@ -2451,12 +2450,12 @@ function displaySearchResults(results, resultsQueue, searchInput) {
             // Handle card display
             div.classList.add('card-search-result');
             const card = new CardStruct();
-            card.cardName = result.card_name;
-            card.cardNum = result.card_num;
+            card.name = result.card_name;
+            card.number = result.card_num;
             card.condition = result.condition;
-            card.language = result.language || 'en';
-            card.marketValue = result.market_value;
-            card.grading = result.is_graded
+            card.lang = result.language || 'en';
+            card.market_value = result.market_value;
+            const grading = result.is_graded
                 ? {
                     grader: result.grader,
                     grade_numeric:
@@ -2467,7 +2466,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
                 }
                 : null;
             const safeConditionClass = sanitizeClassToken(result.condition || 'Unknown');
-            const gradeDisplay = card.grading
+            const gradeDisplay = grading
                 ? [result.grader, result.grade_numeric, result.grade_label, result.qualifier]
                     .filter((value) => value !== null && value !== undefined && value !== '')
                     .join(' ') || 'Graded'
@@ -2480,7 +2479,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
             div.innerHTML = `
                 <p class="result result-card-name">${DOMPurify.sanitize(result.card_name || 'N/A')}</p>
                 <p class="result result-card-num">${DOMPurify.sanitize(result.card_num || 'N/A')}</p>
-                <p class="result result-condition ${safeConditionClass}${card.grading ? ' graded' : ''}">
+                <p class="result result-condition ${safeConditionClass}${grading ? ' graded' : ''}">
                     ${DOMPurify.sanitize(gradeDisplay)}
                 </p>
                 <p class="result result-language">${DOMPurify.sanitize(result.language || 'N/A')}</p>
@@ -2510,7 +2509,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
                         `${pendingQty} / ${availableCount}`;
                 } else if (event.key == 'Enter') {
                     for (let i = 0; i < pendingQty; i++) {
-                        await addToShoppingCart(card);
+                        await addToShoppingCart(card, undefined, null, grading);
                     }
                     searchInput.value = '';
                     searchInput.focus();
@@ -2552,7 +2551,7 @@ function displaySearchResults(results, resultsQueue, searchInput) {
             });
 
             div.addEventListener('click', async () => {
-                await addToShoppingCart(card);
+                await addToShoppingCart(card, undefined, null, grading);
                 searchContainer.innerHTML = '';
             });
         }
@@ -2711,12 +2710,12 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
             const auctionId = auctionDiv.getAttribute('data-id');
 
             const card = new CardStruct();
-            card.cardName = itemLine.querySelector('.card-name').textContent;
-            card.cardNum = itemLine.querySelector('.card-num').textContent;
+            card.name = itemLine.querySelector('.card-name').textContent;
+            card.number = itemLine.querySelector('.card-num').textContent;
             card.condition =
                 itemLine.dataset.condition || itemLine.querySelector('.condition').textContent;
-            card.language = itemLine.querySelector('.language')?.textContent || 'en';
-            card.grading =
+            card.lang = itemLine.querySelector('.language')?.textContent || 'en';
+            const grading =
                 itemLine.dataset.isGraded === 'true'
                     ? {
                         grader: itemLine.dataset.grader || null,
@@ -2727,8 +2726,8 @@ function spawnItemsContextMenu(cardId, e, itemLine) {
                     }
                     : null;
             const marketValueText = itemLine.querySelector('.market-value').textContent;
-            card.marketValue = marketValueText ? marketValueText.replace('€', '') : null;
-            await addToShoppingCart(card, auctionId, cardId);
+            card.market_value = marketValueText ? marketValueText.replace('€', '') : null;
+            await addToShoppingCart(card, auctionId, cardId, grading);
         });
     }
 
@@ -3185,13 +3184,13 @@ async function loadAuctionContent(button) {
                             const cardId = cardDiv.getAttribute('data-id');
                             const auctionId = auctionDiv.getAttribute('data-id');
                             const card = new CardStruct();
-                            card.cardName = cardDiv.querySelector('.card-name').textContent;
-                            card.cardNum = cardDiv.querySelector('.card-num').textContent;
+                            card.name = cardDiv.querySelector('.card-name').textContent;
+                            card.number = cardDiv.querySelector('.card-num').textContent;
                             card.condition = cardDiv.dataset.condition;
-                            card.language = cardDiv.querySelector('.language')?.textContent || 'en';
+                            card.lang = cardDiv.querySelector('.language')?.textContent || 'en';
                             const marketValueText =
                                 cardDiv.querySelector('.market-value').textContent;
-                            card.marketValue = marketValueText
+                            card.market_value = marketValueText
                                 ? marketValueText.replace('€', '')
                                 : null;
                             await addToShoppingCart(card, auctionId, cardId);
@@ -3560,40 +3559,36 @@ async function loadAuctionContent(button) {
             try {
                 newCards.forEach(async (card) => {
                     const cardObj = new CardStruct();
-                    cardObj.cardName =
+                    const inputNumber = (selector) => {
+                        const value = DOMPurify.sanitize(
+                            card.querySelector(selector).value.replace(',', '.').trim(),
+                        );
+                        return value === '' ? null : Number(value);
+                    };
+                    cardObj.name =
                         DOMPurify.sanitize(
                             card.querySelector('input.card-name').value.trim().toUpperCase(),
                         ) || null;
-                    cardObj.cardNum =
+                    cardObj.number =
                         DOMPurify.sanitize(
                             card.querySelector('input.card-num').value.trim().toUpperCase(),
                         ) || null;
                     cardObj.condition =
                         DOMPurify.sanitize(card.querySelector('select.condition').value) || null;
-                    cardObj.language = DOMPurify.sanitize(
+                    cardObj.lang = DOMPurify.sanitize(
                         card.querySelector('select.language').value,
                     );
-                    cardObj.buyPrice =
-                        DOMPurify.sanitize(
-                            card.querySelector('input.card-price').value.replace(',', '.').trim(),
-                        ) || null;
-                    cardObj.marketValue =
-                        DOMPurify.sanitize(
-                            card.querySelector('input.market-value').value.replace(',', '.').trim(),
-                        ) || null;
-                    cardObj.sellPrice =
-                        DOMPurify.sanitize(
-                            card.querySelector('input.sell-price').value.replace(',', '.').trim(),
-                        ) || null;
-                    cardObj.soldDate = null;
+                    cardObj.buy_price = inputNumber('input.card-price');
+                    cardObj.market_value = inputNumber('input.market-value');
+                    cardObj.sell_price = inputNumber('input.sell-price');
 
-                    if (cardObj.buyPrice === null) {
-                        cardObj.buyPrice = cardObj.marketValue * 0.85;
+                    if (cardObj.buy_price === null) {
+                        cardObj.buy_price = Number((cardObj.market_value * 0.85).toFixed(2));
                     }
-                    if (cardObj.sellPrice === null) {
-                        cardObj.sellPrice = cardObj.marketValue;
+                    if (cardObj.sell_price === null) {
+                        cardObj.sell_price = cardObj.market_value;
                     }
-                    if (cardObj.cardName !== null && cardObj.marketValue !== null) {
+                    if (cardObj.name !== null && cardObj.market_value !== null) {
                         cardsArray.push(cardObj);
                     } else {
                         card.remove();
@@ -3604,14 +3599,14 @@ async function loadAuctionContent(button) {
 
                 const auctionSingles = auctionDiv.classList.contains('singles') ? true : false;
                 for (let i = 0; i < cardsArray.length; i++) {
-                    let j = 0;
-                    for (const [key, value] of Object.entries(cardsArray[i])) {
-                        if (key === 'soldDate' || key === 'grading') {
-                            continue;
-                        }
+                    const fields = [
+                        'name', 'number', 'condition', 'lang',
+                        'buy_price', 'market_value', 'sell_price',
+                    ];
+                    for (const [j, key] of fields.entries()) {
+                        const value = cardsArray[i][key];
                         const cardElement = newCards[i].children;
                         replaceWithPElement(cardElement[j].dataset.field, value, cardElement[j]);
-                        j++;
                     }
                 }
 

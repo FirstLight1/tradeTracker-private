@@ -52,6 +52,8 @@ if (initialMarketValueInput) {
 }
 //add typechecks
 saveButton.addEventListener('click', async () => {
+    cardsArr.length = 0;
+    auctionValueCalculated = 0;
     const auctionName = DOMPurify.sanitize(document.querySelector('.auction-name').value);
     const auctionBuy = DOMPurify.sanitize(document.querySelector('.auction-buy-price').value);
     const date = new Date().toISOString();
@@ -96,27 +98,27 @@ saveButton.addEventListener('click', async () => {
             }
             return parseFloat(val.replace(',', '.'));
         };
-        card.cardName = input('input[name=cardName]');
-        card.cardNum = input('input[name=cardNum]');
+        card.name = input('input[name=cardName]');
+        card.number = input('input[name=cardNum]');
         card.condition = input('select[name=condition]');
-        card.language = DOMPurify.sanitize(ell.querySelector('select[name=language]').value);
-        card.buyPrice = inputNumber('input[name=buyPrice]');
-        card.marketValue = inputNumber('input[name=marketValue]');
-        card.sellPrice = inputNumber('input[name=sellPrice]');
-        if (card.sellPrice === null) {
-            card.sellPrice = card.marketValue;
+        card.lang = DOMPurify.sanitize(ell.querySelector('select[name=language]').value);
+        card.buy_price = inputNumber('input[name=buyPrice]');
+        card.market_value = inputNumber('input[name=marketValue]');
+        card.sell_price = inputNumber('input[name=sellPrice]');
+        if (card.sell_price === null) {
+            card.sell_price = card.market_value;
         }
-        if (card.buyPrice === null && card.marketValue !== null) {
-            card.buyPrice = parseFloat((DOMPurify.sanitize(card.marketValue) * 0.8).toFixed(2));
+        if (card.buy_price === null && card.market_value !== null) {
+            card.buy_price = parseFloat((DOMPurify.sanitize(card.market_value) * 0.8).toFixed(2));
         }
-        auctionValueCalculated += card.buyPrice || 0;
-        if (card.cardName !== null && card.marketValue !== null) {
+        auctionValueCalculated += card.buy_price || 0;
+        if (card.name !== null && card.market_value !== null) {
             cardsArr.push(card);
         }
     });
 
-    if (!cardsArr[0].buy) {
-        cardsArr[0].buy = parseFloat(DOMPurify.sanitize(auctionValueCalculated.toFixed(2)));
+    if (auction.buy_price === null) {
+        auction.buy_price = parseFloat(auctionValueCalculated.toFixed(2));
     }
 
     const payload = { auction: auction, cards: cardsArr };

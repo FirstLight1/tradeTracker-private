@@ -1,22 +1,30 @@
 import { renderAlert } from './renderUtil.js';
 
-//TODO: make this also for sealed
+// Field names mirror services.models.ItemInput for cards and sealed items.
 export class CardStruct {
     constructor() {
         this.id = null;
-        this.itemType = 'card';
-        this.cardName = null;
-        this.cardNum = null;
+        this.item_type = 'card';
+        this.name = null;
+        this.number = null;
         this.condition = null;
-        this.language = 'en';
-        this.buyPrice = null;
-        this.marketValue = null;
-        this.sellPrice = null;
-        this.soldDate = null;
-        this.grading = null;
+        this.lang = 'en';
+        this.buy_price = null;
+        this.market_value = null;
+        this.sell_price = null;
         this.quantity = 1;
-        this.date = null;
-        this.cardMarketId = null;
+        this.date = new Date().toISOString().slice(0, 10);
+        this.cardmarketId = null;
+    }
+
+    get normalized_name() {
+        return this.name === null
+            ? null
+            : this.name.normalize('NFD').replace(/[^\x00-\x7F]/g, '').toUpperCase();
+    }
+
+    toJSON() {
+        return { ...this, normalized_name: this.normalized_name };
     }
 }
 
