@@ -35,15 +35,55 @@ class SaleCorrectionService:
                 f"UPDATE cards SET sold_date = NULL WHERE id IN ({cardPlaceholder})", card_ids
             )
             self.db.execute(f"DELETE FROM sale_items WHERE card_id IN ({cardPlaceholder})", card_ids)
-        except sqlite3.Error:
+        except Exception:
+            self.db.rollback
             raise sqlite3.Error("Failed to update database")
         return cards_sum or 0.0
 
     def _return_sealed(self, sale_id: int, sealed: list[SaleCorrectionItem]) -> float:
 
+        sealedPlan = []
+        for entry in sealed:
+            sealed_id = entry.sealed_id
+            returnQuantity = entry.sealed_quantity
+            if not sealed_id or not returnQuantity or returnQuantity <= 0:
+                continue
+            row = self.db.execute(
+                "SELECT quantity, market_value FROM sealed WHERE id = ?", (sealed_id,)
+            ).fetchone()
+            if row is None:
+                self.db.rollback()
+                raise ValueError(f"Sealed item {sealed_id} not found")
+            if returnQuantity > row["quantity"]:
+                self.db.rollback()
+                raise ValueError(f"returnQuantity exceeds available {row['quantity']} for sealed item {sealed_id}")
+            sealedPlan.append(
+                (sealed_id, returnQuantity, row["quantity"], row["market_value"] or 0)
+            )
 
-
-        raise NotImplementedError
+        returned_sum = 0.0
+        for sealed_id, returnQuantity, orig_quantity, mv in sealedPlan:
+            returned_sum += mv * returnQuantity
+            try:
+                if returnQuantity == orig_quantity:
+                    self.db.execute("UPDATE sealed SET sale_id = NULL WHERE id = ?", (sealed_id,))
+                else:
+                    self.db.execute(
+                        "UPDATE sealed SET quantity = quantity - ? WHERE id = ?",
+                        (returnQuantity, sealed_id),
+                    )
+                    self.db.execute(
+                        """INSERT INTO sealed (name, normalized_name, quantity, language, price, market_value,
+                                            date, sale_id, auction_id, opened, cardMarketID)
+                        SELECT name, normalized_name, ?, language, price, market_value,
+                                date, NULL, auction_id, opened, cardMarketID
+                        FROM sealed WHERE id = ?""",
+                        (returnQuantity, sealed_id),
+                    )
+            except Exception:
+                self.db.rollback()
+                raise sqlite3.Error
+        return returned_sum
 
     #TODO: change to DTO
     def generate_credit_note(self, sale_id: int, items: dict[str,Any]) -> None:
