@@ -35,6 +35,7 @@ from tradeTracker.services.models import (
     ItemInput,
     ItemType,
     SaleCorrectionRequest,
+    SaleCorrectionItem,
     SaleInput,
 )
 from tradeTracker.services.r2_service import R2Service
@@ -1093,12 +1094,20 @@ def generate_credit_note(saleId):
     print(sale_correction)
     original_invoice_num = data.get("originalInvoiceNum")
 
-    itemsToReturn = {
-        "cards": data.get("cards") or [],
-        "sealed": data.get("sealed") or [],
-        "shipping_value": (data.get("shipping") or {}).get("shippingPrice", 0) or 0
+    itemsToReturn = { 
+        "shipping_value": data.get("shipping", {}).get("shippingPrice", 0),
     }
 
+    if sale_correction.cards: 
+        itemsToReturn["card_ids"] = [SaleCorrectionItem(card.id) for card in data.get("cards",[])]
+
+    if sale_correction.sealed:
+        itemsToReturn["sealed"] = [SaleCorrectionItem(None, sealed.id, sealed.quantity)
+                                    for sealed in data.get("sealed", [])]
+
+
+
+    
 
 
     err, returned_value = _orderReturn(saleId, itemsToReturn, db)

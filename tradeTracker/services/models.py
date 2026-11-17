@@ -353,6 +353,6 @@ class SaleCorrectionRequest:
 
 @dataclass
 class SaleCorrectionItem:
-    card_id: int | None
-    sealed_id: int | None
-    sealed_quantity: int | None
+    card_id: int | None = None
+    sealed_id: int | None = None
+    sealed_quantity: int | None = None
