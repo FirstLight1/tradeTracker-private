@@ -40,6 +40,7 @@ from tradeTracker.services.models import (
 )
 from tradeTracker.services.r2_service import R2Service
 from tradeTracker.services.reciept_service import EKasaReceiptService, InvoiceReceiptService
+from tradeTracker.services.sale_correction_service import SaleCorrectionService
 from tradeTracker.services.sale_service import SaleService
 from tradeTracker.services.shipping_service import get_eph_service
 from tradeTracker.utils.cardmarket import resolve_cardmarket_id
@@ -1086,12 +1087,10 @@ def load_sale(saleId):
 
 @bp.route("/generateCreditNote/<int:saleId>", methods=("POST",))
 @verify_token
-def generate_credit_note(saleId):
+def generate_credit_note(sale_id):
     db = get_db()
     data = request.get_json()
     sale_correction = SaleCorrectionRequest.from_dict(data)
-    print(data)
-    print(sale_correction)
     original_invoice_num = data.get("originalInvoiceNum")
 
     itemsToReturn = { 
@@ -1106,7 +1105,8 @@ def generate_credit_note(saleId):
                                     for sealed in data.get("sealed", [])]
 
 
-
+    sale_correction_service = SaleCorrectionService(get_db())
+    sale_correction_service.generate_credit_note(sale_id, itemsToReturn)
     
 
 
