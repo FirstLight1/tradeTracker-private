@@ -9,19 +9,44 @@ class SaleCorrectionService:
     def __init__(self, db):
         self.db = db
 
-    def _order_return(self,sale_id:int, items: list[SaleCorrectionItem], shipping_value: float = 0) -> float:
+    def _order_return(self,sale_id:int, items: dict[str, list[SaleCorrectionItem]], shipping_value: float = 0) -> float:
         #TODO: when cards and sealed DTO exist
-        # change proces so order return will cal other methods
+        returned_value = 0.0
+        if "card_ids" in items:
+            returned_value += self._return_cards(sale_id, items['card_ids'])
+
+        if "sealed" in items:
+            returned_value += self._return_sealed(sale_id, items['sealed'])
+
+
         raise NotImplementedError
 
-    def _return_cards(self, sale_id: int, cards: dict[str,Any]) -> float:
-        raise NotImplementedError
+    def _return_cards(self, sale_id: int, cards: list[SaleCorrectionItem]) -> float:
+        cardPlaceholder = ",".join("?" for _ in cards)
+        card_ids = [card.card_id for card in cards]
+    
+        cards_sum= self.db.execute(
+            f"SELECT COALESCE(SUM(sell_price), 0) FROM sale_items WHERE card_id IN ({cardPlaceholder})",
+            card_ids,
+        ).fetchone()[0]
 
-    def _return_sealed(self, sale_id: int, sealed: dict[str,Any]) -> float:
+        try:
+            self.db.execute(
+                f"UPDATE cards SET sold_date = NULL WHERE id IN ({cardPlaceholder})", card_ids
+            )
+            self.db.execute(f"DELETE FROM sale_items WHERE card_id IN ({cardPlaceholder})", card_ids)
+        except sqlite3.Error:
+            raise sqlite3.Error("Failed to update database")
+        return cards_sum or 0.0
+
+    def _return_sealed(self, sale_id: int, sealed: list[SaleCorrectionItem]) -> float:
+
+
+
         raise NotImplementedError
 
     #TODO: change to DTO
-    def generate_credit_note(self, sale_id: int, data: dict[str,Any]) -> None:
+    def generate_credit_note(self, sale_id: int, items: dict[str,Any]) -> None:
         returned_value = self._order_return(sale_id, items)
 
         creditNoteNum = None
