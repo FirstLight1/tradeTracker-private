@@ -9,19 +9,31 @@ class SaleCorrectionService:
     def __init__(self, db):
         self.db = db
 
-    def _order_return(self,sale_id:int, items: dict[str, list[SaleCorrectionItem]], shipping_value: float = 0) -> float:
+    def _return_shipping(self, sale_id:int, shipping_value: float = 0):
+        try:
+            self.db.execute(
+                "UPDATE sales SET shipping_info = shipping_info - ? WHERE id = ?",
+                (shipping_value, sale_id),
+            )
+        except Exception:
+            self.db.rollback()
+            raise sqlite3.Error("Failed to update shipping")
+
+
+    def _order_return(self,sale_id:int, items: dict[str, list[SaleCorrectionItem]]) -> float:
         #TODO: when cards and sealed DTO exist
         returned_value = 0.0
         if "card_ids" in items:
-            returned_value += self._return_cards(sale_id, items['card_ids'])
+            returned_value += self._return_cards(items['card_ids'])
 
         if "sealed" in items:
-            returned_value += self._return_sealed(sale_id, items['sealed'])
+            returned_value += self._return_sealed( items['sealed'])
 
 
-        raise NotImplementedError
+        self._return_bulk(sale_id)
+        return returned_value
 
-    def _return_cards(self, sale_id: int, cards: list[SaleCorrectionItem]) -> float:
+    def _return_cards(self, cards: list[SaleCorrectionItem]) -> float:
         cardPlaceholder = ",".join("?" for _ in cards)
         card_ids = [card.card_id for card in cards]
     
@@ -40,7 +52,7 @@ class SaleCorrectionService:
             raise sqlite3.Error("Failed to update database")
         return cards_sum or 0.0
 
-    def _return_sealed(self, sale_id: int, sealed: list[SaleCorrectionItem]) -> float:
+    def _return_sealed(self, sealed: list[SaleCorrectionItem]) -> float:
 
         sealedPlan = []
         for entry in sealed:
@@ -84,6 +96,22 @@ class SaleCorrectionService:
                 self.db.rollback()
                 raise sqlite3.Error
         return returned_sum
+
+    def _return_bulk(self, sale_id: int):
+        
+        bulk_sales_rows = self.db.execute(
+            "SELECT item_type, quantity FROM bulk_sales WHERE sale_id = ?", (sale_id,)
+        ).fetchall()
+        for bs_row in bulk_sales_rows:
+            target = self.db.execute(
+                "SELECT id FROM bulk_items WHERE item_type = ? ORDER BY auction_id DESC LIMIT 1",
+                (bs_row["item_type"],),
+            ).fetchone()
+            if target:
+                self.db.execute(
+                    "UPDATE bulk_items SET quantity = quantity + ? WHERE id = ?",
+                    (bs_row["quantity"], target["id"]),
+                )
 
     #TODO: change to DTO
     def generate_credit_note(self, sale_id: int, items: dict[str,Any]) -> None:
