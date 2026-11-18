@@ -1085,12 +1085,14 @@ def load_sale(saleId):
     return jsonify({"status": "success", "data": data}), 200
 
 
-@bp.route("/generateCreditNote/<int:saleId>", methods=("POST",))
+@bp.route("/generateCreditNote/<int:sale_id>", methods=("POST",))
 @verify_token
 def generate_credit_note(sale_id):
     db = get_db()
     data = request.get_json()
-    sale_correction = SaleCorrectionRequest.from_dict(data)
+    sale_correction_data = SaleCorrectionRequest.from_dict(data)
+    print("sale correction")
+    print(sale_correction)
     original_invoice_num = data.get("originalInvoiceNum")
 
     itemsToReturn = { 
@@ -1106,7 +1108,7 @@ def generate_credit_note(sale_id):
 
 
     sale_correction_service = SaleCorrectionService(get_db())
-    sale_correction_service.generate_credit_note(sale_id, itemsToReturn)
+    sale_correction_service.generate_credit_note(sale_id, sale_correction_data)
     
 
 
