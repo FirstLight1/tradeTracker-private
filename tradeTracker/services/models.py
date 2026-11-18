@@ -335,8 +335,8 @@ class ShippingDTO:
 class SaleCorrectionRequest:
     reciever: RecieverDTO
     shipping: ShippingDTO | None
-    cards: list[ItemInput] | None
-    sealed: list[ItemInput] | None
+    cards: list[SaleCorrectionItem] | None
+    sealed: list[SaleCorrectionItem] | None
     original_invoice_num: str
     value_change: float
 
@@ -344,15 +344,15 @@ class SaleCorrectionRequest:
     def from_dict(cls, data: dict[str, Any]) -> "SaleCorrectionRequest":
         return cls(
                 reciever=RecieverDTO.from_dict(data["reciever"]),
-                shipping=ShippingDTO(shippingPrice=data["shipping"]["shippingPrice"]) if data.get("shipping") else None,
-                cards=[ItemInput.from_dict(item) for item in data.get("cards")] if data.get("cards") else None,
-                sealed=[ItemInput.from_dict(item) for item in data.get("sealed")] if data.get("sealed") else None,
+                shipping=ShippingDTO(shippingPrice=data.get("shipping", {}).get("shipping_price", 0)),
+                cards=[SaleCorrectionItem(item['id'], item.get("quantity",1)) for item in data.get("cards") or []] or None,
+                sealed=[SaleCorrectionItem(item['id'], item.get("quantity",1)) for item in data.get("sealed") or []] or None,
                 original_invoice_num=data["originalInvoiceNum"],
                 value_change=data["valueChanged"],
                 )
 
 @dataclass
 class SaleCorrectionItem:
-    card_id: int | None = None
-    sealed_id: int | None = None
-    sealed_quantity: int | None = None
+    id: int | None = None
+    quantity: int = 1 
+
