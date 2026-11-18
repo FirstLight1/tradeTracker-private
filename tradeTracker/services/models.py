@@ -345,20 +345,33 @@ class SaleCorrectionRequest:
         return cls(
                 reciever=RecieverDTO.from_dict(data["reciever"]),
                 shipping=ShippingDTO(shippingPrice=data.get("shipping", {}).get("shipping_price", 0)),
-                cards=[SaleCorrectionItem(item['id'], item.get("quantity",1)) for item in data.get("cards") or []] or None,
-                sealed=[SaleCorrectionItem(item['id'], item.get("quantity",1)) for item in data.get("sealed") or []] or None,
+                cards=[SaleCorrectionItem.from_dict(card) for card in data.get("cards", [])],
+                sealed=[SaleCorrectionItem.from_dict(sealed) for sealed in data.get("sealed", [])],
                 original_invoice_num=data["originalInvoiceNum"],
                 value_change=data["valueChanged"],
                 )
 
 @dataclass
 class SaleCorrectionItem:
-    id: int | None 
+    id: int
     quantity: int 
     name: str
     number: str | None
     condition: str | None 
     price: float
     cert_number: str | None
-    auctionId : int | None
+    auction_id : int | None
 
+    @classmethod
+    def from_dict(cls,item: dict[str, Any] ) -> "SaleCorrectionItem":
+        return cls(
+            id=item["id"],
+            quantity=item.get("returnQuantity", 1),
+            name=item["name"] if "name" in item else item["card_name"],
+            number=item.get("card_num"),
+            condition=item.get("condition"),
+            price=item["sell_price"],
+            cert_number=item.get("cert_number"),
+            auction_id=item.get("auction_id")
+
+        )
