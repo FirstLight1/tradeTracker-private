@@ -1092,7 +1092,7 @@ def generate_credit_note(sale_id):
     data = request.get_json()
     sale_correction_data = SaleCorrectionRequest.from_dict(data)
     print("sale correction")
-    print(sale_correction)
+    print(sale_correction_data)
     original_invoice_num = data.get("originalInvoiceNum")
 
     itemsToReturn = { 

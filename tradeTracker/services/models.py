@@ -353,6 +353,12 @@ class SaleCorrectionRequest:
 
 @dataclass
 class SaleCorrectionItem:
-    id: int | None = None
-    quantity: int = 1 
+    id: int | None 
+    quantity: int 
+    name: str
+    number: str | None
+    condition: str | None 
+    price: float
+    cert_number: str | None
+    auctionId : int | None
 

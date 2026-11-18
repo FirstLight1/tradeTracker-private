@@ -311,6 +311,8 @@ def generateCreditNote(
     else:
         invoice.payback = invoice_date
 
+    #FIX: show grade on credit note
+
     if items and len(items) > 0:
         for item in items:
             mv = item.get("sell_price")
