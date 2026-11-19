@@ -5,6 +5,7 @@ from decimal import Decimal
 
 os.environ["INVOICE_LANG"] = "sk"
 from flask import current_app
+from tradeTracker.services.models import RecieverDTO,ShippingDTO, SaleCorrectionItem
 from InvoiceGenerator.api import Client, Creator, CreditNote, Invoice, Item, Provider
 from InvoiceGenerator.pdf import CreditNoteInvoice, SimpleInvoice
 
@@ -222,14 +223,14 @@ def generate_invoice(
 
 
 def generateCreditNote(
-    reciever,
-    items=None,
-    sealed=None,
+    reciever: RecieverDTO,
+    items: list[SaleCorrectionItem] | None = None,
+    sealed:list[SaleCorrectionItem] | None = None,
     bulk=None,
     holo=None,
     ex=None,
     payment_methods=None,
-    shipping=None,
+    shipping: ShippingDTO | None =None,
     original_invoice_num=None,
     cn_num=1,
 ):
@@ -258,19 +259,19 @@ def generateCreditNote(
 
     try:
         nameAndSurname = " ".join(
-            [part.capitalize() for part in reciever.get("nameAndSurname").split(" ")]
+            [part.capitalize() for part in reciever.nameAndSurname.split(" ")]
         )
     except:
         nameAndSurname = " "
 
     client = Client(
         summary=nameAndSurname,
-        address=reciever.get("address", "").capitalize()
-        if reciever.get("address") is not None
+        address=reciever.address.capitalize()
+        if reciever.address is not None
         else " ",
-        city=reciever.get("city", "").capitalize() if reciever.get("city") is not None else " ",
-        country=reciever.get("state", "").capitalize()
-        if reciever.get("state") is not None
+        city=reciever.city.capitalize() if reciever.city is not None else " ",
+        country=reciever.state.capitalize()
+        if reciever.state is not None
         else " ",
     )
 
@@ -315,7 +316,7 @@ def generateCreditNote(
 
     if items and len(items) > 0:
         for item in items:
-            mv = item.get("sell_price")
+            mv = item.price
             if mv is None or str(mv) == "":
                 continue
             invoice.add_item(
@@ -323,29 +324,27 @@ def generateCreditNote(
                     count=1,
                     price=Decimal(str(mv)),
                     unit="ks",
-                    description=(item.get("card_name") or "") + " " + (item.get("card_num") or ""),
+                    description=item.name + " " + (item.number or " "),
                     tax=Decimal("0"),
                 )
             )
 
     if sealed:
         for item in sealed:
-            count = item.get("returnQuantity")
-            if count is None:
-                count = item.get("quantity", 1)
+            count = item.quantity
             if count <= 0:
                 continue
-            if item.get("auction_id") is None:
+            if item.auction_id is None:
                 tax = Decimal("23")
             else:
                 tax = Decimal("0")
-            mv = item.get("market_value", "0")
+            mv = item.price
             invoice.add_item(
                 Item(
                     count=count,
                     price=Decimal(str(mv).replace("€", "")),
                     unit="ks",
-                    description=item.get("name", ""),
+                    description=item.name,
                     tax=tax,
                 )
             )
@@ -356,12 +355,12 @@ def generateCreditNote(
 
     if shipping:
         # Legacy sales may have NULL shipping_info -> shippingPrice None
-        shippingPrice = Decimal(str(shipping.get("shippingPrice") or 0))
+        shippingPrice = Decimal(str(shipping.shippingPrice))
         invoice.add_item(
             Item(
                 count=1,
                 price=shippingPrice,
-                description=shipping.get("shippingWay"),
+                description=shipping.type,
                 unit="ks",
                 tax=Decimal("0"),
             )
@@ -373,12 +372,12 @@ def generateCreditNote(
         data_dir = os.getenv("DATA_DIR", current_app.instance_path)
         app_data_dir = os.path.join(data_dir, "Invoices")
         os.makedirs(app_data_dir, exist_ok=True)
-        output_filename = f"Dobropis_{cn_num}_INV{orig_inv_safe}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
+        output_filename = f"Dobropis_{cn_num}_INV{orig_inv_safe}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{(reciever.nameAndSurname or "client").replace(' ', '_')}.pdf"
         output_path = os.path.join(app_data_dir, output_filename)
     else:
         invoices_dir = os.path.join(current_app.instance_path, "invoices")
         os.makedirs(invoices_dir, exist_ok=True)
-        output_filename = f"Dobropis_{cn_num}_INV{orig_inv_safe}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{reciever.get('nameAndSurname', 'client').replace(' ', '_')}.pdf"
+        output_filename = f"Dobropis_{cn_num}_INV{orig_inv_safe}_CreditNote_{invoice_date.strftime('%Y%m%d')}_{(reciever.nameAndSurname or "client").replace(' ', '_')}.pdf"
         output_path = os.path.join(invoices_dir, output_filename)
 
     pdf.gen(output_path, generate_qr_code=True)
