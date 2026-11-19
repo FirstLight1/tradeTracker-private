@@ -4,6 +4,7 @@ from io import BytesIO
 import sqlite3
 
 from tradeTracker.services.models import SaleCorrectionItem, SaleCorrectionRequest
+from tradeTracker.generateInvoice import generateCreditNote
 
 class SaleCorrectionService:
     def __init__(self, db):
@@ -115,15 +116,15 @@ class SaleCorrectionService:
                 )
 
     #TODO: change to DTO
-    def generate_credit_note(self, sale_id: int, data: SaleCorrectionRequest) -> None:
-        returned_value = self._order_return(sale_id, data.cards, data.sealed)
+    def generate_credit_note(self, sale_id: int, sale_correction_data: SaleCorrectionRequest) -> dict[str, str | bytes]:
+        returned_value = self._order_return(sale_id, sale_correction_data.cards, sale_correction_data.sealed)
 
         creditNoteNum = None
         for attempt in range(3):
             row = self.db.execute(
                 "SELECT COALESCE(MAX(record_number), 0) + 1 FROM sales_correction WHERE change_type = 'credit'"
             ).fetchone()
-            creditNoteNum = row[0]
+            creditNoteNum: int = row[0]
             try:
                 self.db.execute(
                     "INSERT INTO sales_correction (sale_id, record_number, change_type, value_change) VALUES (?, ?, ?, ?)",
@@ -140,25 +141,16 @@ class SaleCorrectionService:
                 continue
 
         try:
-            pdf, cn_num = generateInvoice.generateCreditNote(
-                data.get("reciever"),
-                data.get("items") if data.get("items") else None,
-                data.get("sealed") if data.get("sealed") else None,
-                data.get("bulk"),
-                data.get("holo"),
-                data.get("ex"),
-                None,
-                data.get("shipping"),
-                original_invoice_num,
-                creditNoteNum,
+            pdf, cn_num = generateCreditNote(
+                sale_correction_data.reciever,
+                sale_correction_data.cards,
+                sale_correction_data.sealed,
+                shipping=sale_correction_data.shipping,
+                original_invoice_num=sale_correction_data.original_invoice_num,
+                cn_num=creditNoteNum,
             )
         except Exception as e:
             self.db.rollback()
-            logger.critical("Credit note generation failed %s", e)
-            return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax06"}), 500
+            raise Exception("Credit note generation failed %s", e)
 
-        self.db.commit()
-        logger.info(
-            "Credit note generated succesfully | original invoice num: %s", original_invoice_num
-        )
-            
+        return pdf 
