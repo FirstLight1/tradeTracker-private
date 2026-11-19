@@ -927,100 +927,6 @@ def changeBarterLink():
         return jsonify({"status": "error", "message": "Failed to change barter link"}), 400
 
 
-def _orderReturn(saleId, items, db, shipping_value=0):
-    cardEntries= items.get("cards") or []
-    cardIds = [card.get("id") for card in cardEntries]
-    sealedEntries = items.get("sealed") or []
-
-    returned_value = 0.0
-
-    try:
-        sealedPlan = []
-        for entry in sealedEntries:
-            sealed_id = entry.get("id")
-            returnQuantity = entry.get("returnQuantity")
-            if not sealed_id or not returnQuantity or returnQuantity <= 0:
-                continue
-            row = db.execute(
-                "SELECT quantity, market_value FROM sealed WHERE id = ?", (sealed_id,)
-            ).fetchone()
-            if row is None:
-                db.rollback()
-                return f"Sealed item {sealed_id} not found", None
-            if returnQuantity > row["quantity"]:
-                db.rollback()
-                return (
-                    f"returnQuantity {returnQuantity} exceeds available {row['quantity']} for sealed item {sealed_id}",
-                    None,
-                )
-            sealedPlan.append(
-                (sealed_id, returnQuantity, row["quantity"], row["market_value"] or 0)
-            )
-
-        if cardIds:
-            cardPlaceholder = ",".join("?" for _ in cardIds)
-            cards_sum = db.execute(
-                f"SELECT COALESCE(SUM(sell_price), 0) FROM sale_items WHERE card_id IN ({cardPlaceholder})",
-                cardIds,
-            ).fetchone()[0]
-            returned_value += cards_sum or 0
-            db.execute(
-                f"UPDATE cards SET sold_date = NULL WHERE id IN ({cardPlaceholder})", cardIds
-            )
-            db.execute(f"DELETE FROM sale_items WHERE card_id IN ({cardPlaceholder})", cardIds)
-
-        for sealed_id, returnQuantity, orig_quantity, mv in sealedPlan:
-            returned_value += mv * returnQuantity
-            if returnQuantity == orig_quantity:
-                db.execute("UPDATE sealed SET sale_id = NULL WHERE id = ?", (sealed_id,))
-            else:
-                db.execute(
-                    "UPDATE sealed SET quantity = quantity - ? WHERE id = ?",
-                    (returnQuantity, sealed_id),
-                )
-                db.execute(
-                    """INSERT INTO sealed (name, normalized_name, quantity, language, price, market_value,
-                                           date, sale_id, auction_id, opened, cardMarketID)
-                       SELECT name, normalized_name, ?, language, price, market_value,
-                              date, NULL, auction_id, opened, cardMarketID
-                       FROM sealed WHERE id = ?""",
-                    (returnQuantity, sealed_id),
-                )
-
-        bulk_sales_rows = db.execute(
-            "SELECT item_type, quantity FROM bulk_sales WHERE sale_id = ?", (saleId,)
-        ).fetchall()
-        for bs_row in bulk_sales_rows:
-            target = db.execute(
-                "SELECT id FROM bulk_items WHERE item_type = ? ORDER BY auction_id DESC LIMIT 1",
-                (bs_row["item_type"],),
-            ).fetchone()
-            if target:
-                db.execute(
-                    "UPDATE bulk_items SET quantity = quantity + ? WHERE id = ?",
-                    (bs_row["quantity"], target["id"]),
-                )
-
-        if shipping_value:
-            db.execute(
-                "UPDATE sales SET shipping_info = shipping_info - ? WHERE id = ?",
-                (shipping_value, saleId),
-            )
-        returned_value += float(shipping_value)
-        if returned_value:
-            db.execute(
-                "UPDATE sales SET total_amount = total_amount - ? WHERE id = ?",
-                (returned_value, saleId),
-            )
-
-    except Exception:
-        db.rollback()
-        logger.exception("Return creation failed | saleId: %s", saleId)
-        return "There was an error while creating a return, Error code: Ax04", None
-
-    return None, returned_value
-
-
 @bp.route("/partyInfo/<int:saleId>", methods=("GET",))
 @verify_token
 def partyInfo(saleId):
@@ -1073,7 +979,7 @@ def load_sale(saleId):
     ).fetchall()
 
     sealed = db.execute(
-        "SELECT s.name, s.language, s.price, s.market_value,s.language, s.date, s.id, s.auction_id, s.quantity, 'sealed' as item_type FROM sealed s "
+        "SELECT s.name, s.language, s.price as sell_price, s.market_value,s.language, s.date, s.id, s.auction_id, s.quantity, 'sealed' as item_type FROM sealed s "
         "WHERE s.sale_id = ? ",
         (saleId,),
     ).fetchall()
@@ -1091,81 +997,15 @@ def generate_credit_note(sale_id):
     db = get_db()
     data = request.get_json()
     sale_correction_data = SaleCorrectionRequest.from_dict(data)
-    print("sale correction")
-    print(sale_correction_data)
     original_invoice_num = data.get("originalInvoiceNum")
 
-    itemsToReturn = { 
-        "shipping_value": data.get("shipping", {}).get("shippingPrice", 0),
-    }
-
-    if sale_correction.cards: 
-        itemsToReturn["card_ids"] = [SaleCorrectionItem(card.id) for card in data.get("cards",[])]
-
-    if sale_correction.sealed:
-        itemsToReturn["sealed"] = [SaleCorrectionItem(None, sealed.id, sealed.quantity)
-                                    for sealed in data.get("sealed", [])]
-
-
     sale_correction_service = SaleCorrectionService(get_db())
-    sale_correction_service.generate_credit_note(sale_id, sale_correction_data)
-    
-
-
-    err, returned_value = _orderReturn(saleId, itemsToReturn, db)
-    if err:
-        db.rollback()
-        status_code = 400 if "exceeds available" in err else 500
-        logger.warning("Failed to order return | saleId: %s | reason: %s", saleId, err)
-        return jsonify({"status": "error", "message": f"{str(err)}, Error code: Ax08"}), status_code
-
-    creditNoteNum = None
-    for attempt in range(3):
-        row = db.execute(
-            "SELECT COALESCE(MAX(record_number), 0) + 1 FROM sales_correction WHERE change_type = 'credit'"
-        ).fetchone()
-        creditNoteNum = row[0]
-        try:
-            db.execute(
-                "INSERT INTO sales_correction (sale_id, record_number, change_type, value_change) VALUES (?, ?, ?, ?)",
-                (saleId, creditNoteNum, "credit", returned_value),
-            )
-            break
-        except sqlite3.IntegrityError as e:
-            if "UNIQUE constraint" not in str(e):
-                db.rollback()
-                logger.critical(
-                    "Non-UNIQUE IntegrityError on sales_correction | saleId: %s | e: %s", saleId, e
-                )
-                return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax07"}), 500
-            logger.warning(
-                "record_number collision (attempt %d), retrying | saleId: %s", attempt + 1, saleId
-            )
-            if attempt == 2:
-                db.rollback()
-                logger.critical("record_number conflict exhausted retries | saleId: %s", saleId)
-                return jsonify(
-                    {"status": "error", "message": "Credit note number conflict, Error code: Ax07"}
-                ), 500
-            continue
-
     try:
-        pdf, cn_num = generateInvoice.generateCreditNote(
-            data.get("reciever"),
-            data.get("items") if data.get("items") else None,
-            data.get("sealed") if data.get("sealed") else None,
-            data.get("bulk"),
-            data.get("holo"),
-            data.get("ex"),
-            None,
-            data.get("shipping"),
-            original_invoice_num,
-            creditNoteNum,
-        )
+        pdf = sale_correction_service.generate_credit_note(sale_id, sale_correction_data)
     except Exception as e:
-        db.rollback()
-        logger.critical("Credit note generation failed %s", e)
+        logger.error("Failed to create sale_correction | sale_id: %s | e: %s", sale_id, e)
         return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax06"}), 500
+
 
     db.commit()
     logger.info(

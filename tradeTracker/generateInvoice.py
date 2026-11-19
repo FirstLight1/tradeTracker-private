@@ -300,13 +300,11 @@ def generateCreditNote(
             f"{item['type']} :-{item['amount']}€ " for item in unique_payment
         )
         invoice.paytype = payment_strings
-    else:
-        invoice.paytype = reciever.get("paymentMethod", "Bankovy prevod")
 
     invoice.taxable_date = datetime.now()
     invoice.use_tax = True
 
-    payback_str = reciever.get("paybackDate")
+    payback_str = reciever.paybackDate
     if payback_str:
         invoice.payback = datetime.strptime(payback_str, "%Y-%m-%d").date()
     else:
