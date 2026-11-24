@@ -163,5 +163,5 @@ class SaleCorrectionService:
         except Exception as e:
             self.db.rollback()
             raise Exception(f"{e}")
-
+        self.db.commit()
         return pdf, cn_num

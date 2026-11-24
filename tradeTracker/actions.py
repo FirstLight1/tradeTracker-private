@@ -1007,7 +1007,6 @@ def generate_credit_note(sale_id):
         return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax06"}), 500
 
 
-    db.commit()
     logger.info(
         "Credit note generated succesfully | original invoice num: %s", original_invoice_num
     )
