@@ -344,7 +344,7 @@ class SaleCorrectionRequest:
     def from_dict(cls, data: dict[str, Any]) -> "SaleCorrectionRequest":
         return cls(
                 reciever=RecieverDTO.from_dict(data["reciever"]),
-                shipping=ShippingDTO(shippingPrice=data.get("shipping", {}).get("shipping_price", 0)),
+                shipping=ShippingDTO(shippingPrice=data.get("shipping", {}).get("shippingPrice", 0)),
                 cards=[SaleCorrectionItem.from_dict(card) for card in data.get("cards", [])],
                 sealed=[SaleCorrectionItem.from_dict(sealed) for sealed in data.get("sealed", [])],
                 original_invoice_num=data["originalInvoiceNum"],
