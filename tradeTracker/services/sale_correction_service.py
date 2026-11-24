@@ -10,12 +10,13 @@ class SaleCorrectionService:
     def __init__(self, db):
         self.db = db
 
-    def _return_shipping(self, sale_id:int, shipping_value: float = 0):
+    def _return_shipping(self, sale_id:int, shipping_value: float = 0) -> float:
         try:
             self.db.execute(
                 "UPDATE sales SET shipping_info = shipping_info - ? WHERE id = ?",
                 (shipping_value, sale_id),
             )
+            return shipping_value
         except Exception:
             raise sqlite3.Error("Failed to update shipping")
 
@@ -34,7 +35,7 @@ class SaleCorrectionService:
         self._return_bulk(sale_id)
         return returned_value
 
-    def _return_cards(self, cards: list[SaleCorrectionItem] | None) -> float:
+    def _return_cards(self, cards: list[SaleCorrectionItem] | None, sale_id: int) -> float:
         if not cards:
             return 0.0
         cardPlaceholder = ",".join("?" for _ in cards)
@@ -47,14 +48,14 @@ class SaleCorrectionService:
 
         try:
             self.db.execute(
-                f"UPDATE cards SET sold_date = NULL WHERE id IN ({cardPlaceholder})", card_ids
+                f"UPDATE cards SET sold_date = NULL WHERE sale_id = ? AND id IN ({cardPlaceholder})", (sale_id,card_ids)
             )
             self.db.execute(f"DELETE FROM sale_items WHERE card_id IN ({cardPlaceholder})", card_ids)
         except Exception:
             raise sqlite3.Error("Failed to update database")
         return cards_sum or 0.0
 
-    def _return_sealed(self, sealed: list[SaleCorrectionItem] | None) -> float:
+    def _return_sealed(self, sealed: list[SaleCorrectionItem] | None, sale_id: int) -> float:
         if not sealed:
             return 0.0
 
@@ -65,7 +66,7 @@ class SaleCorrectionService:
             if not sealed_id or not returnQuantity or returnQuantity <= 0:
                 continue
             row = self.db.execute(
-                "SELECT quantity, market_value FROM sealed WHERE id = ?", (sealed_id,)
+                "SELECT quantity, sell_price FROM sealed WHERE id = ? AND sale_id = ?", (sealed_id,sale_id)
             ).fetchone()
             if row is None:
                 raise ValueError(f"Sealed item {sealed_id} not found")
@@ -121,10 +122,10 @@ class SaleCorrectionService:
     def generate_credit_note(self, sale_id: int, sale_correction_data: SaleCorrectionRequest) -> tuple[dict[str, str | bytes], int]:
         returned_value = 0.0
         try:
-            returned_value += self._return_cards(sale_correction_data.cards)
-            returned_value += self._return_sealed(sale_correction_data.sealed)
+            returned_value += self._return_cards(sale_correction_data.cards, sale_id)
+            returned_value += self._return_sealed(sale_correction_data.sealed, sale_id)
             self._return_bulk(sale_id)
-            self._return_shipping(sale_id,sale_correction_data.shipping.shippingPrice)
+            returned_value += self._return_shipping(sale_id,sale_correction_data.shipping.shippingPrice)
 
             #TODO: abstract this
             creditNoteNum = None
