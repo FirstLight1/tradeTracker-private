@@ -17,7 +17,6 @@ class SaleCorrectionService:
                 (shipping_value, sale_id),
             )
         except Exception:
-            self.db.rollback()
             raise sqlite3.Error("Failed to update shipping")
 
 
@@ -35,7 +34,9 @@ class SaleCorrectionService:
         self._return_bulk(sale_id)
         return returned_value
 
-    def _return_cards(self, cards: list[SaleCorrectionItem]) -> float:
+    def _return_cards(self, cards: list[SaleCorrectionItem] | None) -> float:
+        if not cards:
+            return 0.0
         cardPlaceholder = ",".join("?" for _ in cards)
         card_ids = [card.id for card in cards]
     
@@ -50,11 +51,12 @@ class SaleCorrectionService:
             )
             self.db.execute(f"DELETE FROM sale_items WHERE card_id IN ({cardPlaceholder})", card_ids)
         except Exception:
-            self.db.rollback
             raise sqlite3.Error("Failed to update database")
         return cards_sum or 0.0
 
-    def _return_sealed(self, sealed: list[SaleCorrectionItem]) -> float:
+    def _return_sealed(self, sealed: list[SaleCorrectionItem] | None) -> float:
+        if not sealed:
+            return 0.0
 
         sealedPlan = []
         for entry in sealed:
@@ -66,10 +68,8 @@ class SaleCorrectionService:
                 "SELECT quantity, market_value FROM sealed WHERE id = ?", (sealed_id,)
             ).fetchone()
             if row is None:
-                self.db.rollback()
                 raise ValueError(f"Sealed item {sealed_id} not found")
             if returnQuantity > row["quantity"]:
-                self.db.rollback()
                 raise ValueError(f"returnQuantity exceeds available {row['quantity']} for sealed item {sealed_id}")
             sealedPlan.append(
                 (sealed_id, returnQuantity, row["quantity"], row["market_value"] or 0)
@@ -95,7 +95,6 @@ class SaleCorrectionService:
                         (returnQuantity, sealed_id),
                     )
             except Exception:
-                self.db.rollback()
                 raise sqlite3.Error
         return returned_sum
 
@@ -110,47 +109,59 @@ class SaleCorrectionService:
                 (bs_row["item_type"],),
             ).fetchone()
             if target:
-                self.db.execute(
-                    "UPDATE bulk_items SET quantity = quantity + ? WHERE id = ?",
-                    (bs_row["quantity"], target["id"]),
-                )
+                try:
+                    self.db.execute(
+                        "UPDATE bulk_items SET quantity = quantity + ? WHERE id = ?",
+                        (bs_row["quantity"], target["id"]),
+                    )
+                except:
+                    raise sqlite3.Error("Failed to update bulk items")
 
     #TODO: change to DTO
-    def generate_credit_note(self, sale_id: int, sale_correction_data: SaleCorrectionRequest) -> dict[str, str | bytes]:
-        returned_value = self._order_return(sale_id, sale_correction_data.cards, sale_correction_data.sealed)
-
-        creditNoteNum = None
-        for attempt in range(3):
-            row = self.db.execute(
-                "SELECT COALESCE(MAX(record_number), 0) + 1 FROM sales_correction WHERE change_type = 'credit'"
-            ).fetchone()
-            creditNoteNum: int = row[0]
-            try:
-                self.db.execute(
-                    "INSERT INTO sales_correction (sale_id, record_number, change_type, value_change) VALUES (?, ?, ?, ?)",
-                    (sale_id, creditNoteNum, "credit", returned_value),
-                )
-                break
-            except sqlite3.IntegrityError as e:
-                if "UNIQUE constraint" not in str(e):
-                    self.db.rollack()
-                    raise Exception("IntegrityError on sales_correction")
-                if attempt == 2:
-                    self.db.rollback()
-                    raise Exception("Exhausted retries") 
-                continue
-
+    def generate_credit_note(self, sale_id: int, sale_correction_data: SaleCorrectionRequest) -> tuple[dict[str, str | bytes], int]:
+        returned_value = 0.0
         try:
-            pdf, cn_num = generateCreditNote(
-                sale_correction_data.reciever,
-                sale_correction_data.cards,
-                sale_correction_data.sealed,
-                shipping=sale_correction_data.shipping,
-                original_invoice_num=sale_correction_data.original_invoice_num,
-                cn_num=creditNoteNum,
-            )
+            returned_value += self._return_cards(sale_correction_data.cards)
+            returned_value += self._return_sealed(sale_correction_data.sealed)
+            self._return_bulk(sale_id)
+            self._return_shipping(sale_id,sale_correction_data.shipping.shippingPrice)
+
+            #TODO: abstract this
+            creditNoteNum = None
+            for attempt in range(3):
+                row = self.db.execute(
+                    "SELECT COALESCE(MAX(record_number), 0) + 1 FROM sales_correction WHERE change_type = 'credit'"
+                ).fetchone()
+                creditNoteNum: int = row[0]
+                try:
+                    self.db.execute(
+                        "INSERT INTO sales_correction (sale_id, record_number, change_type, value_change) VALUES (?, ?, ?, ?)",
+                        (sale_id, creditNoteNum, "credit", returned_value),
+                    )
+                    break
+                except sqlite3.IntegrityError as e:
+                    if "UNIQUE constraint" not in str(e):
+                        self.db.rollack()
+                        raise Exception("IntegrityError on sales_correction")
+                    if attempt == 2:
+                        self.db.rollback()
+                        raise Exception("Exhausted retries") 
+                    continue
+
+            try:
+                pdf, cn_num = generateCreditNote(
+                    sale_correction_data.reciever,
+                    sale_correction_data.cards,
+                    sale_correction_data.sealed,
+                    shipping=sale_correction_data.shipping,
+                    original_invoice_num=sale_correction_data.original_invoice_num,
+                    cn_num=creditNoteNum,
+                )
+            except Exception as e:
+                self.db.rollback()
+                raise Exception("Credit note generation failed %s", e)
         except Exception as e:
             self.db.rollback()
-            raise Exception("Credit note generation failed %s", e)
+            raise Exception(f"{e}")
 
-        return pdf 
+        return pdf, cn_num
