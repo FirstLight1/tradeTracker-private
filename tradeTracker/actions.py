@@ -979,7 +979,7 @@ def load_sale(saleId):
     ).fetchall()
 
     sealed = db.execute(
-        "SELECT s.name, s.language, s.price as sell_price, s.market_value,s.language, s.date, s.id, s.auction_id, s.quantity, 'sealed' as item_type FROM sealed s "
+        "SELECT s.name, s.language, s.price , s.market_value, s.sell_price ,s.language, s.date, s.id, s.auction_id, s.quantity, 'sealed' as item_type FROM sealed s "
         "WHERE s.sale_id = ? ",
         (saleId,),
     ).fetchall()
