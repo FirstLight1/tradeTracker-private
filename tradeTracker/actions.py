@@ -999,9 +999,9 @@ def generate_credit_note(sale_id):
     sale_correction_data = SaleCorrectionRequest.from_dict(data)
     original_invoice_num = data.get("originalInvoiceNum")
 
-    sale_correction_service = SaleCorrectionService(get_db())
+    sale_correction_service = SaleCorrectionService(db)
     try:
-        pdf = sale_correction_service.generate_credit_note(sale_id, sale_correction_data)
+        pdf, creditNoteNum = sale_correction_service.generate_credit_note(sale_id, sale_correction_data)
     except Exception as e:
         logger.error("Failed to create sale_correction | sale_id: %s | e: %s", sale_id, e)
         return jsonify({"status": "error", "message": f"{str(e)}, Error code: Ax06"}), 500
